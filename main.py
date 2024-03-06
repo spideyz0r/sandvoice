@@ -5,8 +5,12 @@ import pynput
 from pynput import keyboard
 import lameenc
 from openai import OpenAI
+os.environ['PYGAME_HIDE_SUPPORT_PROMPT'] = "hide"
 import pygame
 import warnings
+import sounddevice
+
+
 
 FORMAT = pyaudio.paInt16
 CHANNELS = 2
@@ -17,6 +21,7 @@ tmp_recording = "recording"
 
 client = OpenAI()
 audio = pyaudio.PyAudio()
+
 is_recording = False
 
 def start_recording():
@@ -75,7 +80,7 @@ def generate_response(msg):
         completion = client.chat.completions.create(
           model="gpt-3.5-turbo",
         messages=[
-            {"role": "system", "content": "Answer in portuguese"},
+            {"role": "system", "content": "Answer in portuguese. Be very sympathetic, helpful and don't be rude or have short answers"},
             {"role": "user", "content": msg}
         ]
         )
