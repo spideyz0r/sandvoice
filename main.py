@@ -124,3 +124,4 @@ if __name__ == "__main__":
 # Use OO to encapsulate the code
 # Use some fancy CLI tooling like cobra
 # Read configurations such as language, voice, etc from a file
+# For loop until the user breaks it
