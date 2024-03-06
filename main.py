@@ -65,7 +65,7 @@ def transcribe_and_translate():
         )
     return transcript.text
 
-def convert2mp3():
+def convert_to_mp3():
     lame = lameenc.Encoder()
     lame.set_bit_rate(128)
     lame.set_in_sample_rate(RATE)
@@ -89,7 +89,7 @@ def generate_response(msg):
         print("A general error occurred:", e)
         return "Sorry, I'm having trouble thinking right now. Could you try again later?"
 
-def text2Speech(text):
+def text_to_speech(text):
     warnings.filterwarnings("ignore", category=DeprecationWarning)
     speech_file_path = tmp_recording + ".mp3"
     response = client.audio.speech.create(
@@ -99,7 +99,7 @@ def text2Speech(text):
     )
     response.stream_to_file(speech_file_path)
 
-def playAudio():
+def play_audio():
     pygame.mixer.init()
     pygame.mixer.music.load(tmp_recording + ".mp3")
     pygame.mixer.music.play()
@@ -113,7 +113,7 @@ if __name__ == "__main__":
 
     start_recording()
     audio.terminate()
-    convert2mp3()
+    convert_to_mp3()
 
     text = transcribe_and_translate()
     print(text)
@@ -121,8 +121,8 @@ if __name__ == "__main__":
     response = generate_response(text)
     print(response.content)
 
-    text2Speech(response.content)
-    playAudio()
+    text_to_speech(response.content)
+    play_audio()
 
 ## TODO
 # Remove global variables
