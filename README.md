@@ -22,7 +22,7 @@ the response is also printed in the terminal.
 Ensure you have your API key set in both environment variables `OPENAI_API_KEY` and `OPENWEATHERMAP_API_KEY`.
 
 ## Configuration file
-It should be installed in ~/.sandvoice/config.yaml
+It should be installed in `~/.sandvoice/config.yaml`
 
 ```
 ---
