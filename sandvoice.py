@@ -12,6 +12,30 @@ os.environ['PYGAME_HIDE_SUPPORT_PROMPT'] = "hide"
 import pygame
 import requests
 import yaml
+import urllib.request
+from bs4 import BeautifulSoup
+
+class WebTextExtractor:
+    def __init__(self, url):
+        self.url = url
+        self.user_agent = "Mozilla/5.0 (Windows; U; Windows NT 5.1; en-US; rv:1.9.0.7) Gecko/2009021910 Firefox/3.0.7"
+        self.headers = { "User-Agent" : self.user_agent }
+
+    def get_text(self):
+        try:
+            req = urllib.request.Request(self.url, headers=self.headers)
+            response = urllib.request.urlopen(req)
+            html = response.read()
+            soup = BeautifulSoup(html, 'html.parser')
+
+            text = soup.get_text()
+            lines = (line.strip() for line in text.splitlines())
+            chunks = (phrase.strip() for line in lines for phrase in line.split("  "))
+            text = '\n'.join(chunk for chunk in chunks if chunk)
+            return text
+        except Exception as e:
+            print(f"An error occurred with url {self.url} {e}")
+            return None
 
 class Config:
     def __init__(self):
@@ -54,6 +78,16 @@ class HackerNews:
     def get_story_details(self, story_id):
         response = requests.get(self.base_url + f"item/{story_id}.json")
         return response.json()
+
+    def get_best_stories_summary(self):
+        summaries = []
+        story_ids = self.get_best_story_ids()[:self.limit]
+        for story_id in story_ids:
+            story = self.get_story_details(story_id)
+            extractor = WebTextExtractor(story['url'])
+            text = extractor.get_text()
+            summaries.append({"title": story['title'], "text": text})
+        return summaries
 
     def get_best_stories(self):
         story_ids = self.get_best_story_ids()[:self.limit]
@@ -194,11 +228,13 @@ class SandVoice:
             The content of "routename" is defined according to the message of the user.
             Based on the message of the user and the description of each route you need to choose the route that best fits.
             Bellow follows each route name and it's description delimited by ":"
+
             weather: The user is asking how the weather is or feels like, the user may or may not mention what is the location. For example: "How is the weather outside now?"
-            news: The user might be asking about real time news. For example: "What are the news today?"
+            news-summary: The user might be asking about a summary of the real time news. For example: "What are the summary of the news today? Another example: What are the details of the news today?"
+            news: The user might be asking about real time news. This is just gonna list the topics For example: "What are the news today? Another example: What are the top 5 news today?"
             default: This is the route for when no other route matches.
 
-            Now here are some notes:
+            Rules for the routes:
             #0 If the route is weather never leave location or unit empty.
             #1 If no location is defined, consider {self.location}.
             #2 Convert the location to the following convention: City name, state code (only for the US) and country code divided by comma. Trim all spaces. Please use ISO 3166 country codes. For example: Toronto,ON,CA.
@@ -210,6 +246,29 @@ class SandVoice:
                 {"role": "system", "content": system_role},
                 {"role": "user", "content": user_input}
             ])
+            return json.loads(completion.choices[0].message.content)
+        except Exception as e:
+            print("A general error occurred:", e)
+            return "Sorry, I'm having trouble thinking right now. Could you try again later?"
+
+    def text_summary(self, user_input):
+        try:
+            system_role = f"""
+            You're a bot summaries texts in 20 words.
+            The summary must content the most important information of the text.
+            Your answer will be in json format: {{"title": "some title", "text": "some text"}}.
+            The text must be translated to {self.language} if required.
+            If one of the texts has no content or has an error, figure something out from the title.
+            You will receive a text and you need to summarize it in 10 words and return the title and the summary.
+            """
+            completion = self.openai_client.chat.completions.create(
+            model="gpt-3.5-turbo",
+            messages=[
+                {"role": "system", "content": system_role},
+                {"role": "user", "content": user_input}
+            ])
+            if self.debug:
+                print(completion.choices[0].message.content)
             return json.loads(completion.choices[0].message.content)
         except Exception as e:
             print("A general error occurred:", e)
@@ -248,6 +307,14 @@ class SandVoice:
                 hacker_news = HackerNews()
                 stories = hacker_news.get_best_stories()
                 response = self.generate_response(user_input, f"Use this information to answer questions about any news. This is the hot news at Hacker News at the moment: {str(stories)}. Don't read the URLs \n. Use your knowledge to give some context to each new if possible")
+            case "news-summary":
+                hacker_news = HackerNews()
+                stories = hacker_news.get_best_stories_summary()
+                all_stories = []
+                for story in stories:
+                    summary = self.text_summary(story['text'])
+                    all_stories.append(f"{story['title']} - {summary}")
+                response = self.generate_response(user_input, f"Use this information to answer questions about any news. This is the hot news at Hacker News at the moment: {str(all_stories)}. Don't read the URLs \n. Use your knowledge to give some context to each new if possible")
             case _:
                 response = self.generate_response(user_input)
         return response
@@ -283,6 +350,7 @@ if __name__ == "__main__":
 
 ## TODO
 # Use some fancy CLI tooling like cobra
-# Read configurations such as language, voice, etc from a file
 # Separate the bot messaging in a separate class
-# Make playing the audio optional
+# Add some tests
+# Make routes work as plugins
+# Have proper error checking in multiple parts of the code
