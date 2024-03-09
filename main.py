@@ -1,14 +1,56 @@
-import os
+import os, datetime, json
 import pyaudio
 import wave
 import pynput
 from pynput import keyboard
 import lameenc
 from openai import OpenAI
-os.environ['PYGAME_HIDE_SUPPORT_PROMPT'] = "hide"
-import pygame
 import warnings
 import sounddevice
+# this is necessary to mute some outputs from pygame
+os.environ['PYGAME_HIDE_SUPPORT_PROMPT'] = "hide"
+import pygame
+
+import requests
+
+class HackerNews:
+    def __init__(self):
+        self.base_url = "https://hacker-news.firebaseio.com/v0/"
+        self.limit = 5
+
+    def get_best_story_ids(self):
+        response = requests.get(self.base_url + "beststories.json")
+        return response.json()
+
+    def get_story_details(self, story_id):
+        response = requests.get(self.base_url + f"item/{story_id}.json")
+        return response.json()
+
+    def get_best_stories(self):
+        story_ids = self.get_best_story_ids()[:self.limit]
+
+        stories = []
+        for story_id in story_ids:
+            story = self.get_story_details(story_id)
+            stories.append(f"{story['title']} - {story['url']}")
+        return stories
+
+class OpenWeatherReader:
+    def __init__(self, location, unit):
+        self.api_key = os.environ['OPENWEATHERMAP_API_KEY']
+        self.location = location
+        self.unit = unit
+        self.base_url = "https://api.openweathermap.org/data/2.5/weather?"
+
+    def get_current_weather(self):
+        url = f"{self.base_url}q={self.location}&appid={self.api_key}&units={self.unit}"
+        response = requests.get(url)
+
+        if response.status_code == 200:
+            # not formating the output, since the model can understand that
+            return response.json()
+        else:
+            return None
 
 class SandVoice:
     def __init__(self):
@@ -19,15 +61,16 @@ class SandVoice:
         self.chunk = 1024
         self.tmp_files_path = "/tmp/"
         self.tmp_recording = self.tmp_files_path + "recording"
-        self.openai_api_key = os.getenv("OPENAI_API_KEY")
         self.openai_client = OpenAI()
-        self.audio = pyaudio.PyAudio()
         self.is_recording = False
+        self.conversation_history = []
+        self.botname = "Sandbot"
+        self.timezone = "EST"
+        self.location = "Stoney Creek, Ontario, Canada"
 
     def on_press(self, key):
         if key == keyboard.Key.esc:
-            self.stop_recording()
-            return False
+            self.is_recording = False
 
     def stop_recording(self):
         self.is_recording = False
@@ -54,6 +97,7 @@ class SandVoice:
         wf.setframerate(self.rate)
         wf.writeframes(b''.join(frames))
         wf.close()
+        self.audio.terminate()
 
     def convert_to_mp3(self):
         lame = lameenc.Encoder()
@@ -73,16 +117,62 @@ class SandVoice:
             )
         return transcript.text
 
-    def generate_response(self, msg):
+    def generate_response(self, user_input, extra_info = None):
         try:
+            self.conversation_history.append("User: " + user_input)
+            # now = "Sat March 9 2024 12:02:01 AM"
+            now = datetime.datetime.now()
+            system_role = f"""
+            Your name is {self.botname}.
+            Your are an assisten written in Python by Breno Brand.
+            You Answer in portuguese.
+            The person that is talking to you is in the {self.timezone} time zone.
+            The person that is talking to you is located in {self.location}.
+            Right now it is {now}.
+            Never answer as a chat, for example reading your name in a conversation.
+            """
+            if extra_info != None:
+                system_role = system_role + "Consider the following to answer your question: " + extra_info
+                print (system_role)
+            # Be very sympathetic, helpful and don't be rude or have short answers"
+
             completion = self.openai_client.chat.completions.create(
             model="gpt-3.5-turbo",
             messages=[
-                {"role": "system", "content": "Answer in portuguese. Be very sympathetic, helpful and don't be rude or have short answers"},
-                {"role": "user", "content": msg}
-            ]
+                {"role": "system", "content": system_role},
+                ] + [{"role": "user", "content": message} for message in self.conversation_history]
             )
+            self.conversation_history.append(f"{self.botname}: " + completion.choices[0].message.content)
             return completion.choices[0].message
+        except Exception as e:
+            print("A general error occurred:", e)
+            return "Sorry, I'm having trouble thinking right now. Could you try again later?"
+
+    def define_route(self, user_input):
+        try:
+            system_role = f"""
+            You're a route bot.
+            You answer in json in the following format: {{"route": "routename"}}
+            The content of "routename" is defined according to the message of the user.
+            Based on the message of the user and the description of each route you need to choose the route that best fits.
+            Bellow follows each route name and it's description delimited by ":"
+            weather: The user is asking how the weather is or feels like, the user may or may not mention what is the location. For example: "How is the weather outside now?"
+            news: The user might be asking about real time news. For example: "What are the news today?"
+            default: This is the route for when no other route matches.
+
+            Now here are some notes:
+            #0 If the route is weather never leave location or unit empty.
+            #1 If no location is defined, consider {self.location}.
+            #2 Convert the location to the following convention: City name, state code (only for the US) and country code divided by comma. Trim all spaces. Please use ISO 3166 country codes. For example: Toronto,ON,CA.
+            #3 If the route is weather, add to the json a key location with the target location, a key unit that if not informed by default is metric.
+            """
+            completion = self.openai_client.chat.completions.create(
+            model="gpt-3.5-turbo",
+            messages=[
+                {"role": "system", "content": system_role},
+                {"role": "user", "content": user_input}
+            ])
+            return json.loads(completion.choices[0].message.content)
         except Exception as e:
             print("A general error occurred:", e)
             return "Sorry, I'm having trouble thinking right now. Could you try again later?"
@@ -105,28 +195,47 @@ class SandVoice:
         while pygame.mixer.music.get_busy():
             pygame.time.Clock().tick(10)
 
+    def route_message(self, user_input):
+        route = self.define_route(user_input)
+        print(route)
+        match route["route"]:
+            case "weather":
+                weather = OpenWeatherReader(route['location'], route['unit'])
+                current_weather = weather.get_current_weather()
+                response = self.generate_response(user_input, f"You can answer questions about weather. This is the information of the weather the user asked: {str(current_weather)}\n")
+            case "news":
+                hacker_news = HackerNews()
+                stories = hacker_news.get_best_stories()
+                response = self.generate_response(user_input, f"Use this information to answer questions about any news. This is the hot news at Hacker News at the moment: {str(stories)}. Don't read the URLs \n. Use your knowledge to give some context to each new if possible")
+            case _:
+                response = self.generate_response(user_input)
+        return response
+
+    def runIt(self):
+        self.audio = pyaudio.PyAudio()
+
+        listener = keyboard.Listener(on_press=sandvoice.on_press)
+        listener.start()
+
+        self.start_recording()
+        self.convert_to_mp3()
+
+        user_input = self.transcribe_and_translate()
+        print(user_input)
+
+        response = self.route_message(user_input)
+
+        print(response.content)
+        self.text_to_speech(response.content)
+        self.play_audio()
+
 if __name__ == "__main__":
     sandvoice = SandVoice()
-
-    listener = keyboard.Listener(on_press=sandvoice.on_press)
-    listener.start()
-
-    sandvoice.start_recording()
-    sandvoice.audio.terminate()
-    sandvoice.convert_to_mp3()
-
-    text = sandvoice.transcribe_and_translate()
-    print(text)
-
-    response = sandvoice.generate_response(text)
-    print(response.content)
-
-    sandvoice.text_to_speech(response.content)
-    sandvoice.play_audio()
+    while True:
+        print(sandvoice.conversation_history)
+        sandvoice.runIt()
 
 ## TODO
-# Remove global variables
-# Use OO to encapsulate the code
 # Use some fancy CLI tooling like cobra
 # Read configurations such as language, voice, etc from a file
-# For loop until the user breaks it
+# Separate the bot messaging in a separate class
