@@ -26,8 +26,7 @@ class SandVoice:
 
     def on_press(self, key):
         if key == keyboard.Key.esc:
-            self.stop_recording()
-            return False
+            self.is_recording = False
 
     def stop_recording(self):
         self.is_recording = False
@@ -54,6 +53,7 @@ class SandVoice:
         wf.setframerate(self.rate)
         wf.writeframes(b''.join(frames))
         wf.close()
+        self.audio.terminate()
 
     def convert_to_mp3(self):
         lame = lameenc.Encoder()
@@ -112,7 +112,6 @@ if __name__ == "__main__":
     listener.start()
 
     sandvoice.start_recording()
-    sandvoice.audio.terminate()
     sandvoice.convert_to_mp3()
 
     text = sandvoice.transcribe_and_translate()
