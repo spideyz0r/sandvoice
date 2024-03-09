@@ -239,3 +239,4 @@ if __name__ == "__main__":
 # Use some fancy CLI tooling like cobra
 # Read configurations such as language, voice, etc from a file
 # Separate the bot messaging in a separate class
+# Make playing the audio optional
