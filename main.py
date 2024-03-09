@@ -10,8 +10,37 @@ import sounddevice
 # this is necessary to mute some outputs from pygame
 os.environ['PYGAME_HIDE_SUPPORT_PROMPT'] = "hide"
 import pygame
-
 import requests
+import yaml
+
+class Config:
+    def __init__(self):
+        self.config_file = f"{os.environ['HOME']}/.sandvoice/config.yaml"
+        self.defaults  = {
+            "channels": 2,
+            "bitrate": 128,
+            "rate": 44100,
+            "chunk": 1024,
+            "tmp_files_path": f"{os.environ['HOME']}/.sandvoice/tmp/",
+            "botname": "SandVoice",
+            "timezone": "EST",
+            "location": "Toronto, ON, CA",
+            "language": "English",
+            "debug": "disabled",
+            "botvoice": "enabled"
+        }
+        self.config = self.load_config()
+
+    def load_config(self):
+        if not os.path.exists(self.config_file):
+            return self.defaults
+        with open(self.config_file, "r") as f:
+            data = yaml.safe_load(f)
+        # combine both dicts, data overrides defaults
+        return {**self.defaults, **data}
+
+    def get(self, key):
+            return self.config.get(key, self.defaults[key])
 
 class HackerNews:
     def __init__(self):
@@ -36,7 +65,7 @@ class HackerNews:
         return stories
 
 class OpenWeatherReader:
-    def __init__(self, location, unit):
+    def __init__(self, location, unit = "metric"):
         self.api_key = os.environ['OPENWEATHERMAP_API_KEY']
         self.location = location
         self.unit = unit
@@ -55,18 +84,24 @@ class OpenWeatherReader:
 class SandVoice:
     def __init__(self):
         self.format = pyaudio.paInt16
-        self.channels = 2
-        self.bitrate = 128
-        self.rate = 44100
-        self.chunk = 1024
-        self.tmp_files_path = "/tmp/"
-        self.tmp_recording = self.tmp_files_path + "recording"
         self.openai_client = OpenAI()
         self.is_recording = False
         self.conversation_history = []
-        self.botname = "Sandbot"
-        self.timezone = "EST"
-        self.location = "Stoney Creek, Ontario, Canada"
+        config = Config()
+        self.channels = config.get("channels")
+        self.bitrate = config.get("bitrate")
+        self.rate = config.get("rate")
+        self.chunk = config.get("chunk")
+        self.tmp_files_path = config.get("tmp_files_path")
+        self.botname = config.get("botname")
+        self.timezone = config.get("timezone")
+        self.location = config.get("location")
+        self.language = config.get("language")
+        self.tmp_recording = self.tmp_files_path + "recording"
+        self.debug = config.get("debug") == "enabled"
+        self.botvoice = config.get("botvoice") == "enabled"
+        if not os.path.exists(self.tmp_files_path):
+            os.makedirs(self.tmp_files_path)
 
     def on_press(self, key):
         if key == keyboard.Key.esc:
@@ -77,7 +112,7 @@ class SandVoice:
 
     def start_recording(self):
         self.is_recording = True
-        print("Recording started...")
+        print(">> Listening... press ^ to stop")
         stream = self.audio.open(format=self.format, channels=self.channels,
                             rate=self.rate, input=True,
                             frames_per_buffer=self.chunk)
@@ -89,7 +124,8 @@ class SandVoice:
 
         stream.stop_stream()
         stream.close()
-        print("Recording stopped.")
+        if self.debug:
+            print("Recording stopped.")
 
         wf = wave.open(self.tmp_recording + ".wav", 'wb')
         wf.setnchannels(self.channels)
@@ -120,20 +156,22 @@ class SandVoice:
     def generate_response(self, user_input, extra_info = None):
         try:
             self.conversation_history.append("User: " + user_input)
-            # now = "Sat March 9 2024 12:02:01 AM"
             now = datetime.datetime.now()
             system_role = f"""
             Your name is {self.botname}.
             Your are an assisten written in Python by Breno Brand.
-            You Answer in portuguese.
+            You Answer in {self.language}.
             The person that is talking to you is in the {self.timezone} time zone.
             The person that is talking to you is located in {self.location}.
             Right now it is {now}.
             Never answer as a chat, for example reading your name in a conversation.
+            DO NOT reply to messages with the format "{self.botname}": <message here>.
+            Reply in a natural and human way.
             """
             if extra_info != None:
                 system_role = system_role + "Consider the following to answer your question: " + extra_info
-                print (system_role)
+                if self.debug:
+                    print (system_role)
             # Be very sympathetic, helpful and don't be rude or have short answers"
 
             completion = self.openai_client.chat.completions.create(
@@ -197,9 +235,12 @@ class SandVoice:
 
     def route_message(self, user_input):
         route = self.define_route(user_input)
-        print(route)
+        if self.debug:
+            print(route)
         match route["route"]:
             case "weather":
+                if not route.get('location'):
+                    self.route_message(user_input)
                 weather = OpenWeatherReader(route['location'], route['unit'])
                 current_weather = weather.get_current_weather()
                 response = self.generate_response(user_input, f"You can answer questions about weather. This is the information of the weather the user asked: {str(current_weather)}\n")
@@ -221,18 +262,23 @@ class SandVoice:
         self.convert_to_mp3()
 
         user_input = self.transcribe_and_translate()
-        print(user_input)
+        print(f"\nUser: {user_input}")
 
         response = self.route_message(user_input)
 
-        print(response.content)
-        self.text_to_speech(response.content)
-        self.play_audio()
+        print(f"{self.botname}: {response.content}\n")
+        if self.botvoice:
+            self.text_to_speech(response.content)
+            self.play_audio()
 
 if __name__ == "__main__":
     sandvoice = SandVoice()
     while True:
-        print(sandvoice.conversation_history)
+        if sandvoice.debug:
+            print(sandvoice.conversation_history)
+            print(sandvoice.__str__())
+            print(sandvoice.__repr__())
+            print(sandvoice)
         sandvoice.runIt()
 
 ## TODO
