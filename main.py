@@ -98,8 +98,8 @@ class SandVoice:
         self.location = config.get("location")
         self.language = config.get("language")
         self.tmp_recording = self.tmp_files_path + "recording"
-        self.debug = config.get("debug") == "enabled"
-        self.botvoice = config.get("botvoice") == "enabled"
+        self.debug = config.get("debug").lower() == "enabled"
+        self.botvoice = config.get("botvoice").lower() == "enabled"
         if not os.path.exists(self.tmp_files_path):
             os.makedirs(self.tmp_files_path)
 
