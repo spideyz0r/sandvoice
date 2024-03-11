@@ -1,41 +1,61 @@
 import os, datetime, json
 import pyaudio
 import wave
-import pynput
 from pynput import keyboard
 import lameenc
 from openai import OpenAI
 import warnings
-import sounddevice
 # this is necessary to mute some outputs from pygame
 os.environ['PYGAME_HIDE_SUPPORT_PROMPT'] = "hide"
 import pygame
 import requests
 import yaml
-import urllib.request
 from bs4 import BeautifulSoup
+from googlesearch import search
+
+
+
+class GoogleSearcher:
+    def __init__(self, num_results=3):
+        self.num_results = num_results
+
+    def search(self, query):
+        print (f"Searching for {query}, getting {self.num_results} results.")
+        results = search(query, num_results=self.num_results)
+        return list(results)
 
 class WebTextExtractor:
     def __init__(self, url):
         self.url = url
-        self.user_agent = "Mozilla/5.0 (Windows; U; Windows NT 5.1; en-US; rv:1.9.0.7) Gecko/2009021910 Firefox/3.0.7"
-        self.headers = { "User-Agent" : self.user_agent }
+        self.headers = {
+            "User-Agent": "Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:106.0) Gecko/20100101 Firefox/106.0",
+            "Accept": "*/*",
+            "Accept-Language": "en-US,en;q=0.5",
+            "Accept-Encoding": "gzip, deflate, br",
+            "CallTreeId": "||BTOC-1BF47A0C-CCDD-47BB-A9DA-592009B5FB38",
+            "Content-Type": "application/json; charset=UTF-8",
+            "x-timeout-ms": "5000",
+            "DNT": "1",
+            "Connection": "keep-alive",
+            "Sec-Fetch-Dest": "empty",
+            "Sec-Fetch-Mode": "cors",
+            "Sec-Fetch-Site": "same-origin"
+            }
+
+    def remove_non_ascii(self, text):
+        return ''.join(char for char in text if ord(char) < 128)
 
     def get_text(self):
-        try:
-            req = urllib.request.Request(self.url, headers=self.headers)
-            response = urllib.request.urlopen(req)
-            html = response.read()
-            soup = BeautifulSoup(html, 'html.parser')
-
-            text = soup.get_text()
-            lines = (line.strip() for line in text.splitlines())
-            chunks = (phrase.strip() for line in lines for phrase in line.split("  "))
-            text = '\n'.join(chunk for chunk in chunks if chunk)
-            return text
-        except Exception as e:
-            print(f"An error occurred with url {self.url} {e}")
-            return None
+        response = requests.get(self.url, headers=self.headers)
+        response.encoding = 'utf-8'
+        soup = BeautifulSoup(response.text, 'lxml')
+        for script in soup(["script", "style"]):
+            script.extract()
+        text = soup.get_text()
+        text = BeautifulSoup(text, "lxml").text
+        text = text.strip().replace("\n", " ").replace("\r", " ").replace("\t", " ")
+        cleaned_result = self.remove_non_ascii(text)
+        return cleaned_result
 
 class Config:
     def __init__(self):
@@ -51,6 +71,8 @@ class Config:
             "location": "Toronto, ON, CA",
             "language": "English",
             "debug": "disabled",
+            "summary_words": "100",
+            "search_sources": "4",
             "botvoice": "enabled"
         }
         self.config = self.load_config()
@@ -131,6 +153,8 @@ class SandVoice:
         self.timezone = config.get("timezone")
         self.location = config.get("location")
         self.language = config.get("language")
+        self.summary_words = config.get("summary_words")
+        self.search_sources = config.get("search_sources")
         self.tmp_recording = self.tmp_files_path + "recording"
         self.debug = config.get("debug").lower() == "enabled"
         self.botvoice = config.get("botvoice").lower() == "enabled"
@@ -194,7 +218,7 @@ class SandVoice:
             system_role = f"""
             Your name is {self.botname}.
             Your are an assisten written in Python by Breno Brand.
-            You Answer in {self.language}.
+            You Answer must be in {self.language}.
             The person that is talking to you is in the {self.timezone} time zone.
             The person that is talking to you is located in {self.location}.
             Right now it is {now}.
@@ -224,7 +248,7 @@ class SandVoice:
         try:
             system_role = f"""
             You're a route bot.
-            You answer in json in the following format: {{"route": "routename"}}
+            You answer must be in json in the following format: {{"route": "routename"}}
             The content of "routename" is defined according to the message of the user.
             Based on the message of the user and the description of each route you need to choose the route that best fits.
             Bellow follows each route name and it's description delimited by ":"
@@ -232,6 +256,7 @@ class SandVoice:
             weather: The user is asking how the weather is or feels like, the user may or may not mention what is the location. For example: "How is the weather outside now?"
             news-summary: The user might be asking about a summary of the real time news. For example: "What are the summary of the news today? Another example: What are the details of the news today?"
             news: The user might be asking about real time news. This is just gonna list the topics For example: "What are the news today? Another example: What are the top 5 news today?"
+            other-realtime: This is for any other real time information that is not news or weather. But see if this is potentially something you know, don't use this route. This is a real-time information. For example: "What is the price of Bitcoin today?"
             default: This is the route for when no other route matches.
 
             Rules for the routes:
@@ -239,9 +264,11 @@ class SandVoice:
             #1 If no location is defined, consider {self.location}.
             #2 Convert the location to the following convention: City name, state code (only for the US) and country code divided by comma. Trim all spaces. Please use ISO 3166 country codes. For example: Toronto,ON,CA.
             #3 If the route is weather, add to the json a key location with the target location, a key unit that if not informed by default is metric.
+            #4 if the route is other-realtime, add to the json a key "query" with a string that is going to be used to query the question in the internet. For example, if the user asked what is the price of Bitcoin today, the query is going to be "Bitcoin price today".
             """
             completion = self.openai_client.chat.completions.create(
             model="gpt-3.5-turbo",
+            # model="gpt-4-turbo-preview",
             messages=[
                 {"role": "system", "content": system_role},
                 {"role": "user", "content": user_input}
@@ -251,16 +278,26 @@ class SandVoice:
             print("A general error occurred:", e)
             return "Sorry, I'm having trouble thinking right now. Could you try again later?"
 
-    def text_summary(self, user_input):
+    def text_summary(self, user_input, extra_info = None, words = "100"):
         try:
+            if self.debug:
+                print("Summary words: " + words)
+                print("Before: " + user_input)
             system_role = f"""
-            You're a bot summaries texts in 20 words.
+            You're a bot summaries texts in {words} words.
+            If there is a date of the text you are reading, mention the date in the summary.
             The summary must content the most important information of the text.
-            Your answer will be in json format: {{"title": "some title", "text": "some text"}}.
+            Your answer will be in json format: {{"title": "some title", "text": "the summary here"}}.
             The text must be translated to {self.language} if required.
             If one of the texts has no content or has an error, figure something out from the title.
-            You will receive a text and you need to summarize it in 10 words and return the title and the summary.
+            You will receive a text and you need to summarize it in {words} words and return the title and the summary.
             """
+
+            if self.debug:
+                print(system_role)
+            if extra_info != None:
+                system_role = "Consider that this is the question of the user: {extra_info}" + system_role
+
             completion = self.openai_client.chat.completions.create(
             model="gpt-3.5-turbo",
             messages=[
@@ -268,11 +305,11 @@ class SandVoice:
                 {"role": "user", "content": user_input}
             ])
             if self.debug:
-                print(completion.choices[0].message.content)
+                print("After: " +completion.choices[0].message.content + "\n")
             return json.loads(completion.choices[0].message.content)
         except Exception as e:
             print("A general error occurred:", e)
-            return "Sorry, I'm having trouble thinking right now. Could you try again later?"
+            return "None"
 
     def text_to_speech(self, text):
         warnings.filterwarnings("ignore", category=DeprecationWarning)
@@ -312,11 +349,32 @@ class SandVoice:
                 stories = hacker_news.get_best_stories_summary()
                 all_stories = []
                 for story in stories:
-                    summary = self.text_summary(story['text'])
+                    summary = self.text_summary(story['text'], words=self.summary_words)
                     all_stories.append(f"{story['title']} - {summary}")
-                response = self.generate_response(user_input, f"Use this information to answer questions about any news. This is the hot news at Hacker News at the moment: {str(all_stories)}. Don't read the URLs \n. Use your knowledge to give some context to each new if possible")
+                response = self.generate_response(user_input, f"Use this information to answer questions about any news. This is the hot news at Hacker News at the moment: {str(all_stories)}. Don't read the URLs \n. Use your knowledge to give some context to each new if possible. Answer the question as if you're on a report news podcast style. Make sure to include the take away for each news. Make sure to include your opinion.")
+            case "other-realtime":
+                if self.debug:
+                    print(f"Searching for real time information using {self.search_sources} sources.")
+                searcher = GoogleSearcher(int(self.search_sources))
+                if not route.get('query'):
+                    route['query'] = user_input
+                results = searcher.search(route['query'])
+                summaries = []
+                if self.debug:
+                    print("Results" + str(results) + "\n\n")
+                for r in results:
+                    if self.debug:
+                        print(f"Extracting text from {r}")
+                    extractor = WebTextExtractor(r)
+                    text = extractor.get_text()
+                    summary = self.text_summary(text, route['query'], words=self.summary_words)
+                    summaries.append({"text": summary})
+                if self.debug:
+                    print ("Summaries" + str(summaries) + "\n\n")
+                response = self.generate_response(user_input, f"You have access to an Internet search to look for real data information. You must answer the question. This is the contex information to answer the question: {str(summaries)}\n")
             case _:
                 response = self.generate_response(user_input)
+
         return response
 
     def runIt(self):
@@ -337,6 +395,7 @@ class SandVoice:
         if self.botvoice:
             self.text_to_speech(response.content)
             self.play_audio()
+        exit(1)
 
 if __name__ == "__main__":
     sandvoice = SandVoice()
@@ -344,13 +403,13 @@ if __name__ == "__main__":
         if sandvoice.debug:
             print(sandvoice.conversation_history)
             print(sandvoice.__str__())
-            print(sandvoice.__repr__())
-            print(sandvoice)
         sandvoice.runIt()
 
 ## TODO
-# Use some fancy CLI tooling like cobra
+# After getting the first response, have the option to press a key before start recording again
 # Separate the bot messaging in a separate class
 # Add some tests
 # Make routes work as plugins
 # Have proper error checking in multiple parts of the code
+# Add temperature forecast for a week or close days
+# Launch summarines in parallel
