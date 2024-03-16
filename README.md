@@ -37,6 +37,8 @@ location: Stoney Creek, Ontario, Canada
 language: English
 botvoice: enabled
 debug: disabled
+summary_words: 100
+search_sources: 3
 ```
 
 
