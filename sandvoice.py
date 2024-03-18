@@ -12,8 +12,32 @@ import requests
 import yaml
 from bs4 import BeautifulSoup
 from googlesearch import search
+import feedparser
 
+class RSSReader:
+    def __init__(self, url, max_items=5):
+        self.url = url
+        self.max_items = max_items
 
+    def get_latest_news(self):
+        news_feed = feedparser.parse(self.url)
+
+        news_items = []
+        for entry in news_feed.entries[:self.max_items]:
+            news_item = {
+                'title': entry.title,
+                'link': entry.link,
+                'description': entry.description,
+                'published': entry.get('published_parsed', None)  # Handle potential missing dates
+            }
+
+            # Convert 'published_parsed' (if available) to datetime object
+            if news_item['published']:
+                news_item['published'] = datetime.datetime(*news_item['published'][:6])
+
+            news_items.append(news_item)
+
+        return news_items
 
 class GoogleSearcher:
     def __init__(self, num_results=3):
@@ -73,6 +97,7 @@ class Config:
             "debug": "disabled",
             "summary_words": "100",
             "search_sources": "4",
+            "push_to_talk": "disabled",
             "botvoice": "enabled"
         }
         self.config = self.load_config()
@@ -158,6 +183,7 @@ class SandVoice:
         self.tmp_recording = self.tmp_files_path + "recording"
         self.debug = config.get("debug").lower() == "enabled"
         self.botvoice = config.get("botvoice").lower() == "enabled"
+        self.push_to_talk = config.get("push_to_talk").lower() == "enabled"
         if not os.path.exists(self.tmp_files_path):
             os.makedirs(self.tmp_files_path)
 
@@ -395,9 +421,15 @@ class SandVoice:
         if self.botvoice:
             self.text_to_speech(response.content)
             self.play_audio()
-        exit(1)
+        if self.push_to_talk:
+            input("Press any key to speak...")
+
 
 if __name__ == "__main__":
+    # my_reader = RSSReader("https://rss.uol.com.br/feed/comecar-o-dia.xml")
+    # latest_news = my_reader.get_latest_news()
+    # print(latest_news)
+
     sandvoice = SandVoice()
     while True:
         if sandvoice.debug:
@@ -408,6 +440,7 @@ if __name__ == "__main__":
 ## TODO
 # After getting the first response, have the option to press a key before start recording again
 # Separate the bot messaging in a separate class
+# A class for audio handling
 # Add some tests
 # Make routes work as plugins
 # Have proper error checking in multiple parts of the code
