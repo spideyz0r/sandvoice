@@ -1,19 +1,42 @@
-import os, datetime, json
+import os, datetime, json, sys, re, warnings
+from ctypes import *
 import pyaudio
 import wave
 from pynput import keyboard
 import lameenc
 from openai import OpenAI
-import warnings
 # this is necessary to mute some outputs from pygame
 os.environ['PYGAME_HIDE_SUPPORT_PROMPT'] = "hide"
 import pygame
 import requests
 import yaml
 from bs4 import BeautifulSoup
-from googlesearch import search
+import googlesearch
+import feedparser
 
+class RSSReader:
+    def __init__(self, url, max_items=5):
+        self.url = url
+        self.max_items = max_items
 
+    def get_latest_news(self):
+        news_feed = feedparser.parse(self.url)
+
+        news_items = []
+        for entry in news_feed.entries[:self.max_items]:
+            news_item = {
+                'title': entry.title,
+                'link': entry.link,
+                'description': entry.description,
+                'published': entry.get('published_parsed', None)
+            }
+
+            if news_item['published']:
+                news_item['published'] = datetime.datetime(*news_item['published'][:6])
+
+            news_items.append(news_item)
+
+        return news_items
 
 class GoogleSearcher:
     def __init__(self, num_results=3):
@@ -21,7 +44,7 @@ class GoogleSearcher:
 
     def search(self, query):
         print (f"Searching for {query}, getting {self.num_results} results.")
-        results = search(query, num_results=self.num_results)
+        results = googlesearch.search(query, num_results=self.num_results)
         return list(results)
 
 class WebTextExtractor:
@@ -73,6 +96,10 @@ class Config:
             "debug": "disabled",
             "summary_words": "100",
             "search_sources": "4",
+            "push_to_talk": "disabled",
+            "rss_news": "https://feeds.bbci.co.uk/news/rss.xml",
+            "rss_news_max_items": "5",
+            "linux_warnings": "enabled",
             "botvoice": "enabled"
         }
         self.config = self.load_config()
@@ -155,9 +182,13 @@ class SandVoice:
         self.language = config.get("language")
         self.summary_words = config.get("summary_words")
         self.search_sources = config.get("search_sources")
+        self.rss_news = config.get("rss_news")
+        self.rss_news_max_items = config.get("rss_news_max_items")
         self.tmp_recording = self.tmp_files_path + "recording"
         self.debug = config.get("debug").lower() == "enabled"
         self.botvoice = config.get("botvoice").lower() == "enabled"
+        self.push_to_talk = config.get("push_to_talk").lower() == "enabled"
+        self.linux_warnings = config.get("linux_warnings").lower() == "enabled"
         if not os.path.exists(self.tmp_files_path):
             os.makedirs(self.tmp_files_path)
 
@@ -254,8 +285,9 @@ class SandVoice:
             Bellow follows each route name and it's description delimited by ":"
 
             weather: The user is asking how the weather is or feels like, the user may or may not mention what is the location. For example: "How is the weather outside now?"
-            news-summary: The user might be asking about a summary of the real time news. For example: "What are the summary of the news today? Another example: What are the details of the news today?"
-            news: The user might be asking about real time news. This is just gonna list the topics For example: "What are the news today? Another example: What are the top 5 news today?"
+            news: The user is asking for news, not Hacker News. For example: "What are the news today?" Another example: "What are the news of the day?" 
+            hacker-news-summary: The user might be asking about a summary of Hacker News. For example: "What are the summary of the Hacker news today? Another example: What are the details of the hacker news today?"
+            hacker-news: The user might be asking about real time Hacker News. This is just gonna list the topics For example: "What are the hacker news today? Another example: What are the top 5 hacker news today?"
             other-realtime: This is for any other real time information that is not news or weather. But see if this is potentially something you know, don't use this route. This is a real-time information. For example: "What is the price of Bitcoin today?"
             default: This is the route for when no other route matches.
 
@@ -341,10 +373,17 @@ class SandVoice:
                 current_weather = weather.get_current_weather()
                 response = self.generate_response(user_input, f"You can answer questions about weather. This is the information of the weather the user asked: {str(current_weather)}\n")
             case "news":
+                rss_reader = RSSReader(self.rss_news, int(self.rss_news_max_items))
+                latest_news = rss_reader.get_latest_news()
+                all_news = []
+                for news in latest_news:
+                    all_news.append(news)
+                response = self.generate_response(user_input, f"Use this information to answer questions about any news. Make pertinent comments if any too. This is the hot news at the moment: {str(all_news)}. Don't read the URLs \n. Use your knowledge to give some context to each new if possible")
+            case "hacker-news":
                 hacker_news = HackerNews()
                 stories = hacker_news.get_best_stories()
                 response = self.generate_response(user_input, f"Use this information to answer questions about any news. This is the hot news at Hacker News at the moment: {str(stories)}. Don't read the URLs \n. Use your knowledge to give some context to each new if possible")
-            case "news-summary":
+            case "hacker-news-summary":
                 hacker_news = HackerNews()
                 stories = hacker_news.get_best_stories_summary()
                 all_stories = []
@@ -377,8 +416,40 @@ class SandVoice:
 
         return response
 
-    def runIt(self):
+    def get_libasound_path(self):
+        lib_paths = [
+            '/usr/lib',
+            '/usr/lib64',
+            '/lib',
+            '/lib64',
+        ]
+        lib_pattern = re.compile(r'libasound\.so\..*')
+        for file in lib_paths:
+            if not os.path.isdir(file):
+                continue
+            for f in os.listdir(file):
+                if lib_pattern.match(f):
+                    return f
+        return None
+
+    def initialize_audio(self):
+        if not self.linux_warnings:
+            ERROR_HANDLER_FUNC = CFUNCTYPE(None, c_char_p, c_int, c_char_p, c_int, c_char_p)
+            c_error_handler = ERROR_HANDLER_FUNC(self.py_error_handler)
+            f = self.get_libasound_path()
+            if self.debug:
+                print("Loading libasound from: " + f)
+            asound = cdll.LoadLibrary(f)
+            asound.snd_lib_error_set_handler(c_error_handler)
+            asound = cdll.LoadLibrary('libasound.so.2')
+            asound.snd_lib_error_set_handler(c_error_handler)
         self.audio = pyaudio.PyAudio()
+
+    def py_error_handler(self, filename, line, function, err, fmt):
+        pass
+
+    def runIt(self):
+        self.initialize_audio()
 
         listener = keyboard.Listener(on_press=sandvoice.on_press)
         listener.start()
@@ -395,7 +466,8 @@ class SandVoice:
         if self.botvoice:
             self.text_to_speech(response.content)
             self.play_audio()
-        exit(1)
+        if self.push_to_talk:
+            input("Press any key to speak...")
 
 if __name__ == "__main__":
     sandvoice = SandVoice()
@@ -408,6 +480,7 @@ if __name__ == "__main__":
 ## TODO
 # After getting the first response, have the option to press a key before start recording again
 # Separate the bot messaging in a separate class
+# A class for audio handling
 # Add some tests
 # Make routes work as plugins
 # Have proper error checking in multiple parts of the code
