@@ -1,10 +1,10 @@
-import os, datetime, json
+import os, datetime, json, sys, re
+from ctypes import *
 import pyaudio
 import wave
 from pynput import keyboard
 import lameenc
 from openai import OpenAI
-import warnings
 # this is necessary to mute some outputs from pygame
 os.environ['PYGAME_HIDE_SUPPORT_PROMPT'] = "hide"
 import pygame
@@ -98,6 +98,7 @@ class Config:
             "summary_words": "100",
             "search_sources": "4",
             "push_to_talk": "disabled",
+            "linux_warnings": "enabled",
             "botvoice": "enabled"
         }
         self.config = self.load_config()
@@ -184,6 +185,7 @@ class SandVoice:
         self.debug = config.get("debug").lower() == "enabled"
         self.botvoice = config.get("botvoice").lower() == "enabled"
         self.push_to_talk = config.get("push_to_talk").lower() == "enabled"
+        self.linux_warnings = config.get("linux_warnings").lower() == "enabled"
         if not os.path.exists(self.tmp_files_path):
             os.makedirs(self.tmp_files_path)
 
@@ -403,8 +405,40 @@ class SandVoice:
 
         return response
 
-    def runIt(self):
+    def get_libasound_path(self):
+        lib_paths = [
+            '/usr/lib',
+            '/usr/lib64',
+            '/lib',
+            '/lib64',
+        ]
+        lib_pattern = re.compile(r'libasound\.so\..*')
+        for file in lib_paths:
+            if not os.path.isdir(file):
+                continue
+            for f in os.listdir(file):
+                if lib_pattern.match(f):
+                    return f
+        return None
+
+    def initialize_audio(self):
+        if not self.linux_warnings:
+            ERROR_HANDLER_FUNC = CFUNCTYPE(None, c_char_p, c_int, c_char_p, c_int, c_char_p)
+            c_error_handler = ERROR_HANDLER_FUNC(self.py_error_handler)
+            f = self.get_libasound_path()
+            if self.debug:
+                print("Loading libasound from: " + f)
+            asound = cdll.LoadLibrary(f)
+            asound.snd_lib_error_set_handler(c_error_handler)
+            asound = cdll.LoadLibrary('libasound.so.2')
+            asound.snd_lib_error_set_handler(c_error_handler)
         self.audio = pyaudio.PyAudio()
+
+    def py_error_handler(self, filename, line, function, err, fmt):
+        pass
+
+    def runIt(self):
+        self.initialize_audio()
 
         listener = keyboard.Listener(on_press=sandvoice.on_press)
         listener.start()
@@ -423,7 +457,6 @@ class SandVoice:
             self.play_audio()
         if self.push_to_talk:
             input("Press any key to speak...")
-
 
 if __name__ == "__main__":
     # my_reader = RSSReader("https://rss.uol.com.br/feed/comecar-o-dia.xml")
