@@ -441,8 +441,6 @@ class SandVoice:
                 print("Loading libasound from: " + f)
             asound = cdll.LoadLibrary(f)
             asound.snd_lib_error_set_handler(c_error_handler)
-            asound = cdll.LoadLibrary('libasound.so.2')
-            asound.snd_lib_error_set_handler(c_error_handler)
         self.audio = pyaudio.PyAudio()
 
     def py_error_handler(self, filename, line, function, err, fmt):
