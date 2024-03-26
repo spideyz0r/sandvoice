@@ -1,4 +1,4 @@
-import os, datetime, json, sys, re, warnings
+import os, datetime, json, sys, re, warnings, importlib
 from ctypes import *
 import pyaudio
 import wave
@@ -163,6 +163,9 @@ class OpenWeatherReader:
             return response.json()
         else:
             return None
+class BasePlugin:
+    def process(self, user_input, route_data):
+        raise NotImplementedError("Plugins must implement the process method")
 
 class SandVoice:
     def __init__(self):
@@ -191,6 +194,21 @@ class SandVoice:
         self.linux_warnings = config.get("linux_warnings").lower() == "enabled"
         if not os.path.exists(self.tmp_files_path):
             os.makedirs(self.tmp_files_path)
+        self.plugins = {}
+        self.load_plugins()
+
+    def load_plugins(self):
+        plugins_dir = "plugins"
+        for filename in os.listdir(plugins_dir):
+            if filename.endswith(".py"):
+                module_name = os.path.splitext(filename)[0]
+                module = importlib.import_module(f"plugins.{module_name}")
+
+                # Expect a class named 'Plugin' or a top-level 'process' function
+                if hasattr(module, 'Plugin'):
+                    self.plugins[module_name] = module.Plugin()
+                elif hasattr(module, 'process'):
+                    self.plugins[module_name] = module.process
 
     def on_press(self, key):
         if key == keyboard.Key.esc:
@@ -285,7 +303,7 @@ class SandVoice:
             Bellow follows each route name and it's description delimited by ":"
 
             weather: The user is asking how the weather is or feels like, the user may or may not mention what is the location. For example: "How is the weather outside now?"
-            news: The user is asking for news, not Hacker News. For example: "What are the news today?" Another example: "What are the news of the day?" 
+            news: The user is asking for news, not Hacker News. For example: "What are the news today?" Another example: "What are the news of the day?"
             hacker-news-summary: The user might be asking about a summary of Hacker News. For example: "What are the summary of the Hacker news today? Another example: What are the details of the hacker news today?"
             hacker-news: The user might be asking about real time Hacker News. This is just gonna list the topics For example: "What are the hacker news today? Another example: What are the top 5 hacker news today?"
             other-realtime: This is for any other real time information that is not news or weather. But see if this is potentially something you know, don't use this route. This is a real-time information. For example: "What is the price of Bitcoin today?"
@@ -363,56 +381,65 @@ class SandVoice:
 
     def route_message(self, user_input):
         route = self.define_route(user_input)
+        route["route"] = "echo"
         if self.debug:
             print(route)
-        match route["route"]:
-            case "weather":
-                if not route.get('location'):
-                    self.route_message(user_input)
-                weather = OpenWeatherReader(route['location'], route['unit'])
-                current_weather = weather.get_current_weather()
-                response = self.generate_response(user_input, f"You can answer questions about weather. This is the information of the weather the user asked: {str(current_weather)}\n")
-            case "news":
-                rss_reader = RSSReader(self.rss_news, int(self.rss_news_max_items))
-                latest_news = rss_reader.get_latest_news()
-                all_news = []
-                for news in latest_news:
-                    all_news.append(news)
-                response = self.generate_response(user_input, f"Use this information to answer questions about any news. Make pertinent comments if any too. This is the hot news at the moment: {str(all_news)}. Don't read the URLs \n. Use your knowledge to give some context to each new if possible")
-            case "hacker-news":
-                hacker_news = HackerNews()
-                stories = hacker_news.get_best_stories()
-                response = self.generate_response(user_input, f"Use this information to answer questions about any news. This is the hot news at Hacker News at the moment: {str(stories)}. Don't read the URLs \n. Use your knowledge to give some context to each new if possible")
-            case "hacker-news-summary":
-                hacker_news = HackerNews()
-                stories = hacker_news.get_best_stories_summary()
-                all_stories = []
-                for story in stories:
-                    summary = self.text_summary(story['text'], words=self.summary_words)
-                    all_stories.append(f"{story['title']} - {summary}")
-                response = self.generate_response(user_input, f"Use this information to answer questions about any news. This is the hot news at Hacker News at the moment: {str(all_stories)}. Don't read the URLs \n. Use your knowledge to give some context to each new if possible. Answer the question as if you're on a report news podcast style. Make sure to include the take away for each news. Make sure to include your opinion.")
-            case "other-realtime":
-                if self.debug:
-                    print(f"Searching for real time information using {self.search_sources} sources.")
-                searcher = GoogleSearcher(int(self.search_sources))
-                if not route.get('query'):
-                    route['query'] = user_input
-                results = searcher.search(route['query'])
-                summaries = []
-                if self.debug:
-                    print("Results" + str(results) + "\n\n")
-                for r in results:
-                    if self.debug:
-                        print(f"Extracting text from {r}")
-                    extractor = WebTextExtractor(r)
-                    text = extractor.get_text()
-                    summary = self.text_summary(text, route['query'], words=self.summary_words)
-                    summaries.append({"text": summary})
-                if self.debug:
-                    print ("Summaries" + str(summaries) + "\n\n")
-                response = self.generate_response(user_input, f"You have access to an Internet search to look for real data information. You must answer the question. This is the contex information to answer the question: {str(summaries)}\n")
-            case _:
-                response = self.generate_response(user_input)
+            print(self.plugins)
+        response = self.plugins[route["route"]](user_input, route)
+
+        # if route["route"] in self.plugins:
+        #     response = self.plugins[route["route"]](user_input, route)
+        # else:
+        #     response = self.generate_response(user_input)
+
+        # match route["route"]:
+        #     case "weather":
+        #         if not route.get('location'):
+        #             self.route_message(user_input)
+        #         weather = OpenWeatherReader(route['location'], route['unit'])
+        #         current_weather = weather.get_current_weather()
+        #         response = self.generate_response(user_input, f"You can answer questions about weather. This is the information of the weather the user asked: {str(current_weather)}\n")
+        #     case "news":
+        #         rss_reader = RSSReader(self.rss_news, int(self.rss_news_max_items))
+        #         latest_news = rss_reader.get_latest_news()
+        #         all_news = []
+        #         for news in latest_news:
+        #             all_news.append(news)
+        #         response = self.generate_response(user_input, f"Use this information to answer questions about any news. Make pertinent comments if any too. This is the hot news at the moment: {str(all_news)}. Don't read the URLs \n. Use your knowledge to give some context to each new if possible")
+        #     case "hacker-news":
+        #         hacker_news = HackerNews()
+        #         stories = hacker_news.get_best_stories()
+        #         response = self.generate_response(user_input, f"Use this information to answer questions about any news. This is the hot news at Hacker News at the moment: {str(stories)}. Don't read the URLs \n. Use your knowledge to give some context to each new if possible")
+        #     case "hacker-news-summary":
+        #         hacker_news = HackerNews()
+        #         stories = hacker_news.get_best_stories_summary()
+        #         all_stories = []
+        #         for story in stories:
+        #             summary = self.text_summary(story['text'], words=self.summary_words)
+        #             all_stories.append(f"{story['title']} - {summary}")
+        #         response = self.generate_response(user_input, f"Use this information to answer questions about any news. This is the hot news at Hacker News at the moment: {str(all_stories)}. Don't read the URLs \n. Use your knowledge to give some context to each new if possible. Answer the question as if you're on a report news podcast style. Make sure to include the take away for each news. Make sure to include your opinion.")
+        #     case "other-realtime":
+        #         if self.debug:
+        #             print(f"Searching for real time information using {self.search_sources} sources.")
+        #         searcher = GoogleSearcher(int(self.search_sources))
+        #         if not route.get('query'):
+        #             route['query'] = user_input
+        #         results = searcher.search(route['query'])
+        #         summaries = []
+        #         if self.debug:
+        #             print("Results" + str(results) + "\n\n")
+        #         for r in results:
+        #             if self.debug:
+        #                 print(f"Extracting text from {r}")
+        #             extractor = WebTextExtractor(r)
+        #             text = extractor.get_text()
+        #             summary = self.text_summary(text, route['query'], words=self.summary_words)
+        #             summaries.append({"text": summary})
+        #         if self.debug:
+        #             print ("Summaries" + str(summaries) + "\n\n")
+        #         response = self.generate_response(user_input, f"You have access to an Internet search to look for real data information. You must answer the question. This is the contex information to answer the question: {str(summaries)}\n")
+        #     case _:
+        #         response = self.generate_response(user_input)
 
         return response
 
@@ -460,9 +487,9 @@ class SandVoice:
 
         response = self.route_message(user_input)
 
-        print(f"{self.botname}: {response.content}\n")
+        print(f"{self.botname}: {response}\n")
         if self.botvoice:
-            self.text_to_speech(response.content)
+            self.text_to_speech(response)
             self.play_audio()
         if self.push_to_talk:
             input("Press any key to speak...")
