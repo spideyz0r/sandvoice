@@ -12,6 +12,19 @@ receiving the response, the application converts it back into audio, enabling
 the users to hear the answer. For those who prefer reading, the text version of
 the response is also printed in the terminal.
 
+## Plugins
+Each plugin has a file under the plugins directory. All the plugins must implement a function process in this particular API:
+`def process(user_input, route, s):`
+
+## Add plugins
+To add plugins you need to:
+1) Update the routes.yaml; add the appropriate route for your plugin.
+2) Create a file under the plugins directory with the route name, implementing the process function
+3) Use the commons directory if your function could be helpful to other plugins
+4) Currently all plugins have access to the "sandvoice" object and all its properties
+
+See the echo plugin in `plugins/echo.py` for an example.
+
 ## Key Features
 - Voice to text conversion
 - Interaction with OpenAI's GPT model (more to be added in the future)
