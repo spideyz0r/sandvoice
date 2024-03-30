@@ -54,6 +54,8 @@ class Config:
         self.botvoice = self.get("botvoice").lower() == "enabled"
         self.push_to_talk = self.get("push_to_talk").lower() == "enabled"
         self.linux_warnings = self.get("linux_warnings").lower() == "enabled"
+        self.sandvoice_path = f"{os.path.dirname(os.path.realpath(__file__))}/../"
+        self.plugin_path = f"{self.sandvoice_path}plugins/"
 
     def get(self, key):
             return self.config.get(key, self.defaults[key])

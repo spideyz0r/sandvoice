@@ -14,11 +14,20 @@ class SandVoice:
         self.load_plugins()
 
     def load_plugins(self):
-        plugins_dir = "plugins"
+        if not os.path.exists(self.config.plugin_path):
+            print(f"Plugin path {self.config.plugin_path} does not exist")
+            exit(1)
+        if self.config.debug:
+            print(f"Loading plugins from {self.config.plugin_path}")
+        plugins_dir = self.config.plugin_path
         for filename in os.listdir(plugins_dir):
             if filename.endswith(".py"):
-                module_name = os.path.splitext(filename)[0]
-                module = importlib.import_module(f"plugins.{module_name}")
+                try:
+                    module_name = os.path.splitext(filename)[0]
+                    module = importlib.import_module(f"plugins.{module_name}")
+                except Exception as e:
+                    print(f"Error loading plugin {filename}: {e}")
+                    continue
 
                 # Expect a class named 'Plugin' or a top-level 'process' function
                 if hasattr(module, 'Plugin'):
@@ -72,3 +81,4 @@ if __name__ == "__main__":
 # statistics on how long the session took
 # Make realtime be able to read pdf
 # read all roles from yaml files
+
