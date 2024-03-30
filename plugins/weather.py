@@ -23,5 +23,5 @@ def process(user_input, route, s):
         exit(1)
     weather = OpenWeatherReader(route['location'], route['unit'])
     current_weather = weather.get_current_weather()
-    response = s.generate_response(user_input, f"You can answer questions about weather. This is the information of the weather the user asked: {str(current_weather)}\n")
+    response = s.ai.generate_response(user_input, f"You can answer questions about weather. This is the information of the weather the user asked: {str(current_weather)}\n")
     return response.content
