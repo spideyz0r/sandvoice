@@ -17,11 +17,11 @@ class OpenWeatherReader:
         else:
             return None
 
-def process(user_input, route, sandvoice):
+def process(user_input, route, s):
     if not route.get('location'):
         print("Error, location not found")
         exit(1)
     weather = OpenWeatherReader(route['location'], route['unit'])
     current_weather = weather.get_current_weather()
-    response = sandvoice.generate_response(user_input, f"You can answer questions about weather. This is the information of the weather the user asked: {str(current_weather)}\n")
+    response = s.generate_response(user_input, f"You can answer questions about weather. This is the information of the weather the user asked: {str(current_weather)}\n")
     return response.content
