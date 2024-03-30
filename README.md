@@ -13,7 +13,7 @@ the users to hear the answer. For those who prefer reading, the text version of
 the response is also printed in the terminal.
 
 ## Plugins
-Each plugin has a file under the plugins directory. All the plugins must implement a function process in this particular API:
+Each plugin has a file under the plugins directory. All the plugins must implement a function `process` that returns a string `str` in this particular API:
 `def process(user_input, route, s):`
 
 ### Add plugins
