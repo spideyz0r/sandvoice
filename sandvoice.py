@@ -74,7 +74,6 @@ if __name__ == "__main__":
 # Have proper error checking in multiple parts of the code
 # Add temperature forecast for a week or close days
 # Launch summaries in parallel
-# Read models from config file
 # have specific configuration files for each plugin
 # break the routes.yaml into sections
 # have the option to input with command line

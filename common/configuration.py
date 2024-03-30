@@ -21,6 +21,12 @@ class Config:
             "rss_news": "https://feeds.bbci.co.uk/news/rss.xml",
             "rss_news_max_items": "5",
             "linux_warnings": "enabled",
+            "gpt_summary_model" : "gpt-3.5-turbo",
+            "gpt_route_model" : "gpt-3.5-turbo",
+            "gpt_response_model" : "gpt-3.5-turbo",
+            "speech_to_text_model" : "whisper-1",
+            "text_to_speech_model" : "tts-1",
+            "bot_voice_model" : "nova",
             "botvoice": "enabled"
         }
         self.config = self.load_defaults()
@@ -56,6 +62,12 @@ class Config:
         self.linux_warnings = self.get("linux_warnings").lower() == "enabled"
         self.sandvoice_path = f"{os.path.dirname(os.path.realpath(__file__))}/../"
         self.plugin_path = f"{self.sandvoice_path}plugins/"
+        self.gpt_summary_model = self.get("gpt_summary_model")
+        self.gpt_route_model = self.get("gpt_route_model")
+        self.gpt_response_model = self.get("gpt_response_model")
+        self.speech_to_text_model = self.get("speech_to_text_model")
+        self.text_to_speech_model = self.get("text_to_speech_model")
+        self.bot_voice_model = self.get("bot_voice_model")
 
     def get(self, key):
             return self.config.get(key, self.defaults[key])

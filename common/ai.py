@@ -9,16 +9,21 @@ class AI:
         self.openai_client = OpenAI()
         self.conversation_history = []
 
-    def transcribe_and_translate(self):
+    def transcribe_and_translate(self, model = None):
+        if not model:
+            model = self.config.speech_to_text_model
+
         with open(self.config.tmp_recording + ".mp3", "rb") as file:
             transcript = self.openai_client.audio.translations.create(
-                model="whisper-1",
-                file=file
+                model = model,
+                file = file
             )
         return transcript.text
 
-    def generate_response(self, user_input, extra_info = None):
+    def generate_response(self, user_input, extra_info = None, model = None):
         try:
+            if not model:
+                model = self.config.gpt_response_model
             self.conversation_history.append("User: " + user_input)
             now = datetime.datetime.now()
             system_role = f"""
@@ -39,8 +44,8 @@ class AI:
             # Be very sympathetic, helpful and don't be rude or have short answers"
 
             completion = self.openai_client.chat.completions.create(
-            model="gpt-3.5-turbo",
-            messages=[
+            model = model,
+            messages = [
                 {"role": "system", "content": system_role},
                 ] + [{"role": "user", "content": message} for message in self.conversation_history]
             )
@@ -50,8 +55,10 @@ class AI:
             print("A general error occurred:", e)
             return "Sorry, I'm having trouble thinking right now. Could you try again later?"
 
-    def define_route(self, user_input):
+    def define_route(self, user_input, model = None):
         try:
+            if not model:
+                model = self.config.gpt_route_model
             with open(f"{self.config.sandvoice_path}/routes.yaml", 'r') as f:
                 template_str = f.read()
             template = Template(template_str)
@@ -59,9 +66,8 @@ class AI:
             system_role = yaml.safe_load(rendered_config)
 
             completion = self.openai_client.chat.completions.create(
-            model="gpt-3.5-turbo",
-            # model="gpt-4-turbo-preview",
-            messages=[
+            model = model,
+            messages = [
                 {"role": "system", "content": system_role['route_role']},
                 {"role": "user", "content": user_input}
             ])
@@ -70,8 +76,10 @@ class AI:
             print("A general error occurred:", e)
             return "Sorry, I'm having trouble thinking right now. Could you try again later?"
 
-    def text_summary(self, user_input, extra_info = None, words = "100"):
+    def text_summary(self, user_input, extra_info = None, words = "100", model = None):
         try:
+            if not model:
+                model = self.config.gpt_summary_model
             if self.config.debug:
                 print("Summary words: " + words)
                 print("Before: " + user_input)
@@ -94,8 +102,8 @@ class AI:
                 system_role = "Consider that this is the question of the user: {extra_info}" + system_role
 
             completion = self.openai_client.chat.completions.create(
-            model="gpt-3.5-turbo",
-            messages=[
+            model = model,
+            messages = [
                 {"role": "system", "content": system_role},
                 {"role": "user", "content": user_input}
             ])
@@ -106,12 +114,16 @@ class AI:
             print("A general error occurred:", e)
             return "None"
 
-    def text_to_speech(self, text):
+    def text_to_speech(self, text, model = None, voice = None):
+        if not model:
+            model = self.config.text_to_speech_model
+        if not voice:
+            voice = self.config.bot_voice_model
         warnings.filterwarnings("ignore", category=DeprecationWarning)
         speech_file_path = self.config.tmp_recording + ".mp3"
         response = self.openai_client.audio.speech.create(
-            model="tts-1",
-            voice="nova",
-            input=text
+            model = model,
+            voice = "nova",
+            input = text
         )
         response.stream_to_file(speech_file_path)
