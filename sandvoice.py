@@ -46,10 +46,12 @@ class SandVoice:
             return self.ai.generate_response(user_input).content
 
     def runIt(self):
-        audio = Audio(self.config)
-
-        user_input = self.ai.transcribe_and_translate()
-        print(f"\nUser: {user_input}")
+        if self.config.cli_input:
+            user_input = input(f"You (press new line to finish): ")
+        else:
+            audio = Audio(self.config)
+            user_input = self.ai.transcribe_and_translate()
+            print(f"You: {user_input}")
 
         response = self.route_message(user_input)
         print(f"{self.config.botname}: {response}\n")
@@ -76,7 +78,7 @@ if __name__ == "__main__":
 # Launch summaries in parallel
 # have specific configuration files for each plugin
 # break the routes.yaml into sections
-# have the option to input with command line
+# have the option to input with command line when setting an argument
 # statistics on how long the session took
 # Make realtime be able to read pdf
 # read all roles from yaml files
