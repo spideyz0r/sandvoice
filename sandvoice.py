@@ -1,20 +1,11 @@
-import os, datetime, json, re, warnings, importlib
-from ctypes import *
-import pyaudio
-import wave
-from pynput import keyboard
-import lameenc
-from openai import OpenAI
-# this is necessary to mute some outputs from pygame
-os.environ['PYGAME_HIDE_SUPPORT_PROMPT'] = "hide"
-import pygame
-import yaml
-from jinja2 import Template
 from common.configuration import Config
+from common.audio import Audio
+from openai import OpenAI
+from jinja2 import Template
+import os, datetime, json, yaml, warnings, importlib
 
 class SandVoice:
     def __init__(self):
-        self.format = pyaudio.paInt16
         self.openai_client = OpenAI()
         self.is_recording = False
         self.conversation_history = []
@@ -37,48 +28,6 @@ class SandVoice:
                     self.plugins[module_name] = module.Plugin()
                 elif hasattr(module, 'process'):
                     self.plugins[module_name] = module.process
-
-    def on_press(self, key):
-        if key == keyboard.Key.esc:
-            self.is_recording = False
-
-    def stop_recording(self):
-        self.is_recording = False
-
-    def start_recording(self):
-        self.is_recording = True
-        print(">> Listening... press ^ to stop")
-        stream = self.audio.open(format=self.format, channels=self.config.channels,
-                            rate=self.config.rate, input=True,
-                            frames_per_buffer=self.config.chunk)
-        frames = []
-
-        while self.is_recording:
-            data = stream.read(self.config.chunk)
-            frames.append(data)
-
-        stream.stop_stream()
-        stream.close()
-        if self.config.debug:
-            print("Recording stopped.")
-
-        wf = wave.open(self.config.tmp_recording + ".wav", 'wb')
-        wf.setnchannels(self.config.channels)
-        wf.setsampwidth(self.audio.get_sample_size(self.format))
-        wf.setframerate(self.config.rate)
-        wf.writeframes(b''.join(frames))
-        wf.close()
-        self.audio.terminate()
-
-    def convert_to_mp3(self):
-        lame = lameenc.Encoder()
-        lame.set_bit_rate(self.config.bitrate)
-        lame.set_in_sample_rate(self.config.rate)
-        lame.set_channels(self.config.channels)
-        lame.set_quality(self.config.channels)
-        with open(self.config.tmp_recording + ".wav", "rb") as wav_file, open(self.config.tmp_recording + ".mp3", "wb") as mp3_file:
-            mp3_data = lame.encode(wav_file.read())
-            mp3_file.write(mp3_data)
 
     def transcribe_and_translate(self):
         with open(self.config.tmp_recording + ".mp3", "rb") as file:
@@ -128,8 +77,6 @@ class SandVoice:
             template = Template(template_str)
             rendered_config = template.render(location=self.config.location)
             system_role = yaml.safe_load(rendered_config)
-            # if self.config.debug:
-                # print(system_role)
 
             completion = self.openai_client.chat.completions.create(
             model="gpt-3.5-turbo",
@@ -189,14 +136,6 @@ class SandVoice:
         )
         response.stream_to_file(speech_file_path)
 
-    def play_audio(self):
-        pygame.mixer.init()
-        pygame.mixer.music.load(self.config.tmp_recording + ".mp3")
-        pygame.mixer.music.play()
-
-        while pygame.mixer.music.get_busy():
-            pygame.time.Clock().tick(10)
-
     def route_message(self, user_input):
         route = self.define_route(user_input)
         if self.config.debug:
@@ -207,54 +146,19 @@ class SandVoice:
         else:
             return self.generate_response(user_input).content
 
-    def get_libasound_path(self):
-        lib_paths = [
-            '/usr/lib',
-            '/usr/lib64',
-            '/lib',
-            '/lib64',
-        ]
-        lib_pattern = re.compile(r'libasound\.so\..*')
-        for file in lib_paths:
-            if not os.path.isdir(file):
-                continue
-            for f in os.listdir(file):
-                if lib_pattern.match(f):
-                    return f
-        return None
-
-    def initialize_audio(self):
-        if not self.config.linux_warnings:
-            ERROR_HANDLER_FUNC = CFUNCTYPE(None, c_char_p, c_int, c_char_p, c_int, c_char_p)
-            c_error_handler = ERROR_HANDLER_FUNC(self.py_error_handler)
-            f = self.get_libasound_path()
-            if self.config.debug:
-                print("Loading libasound from: " + f)
-            asound = cdll.LoadLibrary(f)
-            asound.snd_lib_error_set_handler(c_error_handler)
-        self.audio = pyaudio.PyAudio()
-
-    def py_error_handler(self, filename, line, function, err, fmt):
-        pass
-
     def runIt(self):
-        self.initialize_audio()
-
-        listener = keyboard.Listener(on_press=sandvoice.on_press)
-        listener.start()
-
-        self.start_recording()
-        self.convert_to_mp3()
+        self.audio = Audio(self.config)
 
         user_input = self.transcribe_and_translate()
         print(f"\nUser: {user_input}")
 
         response = self.route_message(user_input)
-
         print(f"{self.config.botname}: {response}\n")
+
         if self.config.botvoice:
             self.text_to_speech(response)
-            self.play_audio()
+            self.audio.play_audio()
+
         if self.config.push_to_talk:
             input("Press any key to speak...")
 
@@ -268,7 +172,6 @@ if __name__ == "__main__":
 
 ## TODO
 # Separate the bot AI/messaging in a separate class
-# A class for audio handling
 # Add some tests
 # Have proper error checking in multiple parts of the code
 # Add temperature forecast for a week or close days
