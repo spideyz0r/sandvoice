@@ -52,7 +52,7 @@ class AI:
 
     def define_route(self, user_input):
         try:
-            with open('./routes.yaml', 'r') as f:
+            with open(f"{self.config.sandvoice_path}/routes.yaml", 'r') as f:
                 template_str = f.read()
             template = Template(template_str)
             rendered_config = template.render(location=self.config.location)
