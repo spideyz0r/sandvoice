@@ -12,6 +12,7 @@ class Config:
             "botname": "SandVoice",
             "timezone": "EST",
             "location": "Toronto, ON, CA",
+            "unit": "metric",
             "language": "English",
             "debug": "disabled",
             "summary_words": "100",
@@ -42,6 +43,7 @@ class Config:
         self.botname = self.get("botname")
         self.timezone = self.get("timezone")
         self.location = self.get("location")
+        self.unit = self.get("unit")
         self.language = self.get("language")
         self.summary_words = self.get("summary_words")
         self.search_sources = self.get("search_sources")
