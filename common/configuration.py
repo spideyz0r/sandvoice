@@ -27,7 +27,7 @@ class Config:
             "speech_to_text_model" : "whisper-1",
             "text_to_speech_model" : "tts-1",
             "bot_voice_model" : "nova",
-            "botvoice": "enabled"
+            "bot_voice": "enabled"
         }
         self.config = self.load_defaults()
         self.load_config()
@@ -57,7 +57,7 @@ class Config:
         self.rss_news_max_items = self.get("rss_news_max_items")
         self.tmp_recording = self.tmp_files_path + "recording"
         self.debug = self.get("debug").lower() == "enabled"
-        self.botvoice = self.get("botvoice").lower() == "enabled"
+        self.bot_voice = self.get("bot_voice").lower() == "enabled"
         self.push_to_talk = self.get("push_to_talk").lower() == "enabled"
         self.linux_warnings = self.get("linux_warnings").lower() == "enabled"
         self.sandvoice_path = f"{os.path.dirname(os.path.realpath(__file__))}/../"

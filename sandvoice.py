@@ -54,7 +54,7 @@ class SandVoice:
         response = self.route_message(user_input)
         print(f"{self.config.botname}: {response}\n")
 
-        if self.config.botvoice:
+        if self.config.bot_voice:
             self.ai.text_to_speech(response)
             audio.play_audio()
 
