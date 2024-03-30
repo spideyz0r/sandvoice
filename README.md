@@ -16,8 +16,8 @@ the response is also printed in the terminal.
 Each plugin has a file under the plugins directory. All the plugins must implement a function process in this particular API:
 `def process(user_input, route, s):`
 
-## Add plugins
-To add plugins you need to:
+### Add plugins
+To add a plugin you need to:
 1) Update the routes.yaml; add the appropriate route for your plugin.
 2) Create a file under the plugins directory with the route name, implementing the process function
 3) Use the commons directory if your function could be helpful to other plugins
