@@ -27,6 +27,7 @@ class Config:
             "speech_to_text_model" : "whisper-1",
             "text_to_speech_model" : "tts-1",
             "bot_voice_model" : "nova",
+            "cli_input": "disabled",
             "bot_voice": "enabled"
         }
         self.config = self.load_defaults()
@@ -68,6 +69,7 @@ class Config:
         self.speech_to_text_model = self.get("speech_to_text_model")
         self.text_to_speech_model = self.get("text_to_speech_model")
         self.bot_voice_model = self.get("bot_voice_model")
+        self.cli_input = self.get("cli_input").lower() == "enabled"
 
     def get(self, key):
             return self.config.get(key, self.defaults[key])
