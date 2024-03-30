@@ -56,6 +56,14 @@ push_to_talk: disabled
 rss_news: https://feeds.bbci.co.uk/news/rss.xml
 rss_news_max_items: 5
 linux_warnings: disabled
+cli_input: enabled
+gpt_summary_model: gpt-3.5-turbo
+gpt_route_model: gpt-3.5-turbo
+gpt_response_model: gpt-3.5-turbo
+speech_to_text_model: whisper-1
+text_to_speech_model: tts-1
+bot_voice_model: nova
+
 ```
 
 
