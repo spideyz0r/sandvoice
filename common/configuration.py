@@ -21,7 +21,13 @@ class Config:
             "rss_news": "https://feeds.bbci.co.uk/news/rss.xml",
             "rss_news_max_items": "5",
             "linux_warnings": "enabled",
-            "botvoice": "enabled"
+            "gpt_summary_model" : "gpt-3.5-turbo",
+            "gpt_route_model" : "gpt-3.5-turbo",
+            "gpt_response_model" : "gpt-3.5-turbo",
+            "speech_to_text_model" : "whisper-1",
+            "text_to_speech_model" : "tts-1",
+            "bot_voice_model" : "nova",
+            "bot_voice": "enabled"
         }
         self.config = self.load_defaults()
         self.load_config()
@@ -51,11 +57,17 @@ class Config:
         self.rss_news_max_items = self.get("rss_news_max_items")
         self.tmp_recording = self.tmp_files_path + "recording"
         self.debug = self.get("debug").lower() == "enabled"
-        self.botvoice = self.get("botvoice").lower() == "enabled"
+        self.bot_voice = self.get("bot_voice").lower() == "enabled"
         self.push_to_talk = self.get("push_to_talk").lower() == "enabled"
         self.linux_warnings = self.get("linux_warnings").lower() == "enabled"
         self.sandvoice_path = f"{os.path.dirname(os.path.realpath(__file__))}/../"
         self.plugin_path = f"{self.sandvoice_path}plugins/"
+        self.gpt_summary_model = self.get("gpt_summary_model")
+        self.gpt_route_model = self.get("gpt_route_model")
+        self.gpt_response_model = self.get("gpt_response_model")
+        self.speech_to_text_model = self.get("speech_to_text_model")
+        self.text_to_speech_model = self.get("text_to_speech_model")
+        self.bot_voice_model = self.get("bot_voice_model")
 
     def get(self, key):
             return self.config.get(key, self.defaults[key])

@@ -48,7 +48,7 @@ botname: Sandbot
 timezone: EST
 location: Stoney Creek, Ontario, Canada
 language: English
-botvoice: enabled
+bot_voice: enabled
 debug: disabled
 summary_words: 100
 search_sources: 3

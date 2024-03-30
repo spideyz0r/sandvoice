@@ -54,7 +54,7 @@ class SandVoice:
         response = self.route_message(user_input)
         print(f"{self.config.botname}: {response}\n")
 
-        if self.config.botvoice:
+        if self.config.bot_voice:
             self.ai.text_to_speech(response)
             audio.play_audio()
 
@@ -74,7 +74,6 @@ if __name__ == "__main__":
 # Have proper error checking in multiple parts of the code
 # Add temperature forecast for a week or close days
 # Launch summaries in parallel
-# Read models from config file
 # have specific configuration files for each plugin
 # break the routes.yaml into sections
 # have the option to input with command line
