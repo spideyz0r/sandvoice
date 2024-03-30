@@ -26,5 +26,5 @@ def process (user_input, route, s):
     all_news = []
     for news in latest_news:
         all_news.append(news)
-    response = s.generate_response(user_input, f"Use this information to answer questions about any news. Make pertinent comments if any too. This is the hot news at the moment: {str(all_news)}. Don't read the URLs \n. Use your knowledge to give some context to each new if possible")
+    response = s.ai.generate_response(user_input, f"Use this information to answer questions about any news. Make pertinent comments if any too. This is the hot news at the moment: {str(all_news)}. Don't read the URLs \n. Use your knowledge to give some context to each new if possible")
     return response.content

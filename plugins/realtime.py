@@ -26,9 +26,9 @@ def process(user_input, route, s):
             print(f"Extracting text from {r}")
         extractor = WebTextExtractor(r)
         text = extractor.get_text()
-        summary = s.text_summary(text, route['query'], words=s.config.summary_words)
+        summary = s.ai.text_summary(text, route['query'], words=s.config.summary_words)
         summaries.append({"text": summary})
     if s.config.debug:
         print ("Summaries" + str(summaries) + "\n\n")
-    response = s.generate_response(user_input, f"You have access to an Internet search to look for real data information. You must answer the question. This is the contex information to answer the question: {str(summaries)}\n")
+    response = s.ai.generate_response(user_input, f"You have access to an Internet search to look for real data information. You must answer the question. This is the contex information to answer the question: {str(summaries)}\n")
     return response.content
