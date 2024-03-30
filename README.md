@@ -52,6 +52,10 @@ botvoice: enabled
 debug: disabled
 summary_words: 100
 search_sources: 3
+push_to_talk: disabled
+rss_news: https://feeds.bbci.co.uk/news/rss.xml
+rss_news_max_items: 5
+linux_warnings: disabled
 ```
 
 
