@@ -12,23 +12,23 @@ class GoogleSearcher:
         return list(results)
 
 def process(user_input, route, s):
-    if s.debug:
-        print(f"Searching for real time information using {s.search_sources} sources.")
-    searcher = GoogleSearcher(int(s.search_sources))
+    if s.config.debug:
+        print(f"Searching for real time information using {s.config.search_sources} sources.")
+    searcher = GoogleSearcher(int(s.config.search_sources))
     if not route.get('query'):
         route['query'] = user_input
     results = searcher.search(route['query'])
     summaries = []
-    if s.debug:
+    if s.config.debug:
         print("Results" + str(results) + "\n\n")
     for r in results:
-        if s.debug:
+        if s.config.debug:
             print(f"Extracting text from {r}")
         extractor = WebTextExtractor(r)
         text = extractor.get_text()
-        summary = s.text_summary(text, route['query'], words=s.summary_words)
+        summary = s.text_summary(text, route['query'], words=s.config.summary_words)
         summaries.append({"text": summary})
-    if s.debug:
+    if s.config.debug:
         print ("Summaries" + str(summaries) + "\n\n")
     response = s.generate_response(user_input, f"You have access to an Internet search to look for real data information. You must answer the question. This is the contex information to answer the question: {str(summaries)}\n")
     return response.content

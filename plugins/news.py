@@ -21,7 +21,7 @@ class RSSReader:
         return news_items
 
 def process (user_input, route, s):
-    rss_reader = RSSReader(s.rss_news, int(s.rss_news_max_items))
+    rss_reader = RSSReader(s.config.rss_news, int(s.config.rss_news_max_items))
     latest_news = rss_reader.get_latest_news()
     all_news = []
     for news in latest_news:

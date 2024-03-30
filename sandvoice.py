@@ -1,4 +1,4 @@
-import os, datetime, json, sys, re, warnings, importlib
+import os, datetime, json, re, warnings, importlib
 from ctypes import *
 import pyaudio
 import wave
@@ -10,41 +10,7 @@ os.environ['PYGAME_HIDE_SUPPORT_PROMPT'] = "hide"
 import pygame
 import yaml
 from jinja2 import Template
-
-class Config:
-    def __init__(self):
-        self.config_file = f"{os.environ['HOME']}/.sandvoice/config.yaml"
-        self.defaults  = {
-            "channels": 2,
-            "bitrate": 128,
-            "rate": 44100,
-            "chunk": 1024,
-            "tmp_files_path": f"{os.environ['HOME']}/.sandvoice/tmp/",
-            "botname": "SandVoice",
-            "timezone": "EST",
-            "location": "Toronto, ON, CA",
-            "language": "English",
-            "debug": "disabled",
-            "summary_words": "100",
-            "search_sources": "4",
-            "push_to_talk": "disabled",
-            "rss_news": "https://feeds.bbci.co.uk/news/rss.xml",
-            "rss_news_max_items": "5",
-            "linux_warnings": "enabled",
-            "botvoice": "enabled"
-        }
-        self.config = self.load_config()
-
-    def load_config(self):
-        if not os.path.exists(self.config_file):
-            return self.defaults
-        with open(self.config_file, "r") as f:
-            data = yaml.safe_load(f)
-        # combine both dicts, data overrides defaults
-        return {**self.defaults, **data}
-
-    def get(self, key):
-            return self.config.get(key, self.defaults[key])
+from common.configuration import Config
 
 class SandVoice:
     def __init__(self):
@@ -52,27 +18,10 @@ class SandVoice:
         self.openai_client = OpenAI()
         self.is_recording = False
         self.conversation_history = []
-        config = Config()
-        self.channels = config.get("channels")
-        self.bitrate = config.get("bitrate")
-        self.rate = config.get("rate")
-        self.chunk = config.get("chunk")
-        self.tmp_files_path = config.get("tmp_files_path")
-        self.botname = config.get("botname")
-        self.timezone = config.get("timezone")
-        self.location = config.get("location")
-        self.language = config.get("language")
-        self.summary_words = config.get("summary_words")
-        self.search_sources = config.get("search_sources")
-        self.rss_news = config.get("rss_news")
-        self.rss_news_max_items = config.get("rss_news_max_items")
-        self.tmp_recording = self.tmp_files_path + "recording"
-        self.debug = config.get("debug").lower() == "enabled"
-        self.botvoice = config.get("botvoice").lower() == "enabled"
-        self.push_to_talk = config.get("push_to_talk").lower() == "enabled"
-        self.linux_warnings = config.get("linux_warnings").lower() == "enabled"
-        if not os.path.exists(self.tmp_files_path):
-            os.makedirs(self.tmp_files_path)
+        self.config = Config()
+
+        if not os.path.exists(self.config.tmp_files_path):
+            os.makedirs(self.config.tmp_files_path)
         self.plugins = {}
         self.load_plugins()
 
@@ -99,40 +48,40 @@ class SandVoice:
     def start_recording(self):
         self.is_recording = True
         print(">> Listening... press ^ to stop")
-        stream = self.audio.open(format=self.format, channels=self.channels,
-                            rate=self.rate, input=True,
-                            frames_per_buffer=self.chunk)
+        stream = self.audio.open(format=self.format, channels=self.config.channels,
+                            rate=self.config.rate, input=True,
+                            frames_per_buffer=self.config.chunk)
         frames = []
 
         while self.is_recording:
-            data = stream.read(self.chunk)
+            data = stream.read(self.config.chunk)
             frames.append(data)
 
         stream.stop_stream()
         stream.close()
-        if self.debug:
+        if self.config.debug:
             print("Recording stopped.")
 
-        wf = wave.open(self.tmp_recording + ".wav", 'wb')
-        wf.setnchannels(self.channels)
+        wf = wave.open(self.config.tmp_recording + ".wav", 'wb')
+        wf.setnchannels(self.config.channels)
         wf.setsampwidth(self.audio.get_sample_size(self.format))
-        wf.setframerate(self.rate)
+        wf.setframerate(self.config.rate)
         wf.writeframes(b''.join(frames))
         wf.close()
         self.audio.terminate()
 
     def convert_to_mp3(self):
         lame = lameenc.Encoder()
-        lame.set_bit_rate(self.bitrate)
-        lame.set_in_sample_rate(self.rate)
-        lame.set_channels(self.channels)
-        lame.set_quality(self.channels)
-        with open(self.tmp_recording + ".wav", "rb") as wav_file, open(self.tmp_recording + ".mp3", "wb") as mp3_file:
+        lame.set_bit_rate(self.config.bitrate)
+        lame.set_in_sample_rate(self.config.rate)
+        lame.set_channels(self.config.channels)
+        lame.set_quality(self.config.channels)
+        with open(self.config.tmp_recording + ".wav", "rb") as wav_file, open(self.config.tmp_recording + ".mp3", "wb") as mp3_file:
             mp3_data = lame.encode(wav_file.read())
             mp3_file.write(mp3_data)
 
     def transcribe_and_translate(self):
-        with open(self.tmp_recording + ".mp3", "rb") as file:
+        with open(self.config.tmp_recording + ".mp3", "rb") as file:
             transcript = self.openai_client.audio.translations.create(
                 model="whisper-1",
                 file=file
@@ -144,19 +93,19 @@ class SandVoice:
             self.conversation_history.append("User: " + user_input)
             now = datetime.datetime.now()
             system_role = f"""
-            Your name is {self.botname}.
+            Your name is {self.config.botname}.
             Your are an assisten written in Python by Breno Brand.
-            You Answer must be in {self.language}.
-            The person that is talking to you is in the {self.timezone} time zone.
-            The person that is talking to you is located in {self.location}.
+            You Answer must be in {self.config.language}.
+            The person that is talking to you is in the {self.config.timezone} time zone.
+            The person that is talking to you is located in {self.config.location}.
             Right now it is {now}.
             Never answer as a chat, for example reading your name in a conversation.
-            DO NOT reply to messages with the format "{self.botname}": <message here>.
+            DO NOT reply to messages with the format "{self.config.botname}": <message here>.
             Reply in a natural and human way.
             """
             if extra_info != None:
                 system_role = system_role + "Consider the following to answer your question: " + extra_info
-                if self.debug:
+                if self.config.debug:
                     print (system_role)
             # Be very sympathetic, helpful and don't be rude or have short answers"
 
@@ -166,7 +115,7 @@ class SandVoice:
                 {"role": "system", "content": system_role},
                 ] + [{"role": "user", "content": message} for message in self.conversation_history]
             )
-            self.conversation_history.append(f"{self.botname}: " + completion.choices[0].message.content)
+            self.conversation_history.append(f"{self.config.botname}: " + completion.choices[0].message.content)
             return completion.choices[0].message
         except Exception as e:
             print("A general error occurred:", e)
@@ -176,11 +125,11 @@ class SandVoice:
         try:
             with open('./routes.yaml', 'r') as f:
                 template_str = f.read()
-            if self.debug:
-                print(template_str)
             template = Template(template_str)
-            rendered_config = template.render(location=self.location)
+            rendered_config = template.render(location=self.config.location)
             system_role = yaml.safe_load(rendered_config)
+            # if self.config.debug:
+                # print(system_role)
 
             completion = self.openai_client.chat.completions.create(
             model="gpt-3.5-turbo",
@@ -196,7 +145,7 @@ class SandVoice:
 
     def text_summary(self, user_input, extra_info = None, words = "100"):
         try:
-            if self.debug:
+            if self.config.debug:
                 print("Summary words: " + words)
                 print("Before: " + user_input)
             system_role = f"""
@@ -204,12 +153,15 @@ class SandVoice:
             If there is a date of the text you are reading, mention the date in the summary.
             The summary must content the most important information of the text.
             Your answer will be in json format: {{"title": "some title", "text": "the summary here"}}.
-            The text must be translated to {self.language} if required.
+            The text must be translated to {self.config.language} if required.
             If one of the texts has no content or has an error, figure something out from the title.
             You will receive a text and you need to summarize it in {words} words and return the title and the summary.
+            You must be able to answer the user's question with the summary. For example, if the user is asking for a recipe, your answer must have the recipe.
+            The only condition that will allow you bypass the limite of {words} words is if that amount of words is not enough to summarize the text.
+            Do your best to be as close to the limit  of {words} words as possible.
             """
 
-            if self.debug:
+            if self.config.debug:
                 print(system_role)
             if extra_info != None:
                 system_role = "Consider that this is the question of the user: {extra_info}" + system_role
@@ -220,7 +172,7 @@ class SandVoice:
                 {"role": "system", "content": system_role},
                 {"role": "user", "content": user_input}
             ])
-            if self.debug:
+            if self.config.debug:
                 print("After: " +completion.choices[0].message.content + "\n")
             return json.loads(completion.choices[0].message.content)
         except Exception as e:
@@ -229,7 +181,7 @@ class SandVoice:
 
     def text_to_speech(self, text):
         warnings.filterwarnings("ignore", category=DeprecationWarning)
-        speech_file_path = self.tmp_recording + ".mp3"
+        speech_file_path = self.config.tmp_recording + ".mp3"
         response = self.openai_client.audio.speech.create(
             model="tts-1",
             voice="nova",
@@ -239,7 +191,7 @@ class SandVoice:
 
     def play_audio(self):
         pygame.mixer.init()
-        pygame.mixer.music.load(self.tmp_recording + ".mp3")
+        pygame.mixer.music.load(self.config.tmp_recording + ".mp3")
         pygame.mixer.music.play()
 
         while pygame.mixer.music.get_busy():
@@ -247,7 +199,7 @@ class SandVoice:
 
     def route_message(self, user_input):
         route = self.define_route(user_input)
-        if self.debug:
+        if self.config.debug:
             print(route)
             print(f"Plugins: {str(self.plugins)}")
         if route["route"] in self.plugins:
@@ -272,11 +224,11 @@ class SandVoice:
         return None
 
     def initialize_audio(self):
-        if not self.linux_warnings:
+        if not self.config.linux_warnings:
             ERROR_HANDLER_FUNC = CFUNCTYPE(None, c_char_p, c_int, c_char_p, c_int, c_char_p)
             c_error_handler = ERROR_HANDLER_FUNC(self.py_error_handler)
             f = self.get_libasound_path()
-            if self.debug:
+            if self.config.debug:
                 print("Loading libasound from: " + f)
             asound = cdll.LoadLibrary(f)
             asound.snd_lib_error_set_handler(c_error_handler)
@@ -299,31 +251,32 @@ class SandVoice:
 
         response = self.route_message(user_input)
 
-        print(f"{self.botname}: {response}\n")
-        if self.botvoice:
+        print(f"{self.config.botname}: {response}\n")
+        if self.config.botvoice:
             self.text_to_speech(response)
             self.play_audio()
-        if self.push_to_talk:
+        if self.config.push_to_talk:
             input("Press any key to speak...")
 
 if __name__ == "__main__":
     sandvoice = SandVoice()
     while True:
-        if sandvoice.debug:
+        if sandvoice.config.debug:
             print(sandvoice.conversation_history)
             print(sandvoice.__str__())
         sandvoice.runIt()
 
 ## TODO
-# After getting the first response, have the option to press a key before start recording again
 # Separate the bot AI/messaging in a separate class
 # A class for audio handling
 # Add some tests
 # Have proper error checking in multiple parts of the code
 # Add temperature forecast for a week or close days
-# Launch summarines in parallel
+# Launch summaries in parallel
 # Read models from config file
 # have specific configuration files for each plugin
 # break the routes.yaml into sections
 # have the option to input with command line
 # statistics on how long the session took
+# Make realtime be able to read pdf
+# read all roles from yaml files
