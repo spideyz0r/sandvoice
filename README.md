@@ -34,6 +34,17 @@ See the echo plugin in `plugins/echo.py` for an example.
 ## API setup
 Ensure you have your API key set in both environment variables `OPENAI_API_KEY` and `OPENWEATHERMAP_API_KEY`.
 
+## CLI mode
+```
+usage: sandvoice.py [-h] [--cli]
+
+CLI mode for SandVoice
+
+options:
+  -h, --help  show this help message and exit
+  --cli       enter cli mode (equivalent to yaml option cli_input: enabled)
+  ```
+
 ## Configuration file
 It should be installed in `~/.sandvoice/config.yaml`
 
@@ -56,7 +67,7 @@ push_to_talk: disabled
 rss_news: https://feeds.bbci.co.uk/news/rss.xml
 rss_news_max_items: 5
 linux_warnings: disabled
-cli_input: enabled
+cli_input: disabled
 gpt_summary_model: gpt-3.5-turbo
 gpt_route_model: gpt-3.5-turbo
 gpt_response_model: gpt-3.5-turbo
