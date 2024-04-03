@@ -2,7 +2,7 @@
 This Python script allows users to interact with powerful language models such as OpenAI's GPT
 through audio input and output. It's a versatile tool that converts spoken words into text,
 processes them, and delivers audible responses. You can also see the conversation history
-in your terminal.
+in your terminal. Optionally you can use the CLI mode for a textual chat!
 
 ## How it Works
 Once the script is run, it initiates a microphone chat with the language model.
