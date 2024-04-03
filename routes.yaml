@@ -10,9 +10,11 @@ route_role: |
 
             default-rote: General knowledge. No real time information required. For example: "What is the recipe for a Capirinha?" or "How can I write a regex match in go?".
 
+            greeting: The user is greeting the bot. For example: "Hello" or "Hi".
+
             technical: This is for general technical knowledge that does not depend on real time. Most technical questions should go here.
 
-            weather: The user is asking how the weather is or feels like, the user may or may not mention what is the location. For example: "How is the weather outside now?" If no location is defined, consider {{ location }}. Add a key "location" to the json with the location. Convert the location to the following convention: City name, state code (only for the US) and country code divided by comma. You must also include a key called "unit". The key unit, if not informed, is "metric" by default, the other option is "imperial". Trim all spaces. Please use ISO 3166 country codes. For example: Toronto,ON,CA.
+            weather: The user is asking how the weather is or feels like, the user may or may not mention what is the location. For example: "How is the weather outside now?" The JSON answer must also include the keys location and unit. If no location is defined, consider {{ location }}. Add a key "location" to the json with the location. Convert the location to the following convention: City name, state code (only for the US) and country code divided by comma. Also add a key called "unit". The key unit, if not informed, is "metric" by default, the other option is "imperial". Trim all spaces. Please use ISO 3166 country codes. For example: Toronto,ON,CA. Example of result: {"route": "weather", "reason": "The user asked for the weather", "location": "Toronto,ON,CA", "unit": "metric"}
 
             news: The user is asking for news, not Hacker News. For example: "What are the news today?" Another example: "What are the news of the day?"
 

@@ -26,6 +26,7 @@ def process(user_input, route, s):
         if s.config.debug:
             print("No unit found in route, using default unit")
         route['unit'] =  s.config.unit
+
     weather = OpenWeatherReader(route['location'], route['unit'])
     current_weather = weather.get_current_weather()
     response = s.ai.generate_response(user_input, f"You can answer questions about weather. This is the information of the weather the user asked: {str(current_weather)}\n")

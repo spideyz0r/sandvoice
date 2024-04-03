@@ -35,8 +35,7 @@ class SandVoice:
                 elif hasattr(module, 'process'):
                     self.plugins[module_name] = module.process
 
-    def route_message(self, user_input):
-        route = self.ai.define_route(user_input)
+    def route_message(self, user_input, route):
         if self.config.debug:
             print(route)
             print(f"Plugins: {str(self.plugins)}")
@@ -46,21 +45,23 @@ class SandVoice:
             return self.ai.generate_response(user_input).content
 
     def runIt(self):
+        audio = Audio(self.config)
         if self.config.cli_input:
             user_input = input(f"You (press new line to finish): ")
         else:
-            audio = Audio(self.config)
+            audio.start_recording()
             user_input = self.ai.transcribe_and_translate()
             print(f"You: {user_input}")
 
-        response = self.route_message(user_input)
+        route = self.ai.define_route(user_input)
+        response = self.route_message(user_input, route)
         print(f"{self.config.botname}: {response}\n")
 
         if self.config.bot_voice:
             self.ai.text_to_speech(response)
             audio.play_audio()
 
-        if self.config.push_to_talk:
+        if self.config.push_to_talk and not self.config.cli_input:
             input("Press any key to speak...")
 
 if __name__ == "__main__":
@@ -82,4 +83,4 @@ if __name__ == "__main__":
 # statistics on how long the session took
 # Make realtime be able to read pdf
 # read all roles from yaml files
-
+# write history on a file

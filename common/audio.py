@@ -11,6 +11,8 @@ class Audio:
         self.format = pyaudio.paInt16
         self.config = config
         self.initialize_audio()
+
+    def start_recording(self):
         listener = keyboard.Listener(on_press=self.on_press)
         listener.start()
         self.start_recording()
