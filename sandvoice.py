@@ -2,7 +2,7 @@ from common.configuration import Config
 from common.audio import Audio
 from common.ai import AI
 
-import os, importlib
+import argparse, importlib, os
 
 class SandVoice:
     def __init__(self):
@@ -12,6 +12,21 @@ class SandVoice:
             os.makedirs(self.config.tmp_files_path)
         self.plugins = {}
         self.load_plugins()
+        self.load_cli()
+        if self.args.cli:
+            self.config.cli_input = True
+
+    def load_cli(self):
+        self.parser = argparse.ArgumentParser(
+            description='Cli mode for SandVoice'
+        )
+
+        self.parser.add_argument(
+            '--cli',
+            action='store_true',
+            help='enter cli mode (equivalent to yaml option cli_input: enabled)'
+        )
+        self.args = self.parser.parse_args()
 
     def load_plugins(self):
         if not os.path.exists(self.config.plugin_path):
@@ -49,7 +64,7 @@ class SandVoice:
         if self.config.cli_input:
             user_input = input(f"You (press new line to finish): ")
         else:
-            audio.start_recording()
+            audio.init_recording()
             user_input = self.ai.transcribe_and_translate()
             print(f"You: {user_input}")
 
@@ -79,8 +94,8 @@ if __name__ == "__main__":
 # Launch summaries in parallel
 # have specific configuration files for each plugin
 # break the routes.yaml into sections
-# have the option to input with command line when setting an argument
 # statistics on how long the session took
-# Make realtime be able to read pdf
+# Make realtime be able to read pdf (from url)
 # read all roles from yaml files
 # write history on a file
+# fix history by removing control messages
