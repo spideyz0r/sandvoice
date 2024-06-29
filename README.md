@@ -35,15 +35,21 @@ See the echo plugin in `plugins/echo.py` for an example.
 To run it on mac, on the default speaker/mic use the `channel` configuration as "1".
 
 ### Clone the repository:
+```
 git checkout https://github.com/spideyz0r/sandvoice
 cd sandvoice
+```
 
 ### Activate the virtual env
+```
 python3 -m venv env
 source env/bin/activate
+```
 
 ### Run it!
+```
 ./sandvoice
+```
 
 ## API setup
 Ensure you have your API key set in both environment variables `OPENAI_API_KEY` and `OPENWEATHERMAP_API_KEY`.
