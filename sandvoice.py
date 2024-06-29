@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 from common.configuration import Config
 from common.audio import Audio
 from common.ai import AI
@@ -99,3 +100,4 @@ if __name__ == "__main__":
 # read all roles from yaml files
 # write history on a file
 # fix history by removing control messages
+
