@@ -34,15 +34,15 @@ See the echo plugin in `plugins/echo.py` for an example.
 ## Mac OSX Support
 To run it on mac, on the default speaker/mic use the `channel` configuration as "1".
 
-# Clone the repository:
+### Clone the repository:
 git checkout https://github.com/spideyz0r/sandvoice
 cd sandvoice
 
-# Activate the virtual env
+### Activate the virtual env
 python3 -m venv env
 source env/bin/activate
 
-# Run it!
+### Run it!
 ./sandvoice
 
 ## API setup
