@@ -10,4 +10,4 @@ pygame==2.5.2
 pynput==1.7.6
 PyYAML==6.0
 PyYAML==6.0.1
-Requests==2.31.0
+Requests==2.32.2
