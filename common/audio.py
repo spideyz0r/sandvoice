@@ -1,3 +1,5 @@
+#import re, os, pyaudio, wave
+#from pydub import AudioSegment
 import re, os, pyaudio, wave, lameenc
 from pynput import keyboard
 from ctypes import *
@@ -78,6 +80,8 @@ class Audio:
         self.audio.terminate()
 
     def convert_to_mp3(self):
+        #file = AudioSegment.from_wav(self.config.tmp_recording + ".wav")
+        #file.export(self.config.tmp_recording + ".mp3", format="mp3")
         lame = lameenc.Encoder()
         lame.set_bit_rate(self.config.bitrate)
         lame.set_in_sample_rate(self.config.rate)
