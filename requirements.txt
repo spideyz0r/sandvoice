@@ -3,6 +3,7 @@ feedparser
 google
 googlesearch_python
 Jinja2
+lameenc
 openai
 PyAudio
 pygame
