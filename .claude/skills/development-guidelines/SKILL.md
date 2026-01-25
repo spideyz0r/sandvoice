@@ -14,6 +14,7 @@ Enforce development standards for SandVoice implementation. All code must follow
 ## When to use this skill
 
 - Implementing features from plan/ directory
+- Creating pull requests (ALWAYS create PR with Copilot review)
 - Reviewing code against project standards
 - Validating pull requests before merge
 - Creating new plugins
@@ -393,10 +394,20 @@ def process(user_input, route, s):
 - [ ] Self-reviewed code
 - [ ] Commit messages don't mention Claude
 
-### PR Template
-```markdown
+### Creating Pull Request
+
+**CRITICAL: Always create a PR and request Copilot review when implementing features**
+
+1. **Push branch to remote**:
+```bash
+git push -u origin feature/<name>
+```
+
+2. **Create PR with proper description**:
+```bash
+gh pr create --title "Brief feature title" --body "$(cat <<'EOF'
 ## Summary
-Brief description
+Brief description of what was implemented
 
 ## Planning Document
 Implements plan/XX-feature-name.md
@@ -404,6 +415,7 @@ Implements plan/XX-feature-name.md
 ## Changes
 - Key change 1
 - Key change 2
+- Key change 3
 
 ## Testing
 - [x] All tests pass
@@ -411,9 +423,21 @@ Implements plan/XX-feature-name.md
 - [x] Tested on Mac M1
 - [ ] Tested on Pi 3B
 
-## Configuration
+## Configuration Changes
 List new config.yaml options (if any)
+EOF
+)" --base main
 ```
+
+3. **Request Copilot review** (REQUIRED):
+```bash
+gh pr edit <PR_NUMBER> --add-reviewer "copilot-pull-request-reviewer[bot]"
+```
+
+4. **Confirm to user**:
+- Provide PR URL
+- Confirm Copilot reviewer added
+- Let user know review is in progress
 
 ---
 
@@ -462,7 +486,9 @@ List new config.yaml options (if any)
 - [ ] README updated (if user-facing)
 - [ ] plan/INDEX.md updated
 - [ ] Commits don't mention Claude
+- [ ] PR created with proper description
 - [ ] PR references planning doc
+- [ ] Copilot reviewer added to PR
 
 ---
 
