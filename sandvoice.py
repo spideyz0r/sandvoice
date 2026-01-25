@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 from common.configuration import Config
 from common.audio import Audio
 from common.ai import AI

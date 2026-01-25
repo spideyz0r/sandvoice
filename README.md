@@ -2,7 +2,7 @@
 This Python script allows users to interact with powerful language models such as OpenAI's GPT
 through audio input and output. It's a versatile tool that converts spoken words into text,
 processes them, and delivers audible responses. You can also see the conversation history
-in your terminal.
+in your terminal. Optionally you can use the CLI mode for a textual chat!
 
 ## How it Works
 Once the script is run, it initiates a microphone chat with the language model.
@@ -30,6 +30,26 @@ See the echo plugin in `plugins/echo.py` for an example.
 - Interaction with OpenAI's GPT model (more to be added in the future)
 - Text to voice conversion
 - Terminal-based conversation history
+
+## Mac OSX Support
+To run it on mac, on the default speaker/mic use the `channel` configuration as "1".
+
+### Clone the repository:
+```
+git checkout https://github.com/spideyz0r/sandvoice
+cd sandvoice
+```
+
+### Activate the virtual env
+```
+python3 -m venv env
+source env/bin/activate
+```
+
+### Run it!
+```
+./sandvoice
+```
 
 ## API setup
 Ensure you have your API key set in both environment variables `OPENAI_API_KEY` and `OPENWEATHERMAP_API_KEY`.
