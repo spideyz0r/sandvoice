@@ -22,6 +22,7 @@ class AI:
 
     def generate_response(self, user_input, extra_info = None, model = None):
         try:
+
             if not model:
                 model = self.config.gpt_response_model
             self.conversation_history.append("User: " + user_input)
@@ -32,15 +33,15 @@ class AI:
             You Answer must be in {self.config.language}.
             The person that is talking to you is in the {self.config.timezone} time zone.
             The person that is talking to you is located in {self.config.location}.
-            Right now it is {now}.
+            Current date and time to be considered when answering the message: {now}.
             Never answer as a chat, for example reading your name in a conversation.
             DO NOT reply to messages with the format "{self.config.botname}": <message here>.
             Reply in a natural and human way.
             """
             if extra_info != None:
                 system_role = system_role + "Consider the following to answer your question: " + extra_info
-                if self.config.debug:
-                    print (system_role)
+            if self.config.debug:
+                print (f"System role: {system_role}")
             # Be very sympathetic, helpful and don't be rude or have short answers"
 
             completion = self.openai_client.chat.completions.create(
