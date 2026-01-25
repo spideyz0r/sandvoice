@@ -1,4 +1,4 @@
-python3.11 -m venv venv-3.11
-source venv-3.11/bin/activate
+#!/bin/bash
+python3 -m venv venv
+source venv/bin/activate
 python3 sandvoice.py
-
