@@ -287,7 +287,7 @@ Example:
 # Error handling settings
 api_timeout: 10  # seconds - timeout for OpenAI API calls
 api_retry_attempts: 3  # number of retry attempts
-enable_error_logging: false  # true for detailed debug logs
+enable_error_logging: disabled  # set to enabled for detailed debug logs
 ```
 
 ```python
@@ -295,7 +295,7 @@ enable_error_logging: false  # true for detailed debug logs
 self.defaults = {
     "api_timeout": 10,
     "api_retry_attempts": 3,
-    "enable_error_logging": False,
+    "enable_error_logging": "disabled",
 }
 
 # In load_config()
