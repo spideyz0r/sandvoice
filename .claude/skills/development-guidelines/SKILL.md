@@ -275,6 +275,16 @@ Before PR:
 
 ## Configuration Management
 
+### Configuration-First Principle
+**IMPORTANT: Always consider making new options configurable via config.yaml**
+
+When adding features, ask:
+- Could users want to customize this behavior?
+- Are there sensible default values?
+- Would different users have different preferences?
+
+If yes to any, make it configurable rather than hardcoded.
+
 ### Adding Config Options
 1. Add to `config.yaml` with comment
 2. Add to `configuration.py` defaults dict
