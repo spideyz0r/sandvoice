@@ -106,7 +106,8 @@ class Audio:
             wf.setframerate(self.config.rate)
             wf.writeframes(b''.join(frames))
             wf.close()
-            self.audio.terminate()
+            if self.audio is not None:
+                self.audio.terminate()
         except OSError as e:
             error_msg = handle_file_error(e, operation="write", filename="recording.wav")
             if self.config.debug:

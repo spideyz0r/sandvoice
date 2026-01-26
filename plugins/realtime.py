@@ -1,5 +1,5 @@
 
-import googlesearch, requests, logging
+import googlesearch, logging
 from common.common import WebTextExtractor
 
 class GoogleSearcher:
@@ -36,7 +36,7 @@ def process(user_input, route, s):
             try:
                 if s.config.debug:
                     print(f"Extracting text from {r}")
-                extractor = WebTextExtractor(r)
+                extractor = WebTextExtractor(r, timeout=s.config.api_timeout)
                 text = extractor.get_text()
                 summary = s.ai.text_summary(text, route['query'], words=s.config.summary_words)
                 summaries.append({"text": summary})
@@ -49,7 +49,7 @@ def process(user_input, route, s):
 
         if s.config.debug:
             print ("Summaries" + str(summaries) + "\n\n")
-        response = s.ai.generate_response(user_input, f"You have access to an Internet search to look for real data information. You must answer the question. This is the contex information to answer the question: {str(summaries)}\n")
+        response = s.ai.generate_response(user_input, f"You have access to an Internet search to look for real data information. You must answer the question. This is the context information to answer the question: {str(summaries)}\n")
         return response.content
     except Exception as e:
         error_msg = f"Real-time search error: {str(e)}"

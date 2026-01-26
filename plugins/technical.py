@@ -19,7 +19,7 @@ class HackerNews:
         story_ids = self.get_best_story_ids()[:self.limit]
         for story_id in story_ids:
             story = self.get_story_details(story_id)
-            extractor = WebTextExtractor(story['url'])
+            extractor = WebTextExtractor(story['url'], timeout=10)
             text = extractor.get_text()
             summaries.append({"title": story['title'], "text": text})
         return summaries

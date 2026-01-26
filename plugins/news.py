@@ -10,7 +10,7 @@ class RSSReader:
             news_feed = feedparser.parse(self.url)
 
             # Check if feed was successfully parsed
-            if hasattr(news_feed, 'bozo_exception'):
+            if hasattr(news_feed, 'bozo_exception') and news_feed.bozo_exception:
                 raise news_feed.bozo_exception
 
             news_items = []

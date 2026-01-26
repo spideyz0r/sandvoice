@@ -3,13 +3,14 @@ from common.common import WebTextExtractor
 from common.error_handling import handle_api_error
 
 class HackerNews:
-    def __init__(self):
+    def __init__(self, timeout=10):
         self.base_url = "https://hacker-news.firebaseio.com/v0/"
         self.limit = 5
+        self.timeout = timeout
 
     def get_best_story_ids(self):
         try:
-            response = requests.get(self.base_url + "beststories.json", timeout=10)
+            response = requests.get(self.base_url + "beststories.json", timeout=self.timeout)
             response.raise_for_status()
             return response.json()
         except requests.exceptions.RequestException as e:
@@ -20,7 +21,7 @@ class HackerNews:
 
     def get_story_details(self, story_id):
         try:
-            response = requests.get(self.base_url + f"item/{story_id}.json", timeout=10)
+            response = requests.get(self.base_url + f"item/{story_id}.json", timeout=self.timeout)
             response.raise_for_status()
             return response.json()
         except requests.exceptions.RequestException as e:
@@ -37,7 +38,7 @@ class HackerNews:
                 story = self.get_story_details(story_id)
                 if not story or 'url' not in story:
                     continue
-                extractor = WebTextExtractor(story['url'])
+                extractor = WebTextExtractor(story['url'], timeout=self.timeout)
                 text = extractor.get_text()
                 summaries.append({"title": story.get('title', 'No title'), "text": text})
             except Exception as e:
@@ -61,7 +62,7 @@ class HackerNews:
         return stories
 
 def process(user_input, route_data, s):
-    hacker_news = HackerNews()
+    hacker_news = HackerNews(timeout=s.config.api_timeout)
     stories = hacker_news.get_best_stories_summary()
     all_stories = []
     for story in stories:

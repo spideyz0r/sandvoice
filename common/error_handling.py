@@ -52,16 +52,21 @@ def retry_with_backoff(max_attempts=3, initial_delay=1):
                     last_exception = e
 
                     # Log the error if debug is enabled
-                    if args and hasattr(args[0], 'config') and args[0].config.debug:
-                        logging.error(f"Attempt {attempt + 1}/{max_attempts} failed for {func.__name__}: {e}")
+                    if args:
+                        config = getattr(args[0], 'config', None)
+                        debug_enabled = getattr(config, 'debug', False) if config is not None else False
+                        if debug_enabled:
+                            logging.error(f"Attempt {attempt + 1}/{max_attempts} failed for {func.__name__}: {e}")
 
                     # Don't sleep after the last attempt
                     if attempt < max_attempts - 1:
                         time.sleep(delay)
                         delay *= 2  # Exponential backoff
 
-            # All attempts failed, raise the last exception
-            raise last_exception
+            # All attempts failed, raise the last exception if available
+            if last_exception is not None:
+                raise last_exception
+            raise RuntimeError("All retry attempts failed, but no exception was captured.")
 
         return wrapper
     return decorator

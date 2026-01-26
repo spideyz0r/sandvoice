@@ -3,7 +3,7 @@ import time
 import logging
 import os
 import tempfile
-from unittest.mock import Mock, patch
+from unittest.mock import Mock
 from common.error_handling import (
     retry_with_backoff,
     format_user_error,
@@ -55,10 +55,8 @@ class TestRetryWithBackoff(unittest.TestCase):
 
         decorated_func = retry_with_backoff(max_attempts=3, initial_delay=0.1)(failing_func)
 
-        try:
+        with self.assertRaises(Exception):
             decorated_func()
-        except Exception:
-            pass
 
         # Check that delays roughly double (0.1s, 0.2s)
         # Allow some tolerance for execution overhead

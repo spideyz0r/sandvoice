@@ -4,8 +4,9 @@ from bs4 import BeautifulSoup
 from common.error_handling import handle_api_error
 
 class WebTextExtractor:
-    def __init__(self, url):
+    def __init__(self, url, timeout=10):
         self.url = url
+        self.timeout = timeout
         self.headers = {
             "User-Agent": "Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:106.0) Gecko/20100101 Firefox/106.0",
             "Accept": "*/*",
@@ -26,7 +27,7 @@ class WebTextExtractor:
 
     def get_text(self):
         try:
-            response = requests.get(self.url, headers=self.headers, timeout=10)
+            response = requests.get(self.url, headers=self.headers, timeout=self.timeout)
             response.raise_for_status()
             response.encoding = 'utf-8'
             soup = BeautifulSoup(response.text, 'lxml')
