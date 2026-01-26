@@ -17,7 +17,7 @@ class AI:
             print(f"Error: {error_msg}")
             raise ValueError(error_msg)
 
-        self.openai_client = OpenAI()
+        self.openai_client = OpenAI(timeout=self.config.api_timeout)
         self.conversation_history = []
 
     @retry_with_backoff(max_attempts=3, initial_delay=1)
@@ -50,7 +50,12 @@ class AI:
         try:
             if not model:
                 model = self.config.gpt_response_model
-            self.conversation_history.append("User: " + user_input)
+
+            # Add to conversation history only if not already present (prevents duplicates during retries)
+            user_message = "User: " + user_input
+            if not self.conversation_history or self.conversation_history[-1] != user_message:
+                self.conversation_history.append(user_message)
+
             now = datetime.datetime.now()
             system_role = f"""
             Your name is {self.config.botname}.
@@ -190,6 +195,7 @@ class AI:
                 input = text
             )
             response.stream_to_file(speech_file_path)
+            return True
         except Exception as e:
             error_msg = handle_api_error(e, service_name="OpenAI TTS")
             if self.config.debug:
@@ -198,5 +204,6 @@ class AI:
             # Don't raise - allow fallback to text-only mode
             if self.config.fallback_to_text_on_audio_error:
                 print("Falling back to text-only mode.")
+                return False
             else:
                 raise

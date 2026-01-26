@@ -186,13 +186,11 @@ class TestSetupErrorLogging(unittest.TestCase):
             for handler in logger.handlers:
                 handler.flush()
 
-            # Verify log file was created and has content
-            if os.path.exists(log_path):
-                with open(log_path, 'r') as f:
-                    content = f.read()
-                    # If file exists, it should have content
-                    if content:
-                        self.assertIn("Test error message", content)
+            # Verify log file was created and contains the expected message
+            self.assertTrue(os.path.exists(log_path), "Log file was not created")
+            with open(log_path, 'r') as f:
+                content = f.read()
+            self.assertIn("Test error message", content)
 
     def test_logging_disabled(self):
         """Test error logging setup when disabled"""

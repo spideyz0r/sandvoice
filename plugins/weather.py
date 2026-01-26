@@ -47,12 +47,10 @@ def process(user_input, route, s):
         response = s.ai.generate_response(user_input, f"You can answer questions about weather. This is the information of the weather the user asked: {str(current_weather)}\n")
         return response.content
     except ValueError as e:
-        error_msg = f"Weather service configuration error: {str(e)}"
         if s.config.debug:
-            logging.error(f"Weather plugin error: {e}")
+            logging.error(f"Weather plugin configuration error: {e}")
         return "Unable to fetch weather information. Please check your configuration."
     except Exception as e:
-        error_msg = f"Weather service error: {str(e)}"
         if s.config.debug:
             logging.error(f"Weather plugin error: {e}")
         return "Unable to fetch weather information. Please try again later."

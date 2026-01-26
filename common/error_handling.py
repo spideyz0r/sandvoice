@@ -45,7 +45,14 @@ def retry_with_backoff(max_attempts=3, initial_delay=1):
             delay = initial_delay
             last_exception = None
 
-            for attempt in range(max_attempts):
+            # Use config.api_retry_attempts if available, otherwise use decorator parameter
+            attempts = max_attempts
+            if args:
+                config = getattr(args[0], 'config', None)
+                if config is not None:
+                    attempts = getattr(config, 'api_retry_attempts', max_attempts)
+
+            for attempt in range(attempts):
                 try:
                     return func(*args, **kwargs)
                 except Exception as e:

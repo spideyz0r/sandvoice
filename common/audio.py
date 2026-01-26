@@ -28,6 +28,11 @@ class Audio:
                 ERROR_HANDLER_FUNC = CFUNCTYPE(None, c_char_p, c_int, c_char_p, c_int, c_char_p)
                 c_error_handler = ERROR_HANDLER_FUNC(self.py_error_handler)
                 f = self.get_libasound_path()
+                if f is None:
+                    error_msg = "libasound library not found. Please install ALSA (libasound2) or ensure it is available in a standard library path."
+                    if self.config.debug:
+                        logging.error(error_msg)
+                    raise RuntimeError(error_msg)
                 if self.config.debug:
                     print("Loading libasound from: " + f)
                 asound = cdll.LoadLibrary(f)
@@ -106,8 +111,6 @@ class Audio:
             wf.setframerate(self.config.rate)
             wf.writeframes(b''.join(frames))
             wf.close()
-            if self.audio is not None:
-                self.audio.terminate()
         except OSError as e:
             error_msg = handle_file_error(e, operation="write", filename="recording.wav")
             if self.config.debug:
