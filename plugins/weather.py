@@ -1,21 +1,34 @@
-import os, requests
+import os, requests, logging
+from common.error_handling import handle_api_error
 
 class OpenWeatherReader:
     def __init__(self, location, unit = "metric"):
+        if not os.environ.get('OPENWEATHERMAP_API_KEY'):
+            error_msg = "Missing OPENWEATHERMAP_API_KEY environment variable"
+            print(f"Error: {error_msg}")
+            raise ValueError(error_msg)
         self.api_key = os.environ['OPENWEATHERMAP_API_KEY']
         self.location = location
         self.unit = unit
         self.base_url = "https://api.openweathermap.org/data/2.5/weather?"
 
     def get_current_weather(self):
-        url = f"{self.base_url}q={self.location}&appid={self.api_key}&units={self.unit}"
-        response = requests.get(url)
-
-        if response.status_code == 200:
+        try:
+            url = f"{self.base_url}q={self.location}&appid={self.api_key}&units={self.unit}"
+            response = requests.get(url, timeout=10)
+            response.raise_for_status()
             # not formating the output, since the model can understand that
             return response.json()
-        else:
-            return None
+        except requests.exceptions.RequestException as e:
+            error_msg = handle_api_error(e, service_name="OpenWeatherMap")
+            logging.error(f"Weather API error: {e}")
+            print(error_msg)
+            return {"error": "Unable to fetch weather data"}
+        except Exception as e:
+            error_msg = f"Weather service error: {str(e)}"
+            logging.error(f"Weather error: {e}")
+            print(f"Error: {error_msg}")
+            return {"error": "Weather service unavailable"}
 
 def process(user_input, route, s):
     if not route.get('location'):

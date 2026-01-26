@@ -1,5 +1,6 @@
-import requests
+import requests, logging
 from common.common import WebTextExtractor
+from common.error_handling import handle_api_error
 
 class HackerNews:
     def __init__(self):
@@ -7,21 +8,41 @@ class HackerNews:
         self.limit = 5
 
     def get_best_story_ids(self):
-        response = requests.get(self.base_url + "beststories.json")
-        return response.json()
+        try:
+            response = requests.get(self.base_url + "beststories.json", timeout=10)
+            response.raise_for_status()
+            return response.json()
+        except requests.exceptions.RequestException as e:
+            error_msg = handle_api_error(e, service_name="Hacker News API")
+            logging.error(f"Hacker News API error: {e}")
+            print(error_msg)
+            return []
 
     def get_story_details(self, story_id):
-        response = requests.get(self.base_url + f"item/{story_id}.json")
-        return response.json()
+        try:
+            response = requests.get(self.base_url + f"item/{story_id}.json", timeout=10)
+            response.raise_for_status()
+            return response.json()
+        except requests.exceptions.RequestException as e:
+            error_msg = handle_api_error(e, service_name="Hacker News API")
+            logging.error(f"Hacker News story error: {e}")
+            print(error_msg)
+            return None
 
     def get_best_stories_summary(self):
         summaries = []
         story_ids = self.get_best_story_ids()[:self.limit]
         for story_id in story_ids:
-            story = self.get_story_details(story_id)
-            extractor = WebTextExtractor(story['url'])
-            text = extractor.get_text()
-            summaries.append({"title": story['title'], "text": text})
+            try:
+                story = self.get_story_details(story_id)
+                if not story or 'url' not in story:
+                    continue
+                extractor = WebTextExtractor(story['url'])
+                text = extractor.get_text()
+                summaries.append({"title": story.get('title', 'No title'), "text": text})
+            except Exception as e:
+                logging.error(f"Error processing story {story_id}: {e}")
+                continue
         return summaries
 
     def get_best_stories(self):
@@ -29,8 +50,14 @@ class HackerNews:
 
         stories = []
         for story_id in story_ids:
-            story = self.get_story_details(story_id)
-            stories.append(f"{story['title']} - {story['url']}")
+            try:
+                story = self.get_story_details(story_id)
+                if not story:
+                    continue
+                stories.append(f"{story.get('title', 'No title')} - {story.get('url', '')}")
+            except Exception as e:
+                logging.error(f"Error processing story {story_id}: {e}")
+                continue
         return stories
 
 def process(user_input, route_data, s):
