@@ -52,7 +52,7 @@ def retry_with_backoff(max_attempts=3, initial_delay=1):
                     last_exception = e
 
                     # Log the error if debug is enabled
-                    if hasattr(args[0], 'config') and args[0].config.debug:
+                    if args and hasattr(args[0], 'config') and args[0].config.debug:
                         logging.error(f"Attempt {attempt + 1}/{max_attempts} failed for {func.__name__}: {e}")
 
                     # Don't sleep after the last attempt
