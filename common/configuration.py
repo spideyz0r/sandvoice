@@ -28,7 +28,12 @@ class Config:
             "text_to_speech_model" : "tts-1",
             "bot_voice_model" : "nova",
             "cli_input": "disabled",
-            "bot_voice": "enabled"
+            "bot_voice": "enabled",
+            "api_timeout": 10,
+            "api_retry_attempts": 3,
+            "enable_error_logging": "disabled",
+            "error_log_path": f"{os.environ['HOME']}/.sandvoice/error.log",
+            "fallback_to_text_on_audio_error": "enabled"
         }
         self.config = self.load_defaults()
         self.load_config()
@@ -70,6 +75,11 @@ class Config:
         self.text_to_speech_model = self.get("text_to_speech_model")
         self.bot_voice_model = self.get("bot_voice_model")
         self.cli_input = self.get("cli_input").lower() == "enabled"
+        self.api_timeout = self.get("api_timeout")
+        self.api_retry_attempts = self.get("api_retry_attempts")
+        self.enable_error_logging = self.get("enable_error_logging").lower() == "enabled"
+        self.error_log_path = self.get("error_log_path")
+        self.fallback_to_text_on_audio_error = self.get("fallback_to_text_on_audio_error").lower() == "enabled"
 
     def get(self, key):
             return self.config.get(key, self.defaults[key])
