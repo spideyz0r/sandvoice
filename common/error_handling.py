@@ -1,6 +1,7 @@
 import time
 import logging
 import os
+import json
 from functools import wraps
 
 
@@ -44,7 +45,7 @@ def retry_with_backoff(max_attempts=3, initial_delay=1):
         are raised immediately without retry.
     """
     # Exceptions that should not be retried (non-transient errors)
-    NON_RETRYABLE_EXCEPTIONS = (FileNotFoundError, PermissionError, ValueError, KeyError)
+    NON_RETRYABLE_EXCEPTIONS = (FileNotFoundError, PermissionError, ValueError, KeyError, json.JSONDecodeError)
 
     def decorator(func):
         @wraps(func)
