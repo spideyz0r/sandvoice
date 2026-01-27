@@ -72,7 +72,7 @@ class Audio:
                 continue
             for f in os.listdir(file):
                 if lib_pattern.match(f):
-                    return f
+                    return os.path.join(file, f)
         return None
 
     def py_error_handler(self, filename, line, function, err, fmt):
