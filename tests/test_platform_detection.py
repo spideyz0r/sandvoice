@@ -5,7 +5,7 @@ from common.platform_detection import (
     get_architecture,
     is_macos,
     is_linux,
-    is_raspberry_pi,
+    is_likely_raspberry_pi,
     is_arm_architecture,
     get_platform_info,
     log_platform_info
@@ -75,35 +75,35 @@ class TestPlatformDetection(unittest.TestCase):
 
     @patch('common.platform_detection.platform.machine')
     @patch('common.platform_detection.platform.system')
-    def test_is_raspberry_pi_true_armv7l(self, mock_system, mock_machine):
-        """Test is_raspberry_pi returns True for Pi 3B (armv7l)"""
+    def test_is_likely_raspberry_pi_true_armv7l(self, mock_system, mock_machine):
+        """Test is_likely_raspberry_pi returns True for Pi 3B (armv7l)"""
         mock_system.return_value = 'Linux'
         mock_machine.return_value = 'armv7l'
-        self.assertTrue(is_raspberry_pi())
+        self.assertTrue(is_likely_raspberry_pi())
 
     @patch('common.platform_detection.platform.machine')
     @patch('common.platform_detection.platform.system')
-    def test_is_raspberry_pi_true_aarch64(self, mock_system, mock_machine):
-        """Test is_raspberry_pi returns True for Pi 4 (aarch64)"""
+    def test_is_likely_raspberry_pi_true_aarch64(self, mock_system, mock_machine):
+        """Test is_likely_raspberry_pi returns True for Pi 4 (aarch64)"""
         mock_system.return_value = 'Linux'
         mock_machine.return_value = 'aarch64'
-        self.assertTrue(is_raspberry_pi())
+        self.assertTrue(is_likely_raspberry_pi())
 
     @patch('common.platform_detection.platform.machine')
     @patch('common.platform_detection.platform.system')
-    def test_is_raspberry_pi_false_macos(self, mock_system, mock_machine):
-        """Test is_raspberry_pi returns False on macOS ARM"""
+    def test_is_likely_raspberry_pi_false_macos(self, mock_system, mock_machine):
+        """Test is_likely_raspberry_pi returns False on macOS ARM"""
         mock_system.return_value = 'Darwin'
         mock_machine.return_value = 'arm64'
-        self.assertFalse(is_raspberry_pi())
+        self.assertFalse(is_likely_raspberry_pi())
 
     @patch('common.platform_detection.platform.machine')
     @patch('common.platform_detection.platform.system')
-    def test_is_raspberry_pi_false_linux_x86(self, mock_system, mock_machine):
-        """Test is_raspberry_pi returns False on Linux x86"""
+    def test_is_likely_raspberry_pi_false_linux_x86(self, mock_system, mock_machine):
+        """Test is_likely_raspberry_pi returns False on Linux x86"""
         mock_system.return_value = 'Linux'
         mock_machine.return_value = 'x86_64'
-        self.assertFalse(is_raspberry_pi())
+        self.assertFalse(is_likely_raspberry_pi())
 
     @patch('common.platform_detection.platform.machine')
     def test_is_arm_architecture_arm64(self, mock_machine):
@@ -149,7 +149,7 @@ class TestPlatformDetection(unittest.TestCase):
         self.assertEqual(info['release'], '23.1.0')
         self.assertTrue(info['is_macos'])
         self.assertFalse(info['is_linux'])
-        self.assertFalse(info['is_raspberry_pi'])
+        self.assertFalse(info['is_likely_raspberry_pi'])
         self.assertTrue(info['is_arm'])
 
     @patch('common.platform_detection.platform.version')
@@ -171,13 +171,13 @@ class TestPlatformDetection(unittest.TestCase):
         self.assertEqual(info['machine'], 'armv7l')
         self.assertFalse(info['is_macos'])
         self.assertTrue(info['is_linux'])
-        self.assertTrue(info['is_raspberry_pi'])
+        self.assertTrue(info['is_likely_raspberry_pi'])
         self.assertTrue(info['is_arm'])
 
-    @patch('common.platform_detection.logging.info')
+    @patch('builtins.print')
     @patch('common.platform_detection.get_platform_info')
-    def test_log_platform_info_debug_enabled(self, mock_get_info, mock_log):
-        """Test log_platform_info logs when debug enabled"""
+    def test_log_platform_info_debug_enabled(self, mock_get_info, mock_print):
+        """Test log_platform_info prints when debug enabled"""
         mock_config = Mock()
         mock_config.debug = True
 
@@ -189,35 +189,35 @@ class TestPlatformDetection(unittest.TestCase):
             'release': '23.1.0',
             'is_macos': True,
             'is_linux': False,
-            'is_raspberry_pi': False,
+            'is_likely_raspberry_pi': False,
             'is_arm': True,
         }
 
         log_platform_info(mock_config)
 
-        # Should have called logging.info multiple times
-        self.assertGreater(mock_log.call_count, 5)
+        # Should have called print multiple times
+        self.assertGreater(mock_print.call_count, 5)
 
-    @patch('common.platform_detection.logging.info')
+    @patch('builtins.print')
     @patch('common.platform_detection.get_platform_info')
-    def test_log_platform_info_debug_disabled(self, mock_get_info, mock_log):
-        """Test log_platform_info doesn't log when debug disabled"""
+    def test_log_platform_info_debug_disabled(self, mock_get_info, mock_print):
+        """Test log_platform_info doesn't print when debug disabled"""
         mock_config = Mock()
         mock_config.debug = False
 
         log_platform_info(mock_config)
 
-        # Should not have called logging.info
-        mock_log.assert_not_called()
+        # Should not have called print
+        mock_print.assert_not_called()
 
-    @patch('common.platform_detection.logging.info')
+    @patch('builtins.print')
     @patch('common.platform_detection.get_platform_info')
-    def test_log_platform_info_no_config(self, mock_get_info, mock_log):
-        """Test log_platform_info doesn't log when no config provided"""
+    def test_log_platform_info_no_config(self, mock_get_info, mock_print):
+        """Test log_platform_info doesn't print when no config provided"""
         log_platform_info()
 
-        # Should not have called logging.info
-        mock_log.assert_not_called()
+        # Should not have called print
+        mock_print.assert_not_called()
 
 
 if __name__ == '__main__':

@@ -7,7 +7,8 @@ def get_platform():
     Get the operating system platform.
 
     Returns:
-        str: 'darwin' for macOS, 'linux' for Linux, or the raw platform.system() value
+        str: Lowercased platform name derived from platform.system()
+             (e.g., 'darwin' for macOS, 'linux' for Linux, 'windows' for Windows)
     """
     system = platform.system().lower()
     return system
@@ -43,13 +44,13 @@ def is_linux():
     return get_platform() == 'linux'
 
 
-def is_raspberry_pi():
+def is_likely_raspberry_pi():
     """
-    Check if running on a Raspberry Pi.
+    Check if likely running on a Raspberry Pi.
 
-    This checks for Linux + ARM architecture, which is a strong indicator
-    of Raspberry Pi hardware. More specific detection (reading /proc/cpuinfo)
-    could be added if needed.
+    This uses a heuristic: Linux + ARM architecture. This will match Raspberry Pi
+    devices but may also match other ARM Linux devices (Jetson, ARM servers, etc.).
+    For more specific detection, check /proc/device-tree/model or /proc/cpuinfo.
 
     Returns:
         bool: True if likely running on Raspberry Pi, False otherwise
@@ -90,7 +91,7 @@ def get_platform_info():
         'version': platform.version(),
         'is_macos': is_macos(),
         'is_linux': is_linux(),
-        'is_raspberry_pi': is_raspberry_pi(),
+        'is_likely_raspberry_pi': is_likely_raspberry_pi(),
         'is_arm': is_arm_architecture(),
     }
 
@@ -102,17 +103,16 @@ def log_platform_info(config=None):
     Args:
         config: Optional configuration object with debug flag
     """
-    info = get_platform_info()
-
     if config and config.debug:
-        logging.info("=== Platform Information ===")
-        logging.info(f"System: {info['system']}")
-        logging.info(f"Platform: {info['platform']}")
-        logging.info(f"Architecture: {info['architecture']}")
-        logging.info(f"Machine: {info['machine']}")
-        logging.info(f"Release: {info['release']}")
-        logging.info(f"Is macOS: {info['is_macos']}")
-        logging.info(f"Is Linux: {info['is_linux']}")
-        logging.info(f"Is Raspberry Pi: {info['is_raspberry_pi']}")
-        logging.info(f"Is ARM: {info['is_arm']}")
-        logging.info("===========================")
+        info = get_platform_info()
+        print("=== Platform Information ===")
+        print(f"System: {info['system']}")
+        print(f"Platform: {info['platform']}")
+        print(f"Architecture: {info['architecture']}")
+        print(f"Machine: {info['machine']}")
+        print(f"Release: {info['release']}")
+        print(f"Is macOS: {info['is_macos']}")
+        print(f"Is Linux: {info['is_linux']}")
+        print(f"Is Raspberry Pi: {info['is_likely_raspberry_pi']}")
+        print(f"Is ARM: {info['is_arm']}")
+        print("===========================")
