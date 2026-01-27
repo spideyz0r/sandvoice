@@ -4,6 +4,12 @@ import datetime, json, yaml, warnings, os, logging
 from common.error_handling import retry_with_backoff, setup_error_logging, handle_api_error, handle_file_error
 
 
+class ErrorMessage:
+    """Simple message object for error responses"""
+    def __init__(self, content):
+        self.content = content
+
+
 class AI:
     def __init__(self, config):
         self.config = config
@@ -87,10 +93,6 @@ class AI:
             if self.config.debug:
                 logging.error(f"Response generation error: {e}")
             print(error_msg)
-            # Return a message object-like string for compatibility
-            class ErrorMessage:
-                def __init__(self, content):
-                    self.content = content
             return ErrorMessage("Sorry, I'm having trouble right now. Please try again in a moment.")
 
     @retry_with_backoff(max_attempts=3, initial_delay=1)

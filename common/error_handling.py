@@ -38,7 +38,14 @@ def retry_with_backoff(max_attempts=3, initial_delay=1):
 
     Returns:
         Decorated function that retries on failure
+
+    Note:
+        Non-retryable exceptions (FileNotFoundError, PermissionError, ValueError)
+        are raised immediately without retry.
     """
+    # Exceptions that should not be retried (non-transient errors)
+    NON_RETRYABLE_EXCEPTIONS = (FileNotFoundError, PermissionError, ValueError, KeyError)
+
     def decorator(func):
         @wraps(func)
         def wrapper(*args, **kwargs):
@@ -55,6 +62,9 @@ def retry_with_backoff(max_attempts=3, initial_delay=1):
             for attempt in range(attempts):
                 try:
                     return func(*args, **kwargs)
+                except NON_RETRYABLE_EXCEPTIONS:
+                    # Don't retry non-transient errors
+                    raise
                 except Exception as e:
                     last_exception = e
 
@@ -63,10 +73,10 @@ def retry_with_backoff(max_attempts=3, initial_delay=1):
                         config = getattr(args[0], 'config', None)
                         debug_enabled = getattr(config, 'debug', False) if config is not None else False
                         if debug_enabled:
-                            logging.error(f"Attempt {attempt + 1}/{max_attempts} failed for {func.__name__}: {e}")
+                            logging.error(f"Attempt {attempt + 1}/{attempts} failed for {func.__name__}: {e}")
 
                     # Don't sleep after the last attempt
-                    if attempt < max_attempts - 1:
+                    if attempt < attempts - 1:
                         time.sleep(delay)
                         delay *= 2  # Exponential backoff
 
