@@ -87,41 +87,23 @@ class Config:
         errors = []
 
         # Validate numeric values
-        try:
-            if not isinstance(self.channels, int) or self.channels < 1 or self.channels > 2:
-                errors.append("channels must be 1 or 2")
-        except (TypeError, ValueError):
-            errors.append("channels must be a valid integer")
+        if not isinstance(self.channels, int) or self.channels < 1 or self.channels > 2:
+            errors.append("channels must be 1 or 2")
 
-        try:
-            if not isinstance(self.bitrate, int) or self.bitrate < 32 or self.bitrate > 320:
-                errors.append("bitrate must be between 32 and 320")
-        except (TypeError, ValueError):
-            errors.append("bitrate must be a valid integer")
+        if not isinstance(self.bitrate, int) or self.bitrate < 32 or self.bitrate > 320:
+            errors.append("bitrate must be between 32 and 320")
 
-        try:
-            if not isinstance(self.rate, int) or self.rate < 8000:
-                errors.append("rate must be at least 8000")
-        except (TypeError, ValueError):
-            errors.append("rate must be a valid integer")
+        if not isinstance(self.rate, int) or self.rate < 8000:
+            errors.append("rate must be at least 8000")
 
-        try:
-            if not isinstance(self.chunk, int) or self.chunk < 256:
-                errors.append("chunk must be at least 256")
-        except (TypeError, ValueError):
-            errors.append("chunk must be a valid integer")
+        if not isinstance(self.chunk, int) or self.chunk < 256:
+            errors.append("chunk must be at least 256")
 
-        try:
-            if not isinstance(self.api_timeout, int) or self.api_timeout < 1:
-                errors.append("api_timeout must be at least 1")
-        except (TypeError, ValueError):
-            errors.append("api_timeout must be a valid integer")
+        if not isinstance(self.api_timeout, int) or self.api_timeout < 1:
+            errors.append("api_timeout must be at least 1")
 
-        try:
-            if not isinstance(self.api_retry_attempts, int) or self.api_retry_attempts < 1:
-                errors.append("api_retry_attempts must be at least 1")
-        except (TypeError, ValueError):
-            errors.append("api_retry_attempts must be a valid integer")
+        if not isinstance(self.api_retry_attempts, int) or self.api_retry_attempts < 1:
+            errors.append("api_retry_attempts must be at least 1")
 
         # Validate string values
         if not self.botname or not isinstance(self.botname, str):
