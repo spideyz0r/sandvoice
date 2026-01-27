@@ -66,6 +66,57 @@ class TestRetryWithBackoff(unittest.TestCase):
         self.assertAlmostEqual(delay1, 0.1, delta=0.05)
         self.assertAlmostEqual(delay2, 0.2, delta=0.05)
 
+    def test_non_retryable_file_not_found(self):
+        """Test that FileNotFoundError is raised immediately without retry"""
+        mock_func = Mock(side_effect=FileNotFoundError("file not found"))
+        decorated_func = retry_with_backoff(max_attempts=3, initial_delay=0.01)(mock_func)
+
+        with self.assertRaises(FileNotFoundError):
+            decorated_func()
+
+        self.assertEqual(mock_func.call_count, 1)
+
+    def test_non_retryable_permission_error(self):
+        """Test that PermissionError is raised immediately without retry"""
+        mock_func = Mock(side_effect=PermissionError("permission denied"))
+        decorated_func = retry_with_backoff(max_attempts=3, initial_delay=0.01)(mock_func)
+
+        with self.assertRaises(PermissionError):
+            decorated_func()
+
+        self.assertEqual(mock_func.call_count, 1)
+
+    def test_non_retryable_value_error(self):
+        """Test that ValueError is raised immediately without retry"""
+        mock_func = Mock(side_effect=ValueError("invalid value"))
+        decorated_func = retry_with_backoff(max_attempts=3, initial_delay=0.01)(mock_func)
+
+        with self.assertRaises(ValueError):
+            decorated_func()
+
+        self.assertEqual(mock_func.call_count, 1)
+
+    def test_non_retryable_key_error(self):
+        """Test that KeyError is raised immediately without retry"""
+        mock_func = Mock(side_effect=KeyError("missing key"))
+        decorated_func = retry_with_backoff(max_attempts=3, initial_delay=0.01)(mock_func)
+
+        with self.assertRaises(KeyError):
+            decorated_func()
+
+        self.assertEqual(mock_func.call_count, 1)
+
+    def test_non_retryable_json_decode_error(self):
+        """Test that json.JSONDecodeError is raised immediately without retry"""
+        import json
+        mock_func = Mock(side_effect=json.JSONDecodeError("invalid json", "", 0))
+        decorated_func = retry_with_backoff(max_attempts=3, initial_delay=0.01)(mock_func)
+
+        with self.assertRaises(json.JSONDecodeError):
+            decorated_func()
+
+        self.assertEqual(mock_func.call_count, 1)
+
 
 class TestFormatUserError(unittest.TestCase):
     def test_basic_error_message(self):
