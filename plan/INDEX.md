@@ -12,7 +12,7 @@ This directory contains planning documentation for SandVoice features and improv
 ## Current Priority Features
 
 ### Priority 1: Error Handling
-**Status**: 📋 Planned
+**Status**: 🚧 In Progress
 **Document**: [01-error-handling.md](./01-error-handling.md)
 **Description**: Add comprehensive error handling for API calls, network failures, and hardware issues. Ensure graceful degradation and user-friendly error messages instead of crashes.
 
