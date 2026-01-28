@@ -99,6 +99,22 @@ class TestPlatformDetection(unittest.TestCase):
 
     @patch('common.platform_detection.platform.machine')
     @patch('common.platform_detection.platform.system')
+    def test_is_likely_raspberry_pi_true_armv6l(self, mock_system, mock_machine):
+        """Test is_likely_raspberry_pi returns True for Pi Zero (armv6l)"""
+        mock_system.return_value = 'Linux'
+        mock_machine.return_value = 'armv6l'
+        self.assertTrue(is_likely_raspberry_pi())
+
+    @patch('common.platform_detection.platform.machine')
+    @patch('common.platform_detection.platform.system')
+    def test_is_likely_raspberry_pi_true_armv8(self, mock_system, mock_machine):
+        """Test is_likely_raspberry_pi returns True for Pi with armv8"""
+        mock_system.return_value = 'Linux'
+        mock_machine.return_value = 'armv8'
+        self.assertTrue(is_likely_raspberry_pi())
+
+    @patch('common.platform_detection.platform.machine')
+    @patch('common.platform_detection.platform.system')
     def test_is_likely_raspberry_pi_false_linux_x86(self, mock_system, mock_machine):
         """Test is_likely_raspberry_pi returns False on Linux x86"""
         mock_system.return_value = 'Linux'
