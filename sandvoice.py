@@ -100,4 +100,6 @@ if __name__ == "__main__":
 # read all roles from yaml files
 # write history on a file
 # fix history by removing control messages
-
+# make the audio files randomly created and removed, to support multiple uses at the same time
+# make the system role overridable
+# add support to send messages when there's a silence for N seconds in the input audio

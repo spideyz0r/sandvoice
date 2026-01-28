@@ -1,4 +1,4 @@
-import os, yaml
+import os, yaml, logging
 
 class Config:
     def __init__(self):
@@ -28,7 +28,12 @@ class Config:
             "text_to_speech_model" : "tts-1",
             "bot_voice_model" : "nova",
             "cli_input": "disabled",
-            "bot_voice": "enabled"
+            "bot_voice": "enabled",
+            "api_timeout": 10,
+            "api_retry_attempts": 3,
+            "enable_error_logging": "disabled",
+            "error_log_path": f"{os.environ['HOME']}/.sandvoice/error.log",
+            "fallback_to_text_on_audio_error": "enabled"
         }
         self.config = self.load_defaults()
         self.load_config()
@@ -70,6 +75,59 @@ class Config:
         self.text_to_speech_model = self.get("text_to_speech_model")
         self.bot_voice_model = self.get("bot_voice_model")
         self.cli_input = self.get("cli_input").lower() == "enabled"
+        self.api_timeout = self.get("api_timeout")
+        self.api_retry_attempts = self.get("api_retry_attempts")
+        self.enable_error_logging = self.get("enable_error_logging").lower() == "enabled"
+        self.error_log_path = self.get("error_log_path")
+        self.fallback_to_text_on_audio_error = self.get("fallback_to_text_on_audio_error").lower() == "enabled"
+        self.validate_config()
+
+    def validate_config(self):
+        """Validate configuration values and raise errors for invalid settings."""
+        errors = []
+
+        # Validate numeric values
+        if not isinstance(self.channels, int) or self.channels < 1 or self.channels > 2:
+            errors.append("channels must be 1 or 2")
+
+        if not isinstance(self.bitrate, int) or self.bitrate < 32 or self.bitrate > 320:
+            errors.append("bitrate must be between 32 and 320")
+
+        if not isinstance(self.rate, int) or self.rate < 8000:
+            errors.append("rate must be at least 8000")
+
+        if not isinstance(self.chunk, int) or self.chunk < 256:
+            errors.append("chunk must be at least 256")
+
+        if not isinstance(self.api_timeout, int) or self.api_timeout < 1:
+            errors.append("api_timeout must be at least 1")
+
+        if not isinstance(self.api_retry_attempts, int) or self.api_retry_attempts < 1:
+            errors.append("api_retry_attempts must be at least 1")
+
+        # Validate string values
+        if not self.botname or not isinstance(self.botname, str):
+            errors.append("botname must be a non-empty string")
+
+        if not self.language or not isinstance(self.language, str):
+            errors.append("language must be a non-empty string")
+
+        if not self.location or not isinstance(self.location, str):
+            errors.append("location must be a non-empty string")
+
+        # Validate unit
+        if self.unit not in ["metric", "imperial"]:
+            errors.append("unit must be 'metric' or 'imperial'")
+
+        # Validate paths
+        if not self.tmp_files_path or not isinstance(self.tmp_files_path, str):
+            errors.append("tmp_files_path must be a non-empty string")
+
+        # Report all errors
+        if errors:
+            error_msg = "Configuration validation failed:\n" + "\n".join(f"  - {err}" for err in errors)
+            logging.error(error_msg)
+            raise ValueError(error_msg)
 
     def get(self, key):
             return self.config.get(key, self.defaults[key])
