@@ -160,7 +160,6 @@ class TestPlatformDetection(unittest.TestCase):
 
         self.assertEqual(info['system'], 'Darwin')
         self.assertEqual(info['platform'], 'darwin')
-        self.assertEqual(info['architecture'], 'arm64')
         self.assertEqual(info['machine'], 'arm64')
         self.assertEqual(info['release'], '23.1.0')
         self.assertTrue(info['is_macos'])
@@ -183,7 +182,6 @@ class TestPlatformDetection(unittest.TestCase):
 
         self.assertEqual(info['system'], 'Linux')
         self.assertEqual(info['platform'], 'linux')
-        self.assertEqual(info['architecture'], 'armv7l')
         self.assertEqual(info['machine'], 'armv7l')
         self.assertFalse(info['is_macos'])
         self.assertTrue(info['is_linux'])

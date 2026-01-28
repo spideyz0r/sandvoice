@@ -74,19 +74,21 @@ def get_platform_info():
     Get comprehensive platform information for logging and debugging.
 
     Returns:
-        dict: Platform information including system, architecture, release, etc.
+        dict: Platform information including system, machine, release, etc.
     """
+    system = platform.system()
+    machine = platform.machine().lower()
+
     return {
-        'system': platform.system(),
-        'platform': get_platform(),
-        'architecture': get_architecture(),
-        'machine': platform.machine().lower(),
+        'system': system,
+        'platform': system.lower(),
+        'machine': machine,
         'release': platform.release(),
         'version': platform.version(),
-        'is_macos': is_macos(),
-        'is_linux': is_linux(),
-        'is_likely_raspberry_pi': is_likely_raspberry_pi(),
-        'is_arm': is_arm_architecture(),
+        'is_macos': system.lower() == 'darwin',
+        'is_linux': system.lower() == 'linux',
+        'is_likely_raspberry_pi': system.lower() == 'linux' and ('arm' in machine or 'aarch' in machine),
+        'is_arm': 'arm' in machine or 'aarch' in machine,
     }
 
 
