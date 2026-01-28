@@ -54,13 +54,8 @@ def is_likely_raspberry_pi():
     Returns:
         bool: True if likely running on Raspberry Pi, False otherwise
     """
-    if not is_linux():
-        return False
-
-    arch = get_architecture()
-    # Raspberry Pi uses ARM architecture
-    # Pi 3B: armv7l, Pi 4: aarch64 or armv7l, Pi 5: aarch64
-    return arch in ['armv7l', 'aarch64', 'armv6l', 'armv8']
+    # Use generic ARM detection to cover all ARM variants (arm64, aarch64, armv7l, etc.)
+    return is_linux() and is_arm_architecture()
 
 
 def is_arm_architecture():
@@ -85,7 +80,7 @@ def get_platform_info():
         'system': platform.system(),
         'platform': get_platform(),
         'architecture': get_architecture(),
-        'machine': platform.machine(),
+        'machine': platform.machine().lower(),
         'release': platform.release(),
         'version': platform.version(),
         'is_macos': is_macos(),
