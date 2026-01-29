@@ -2,6 +2,7 @@ import unittest
 import tempfile
 import os
 import yaml
+from unittest.mock import patch
 from common.configuration import Config
 
 
@@ -194,6 +195,66 @@ class TestConfigurationValidation(unittest.TestCase):
         self.assertEqual(config.unit, "metric")
         self.assertEqual(config.api_timeout, 30)
         self.assertEqual(config.api_retry_attempts, 5)
+
+    @patch('common.configuration.get_optimal_channels')
+    def test_auto_detect_channels_when_not_configured(self, mock_get_optimal):
+        """Test that channels are auto-detected when not in config"""
+        mock_get_optimal.return_value = 1
+
+        # Don't set channels in config - should auto-detect
+        self.write_config({"botname": "TestBot"})
+
+        config = Config()
+
+        # Should have called auto-detection
+        mock_get_optimal.assert_called_once()
+        self.assertEqual(config.channels, 1)
+
+    @patch('common.configuration.get_optimal_channels')
+    def test_explicit_channels_overrides_auto_detect(self, mock_get_optimal):
+        """Test that explicit channels config overrides auto-detection"""
+        mock_get_optimal.return_value = 1
+
+        # Explicitly set channels to 2
+        self.write_config({"channels": 2})
+
+        config = Config()
+
+        # Should NOT have called auto-detection
+        mock_get_optimal.assert_not_called()
+        self.assertEqual(config.channels, 2)
+
+    @patch('common.configuration.get_optimal_channels')
+    @patch('builtins.print')
+    def test_deprecation_warning_for_linux_warnings(self, mock_print, mock_get_optimal):
+        """Test that linux_warnings config triggers deprecation warning"""
+        mock_get_optimal.return_value = 2
+
+        # Set linux_warnings to a non-default value
+        self.write_config({"linux_warnings": "disabled"})
+
+        config = Config()
+
+        # Should have printed deprecation warning
+        warning_calls = [call for call in mock_print.call_args_list
+                        if len(call[0]) > 0 and 'deprecated' in call[0][0].lower()]
+        self.assertGreater(len(warning_calls), 0, "Should print deprecation warning")
+
+    @patch('common.configuration.get_optimal_channels')
+    @patch('builtins.print')
+    def test_no_warning_when_linux_warnings_not_set(self, mock_print, mock_get_optimal):
+        """Test that no deprecation warning when linux_warnings not explicitly set"""
+        mock_get_optimal.return_value = 2
+
+        # Don't set linux_warnings - uses default
+        self.write_config({"channels": 2})
+
+        config = Config()
+
+        # Should NOT print deprecation warning
+        warning_calls = [call for call in mock_print.call_args_list
+                        if len(call[0]) > 0 and 'deprecated' in call[0][0].lower()]
+        self.assertEqual(len(warning_calls), 0, "Should not print deprecation warning")
 
 
 if __name__ == '__main__':

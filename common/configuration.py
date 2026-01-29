@@ -1,10 +1,12 @@
 import os, yaml, logging
+from common.platform_detection import log_platform_info
+from common.audio_device_detection import get_optimal_channels, log_device_info
 
 class Config:
     def __init__(self):
         self.config_file = f"{os.environ['HOME']}/.sandvoice/config.yaml"
         self.defaults  = {
-            "channels": 2,
+            "channels": None,
             "bitrate": 128,
             "rate": 44100,
             "chunk": 1024,
@@ -47,7 +49,10 @@ class Config:
         return {**self.defaults, **data}
 
     def load_config(self):
-        self.channels = self.get("channels")
+        # Load channels configuration (None triggers auto-detection)
+        channels_config = self.get("channels")
+        self.channels = channels_config
+
         self.bitrate = self.get("bitrate")
         self.rate = self.get("rate")
         self.chunk = self.get("chunk")
@@ -80,6 +85,23 @@ class Config:
         self.enable_error_logging = self.get("enable_error_logging").lower() == "enabled"
         self.error_log_path = self.get("error_log_path")
         self.fallback_to_text_on_audio_error = self.get("fallback_to_text_on_audio_error").lower() == "enabled"
+
+        # Auto-detect channels if not explicitly configured
+        if self.channels is None:
+            self.channels = get_optimal_channels()
+            if self.debug:
+                print(f"Auto-detected audio channels: {self.channels}")
+
+        # Deprecation warning for linux_warnings
+        if "linux_warnings" in self.config and self.config["linux_warnings"] != self.defaults["linux_warnings"]:
+            print("WARNING: 'linux_warnings' configuration is deprecated and no longer needed.")
+            print("Platform-specific audio settings are now auto-detected.")
+
+        # Log platform and audio device info in debug mode
+        if self.debug:
+            log_platform_info(self)
+            log_device_info(self)
+
         self.validate_config()
 
     def validate_config(self):
