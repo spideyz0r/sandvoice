@@ -104,7 +104,7 @@ def get_optimal_channels(device_info=None):
     Determine the optimal number of channels for audio recording.
 
     macOS typically works better with mono (1 channel).
-    Linux/Pi can use stereo (2 channels) if the device supports it.
+    Other platforms (Linux/Pi) can use stereo (2 channels) if the device supports it.
 
     Args:
         device_info: Optional device info dictionary from PyAudio
@@ -116,13 +116,13 @@ def get_optimal_channels(device_info=None):
     if is_macos():
         return 1
 
-    # For Linux/Pi, check device capabilities
+    # For other platforms, check device capabilities
     if device_info is not None:
         max_channels = device_info.get('maxInputChannels', 1)
         # Use stereo if device supports it, otherwise mono
         return 2 if max_channels >= 2 else 1
 
-    # Default to stereo for Linux/Pi if no device info
+    # Default to stereo for non-macOS platforms if no device info
     return 2
 
 
@@ -162,12 +162,9 @@ def get_all_devices(audio=None):
             audio.terminate()
 
 
-def get_device_summary(config=None):
+def get_device_summary():
     """
     Get a summary of audio device configuration for logging and debugging.
-
-    Args:
-        config: Optional configuration object with debug flag
 
     Returns:
         dict: Summary of audio device information
@@ -215,7 +212,7 @@ def log_device_info(config=None):
         config: Optional configuration object with debug flag
     """
     if config and config.debug:
-        summary = get_device_summary(config)
+        summary = get_device_summary()
 
         print("=== Audio Device Information ===")
         print(f"PyAudio Available: {summary['pyaudio_available']}")

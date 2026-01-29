@@ -1,5 +1,5 @@
 import unittest
-from unittest.mock import Mock, patch, MagicMock
+from unittest.mock import Mock, patch
 from common.audio_device_detection import (
     get_audio_instance,
     get_device_count,
@@ -131,6 +131,19 @@ class TestGetDefaultOutputDevice(unittest.TestCase):
         result = get_default_output_device(mock_audio)
 
         self.assertEqual(result, device_info)
+
+    @patch('common.audio_device_detection.get_audio_instance')
+    def test_with_cleanup(self, mock_get_audio):
+        """Test getting default output device with automatic cleanup"""
+        mock_audio = Mock()
+        device_info = {'name': 'USB Speaker', 'index': 1}
+        mock_audio.get_default_output_device_info.return_value = device_info
+        mock_get_audio.return_value = mock_audio
+
+        result = get_default_output_device()
+
+        self.assertEqual(result, device_info)
+        mock_audio.terminate.assert_called_once()
 
     @patch('common.audio_device_detection.get_audio_instance')
     def test_pyaudio_unavailable(self, mock_get_audio):
