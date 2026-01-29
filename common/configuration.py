@@ -85,9 +85,16 @@ class Config:
 
         # Auto-detect channels if not explicitly configured
         if self.channels is None:
-            self.channels = get_optimal_channels()
-            if self.debug:
-                print(f"Auto-detected audio channels: {self.channels}")
+            try:
+                self.channels = get_optimal_channels()
+                if self.debug:
+                    print(f"Auto-detected audio channels: {self.channels}")
+            except Exception as e:
+                logging.warning(
+                    "Failed to auto-detect audio channels: %s. Falling back to 2 channels.",
+                    e
+                )
+                self.channels = 2
 
         # Deprecation warning for linux_warnings
         if "linux_warnings" in self.config and self.config["linux_warnings"] != self.defaults["linux_warnings"]:

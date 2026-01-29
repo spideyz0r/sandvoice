@@ -206,8 +206,8 @@ class TestConfigurationValidation(unittest.TestCase):
 
         config = Config()
 
-        # Should have called auto-detection
-        mock_get_optimal.assert_called_once()
+        # Should have called auto-detection with no arguments
+        mock_get_optimal.assert_called_once_with()
         self.assertEqual(config.channels, 1)
 
     @patch('common.configuration.get_optimal_channels')
@@ -256,6 +256,21 @@ class TestConfigurationValidation(unittest.TestCase):
         warning_calls = [call for call in mock_print.call_args_list
                         if len(call[0]) > 0 and 'deprecated' in call[0][0].lower()]
         self.assertEqual(len(warning_calls), 0, "Should not print deprecation warning")
+
+    @patch('common.configuration.get_optimal_channels')
+    def test_auto_detect_fallback_on_exception(self, mock_get_optimal):
+        """Test that auto-detection falls back to 2 channels on exception"""
+        mock_get_optimal.side_effect = Exception("PyAudio not available")
+
+        # Don't set channels in config - should auto-detect and fallback
+        self.write_config({"botname": "TestBot"})
+
+        config = Config()
+
+        # Should have attempted auto-detection
+        mock_get_optimal.assert_called_once_with()
+        # Should have fallen back to 2 channels
+        self.assertEqual(config.channels, 2)
 
 
 if __name__ == '__main__':
