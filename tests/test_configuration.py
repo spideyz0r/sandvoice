@@ -233,7 +233,7 @@ class TestConfigurationValidation(unittest.TestCase):
         # Set linux_warnings to a non-default value
         self.write_config({"linux_warnings": "disabled"})
 
-        config = Config()
+        Config()
 
         # Should have printed deprecation warning
         warning_calls = [call for call in mock_print.call_args_list
@@ -250,6 +250,7 @@ class TestConfigurationValidation(unittest.TestCase):
         self.write_config({"channels": 2})
 
         config = Config()
+        self.assertEqual(config.channels, 2)
 
         # Should NOT print deprecation warning
         warning_calls = [call for call in mock_print.call_args_list

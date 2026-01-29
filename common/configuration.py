@@ -49,10 +49,7 @@ class Config:
         return {**self.defaults, **data}
 
     def load_config(self):
-        # Load channels configuration (None triggers auto-detection)
-        channels_config = self.get("channels")
-        self.channels = channels_config
-
+        self.channels = self.get("channels")
         self.bitrate = self.get("bitrate")
         self.rate = self.get("rate")
         self.chunk = self.get("chunk")
