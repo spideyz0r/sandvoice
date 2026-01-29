@@ -12,12 +12,12 @@ This directory contains planning documentation for SandVoice features and improv
 ## Current Priority Features
 
 ### Priority 1: Error Handling
-**Status**: 🚧 In Progress
+**Status**: ✅ Completed
 **Document**: [01-error-handling.md](./01-error-handling.md)
 **Description**: Add comprehensive error handling for API calls, network failures, and hardware issues. Ensure graceful degradation and user-friendly error messages instead of crashes.
 
 ### Priority 2: Platform Auto-Detection
-**Status**: 📋 Planned
+**Status**: ✅ Completed
 **Document**: [02-platform-auto-detection.md](./02-platform-auto-detection.md)
 **Description**: Automatically detect platform (macOS/Linux) and configure audio settings appropriately. Eliminate manual configuration footguns like `linux_warnings` and `channels`.
 
