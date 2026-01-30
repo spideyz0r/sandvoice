@@ -88,37 +88,14 @@ class SandVoice:
                             "or another internal TTS issue. Skipping audio playback."
                         )
             else:
-                for idx, tts_file in enumerate(tts_files):
-                    delete_file = True
-                    try:
-                        audio.play_audio_file(tts_file)
-                    except Exception as e:
-                        if self.config.debug:
-                            print(f"Error during audio playback for file '{tts_file}': {e}")
-                            print("Stopping voice playback and continuing with text only.")
-                            print(f"Preserving TTS file '{tts_file}' for debugging.")
-                            delete_file = False
-                        else:
-                            print("Audio playback failed. Continuing with text only.")
-
-                        # Clean up any remaining, unplayed chunk files to avoid leaks.
-                        for remaining_file in tts_files[idx + 1:]:
-                            try:
-                                if os.path.exists(remaining_file):
-                                    os.remove(remaining_file)
-                            except Exception:
-                                # Best-effort cleanup: ignore errors while deleting temporary audio files
-                                pass
-
-                        break
-                    finally:
-                        if delete_file:
-                            try:
-                                if os.path.exists(tts_file):
-                                    os.remove(tts_file)
-                            except Exception:
-                                # Best-effort cleanup: ignore errors while deleting temporary audio files
-                                pass
+                success, failed_file, error = audio.play_audio_files(tts_files)
+                if not success:
+                    if self.config.debug:
+                        print(f"Error during audio playback for file '{failed_file}': {error}")
+                        print("Stopping voice playback and continuing with text only.")
+                        print(f"Preserving TTS file '{failed_file}' for debugging.")
+                    else:
+                        print("Audio playback failed. Continuing with text only.")
 
         if self.config.push_to_talk and not self.config.cli_input:
             input("Press any key to speak...")

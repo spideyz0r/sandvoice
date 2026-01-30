@@ -155,9 +155,18 @@ class Audio:
     def play_audio_file(self, file_path):
         try:
             if not pygame.mixer.get_init():
-                pygame.mixer.init()
+                try:
+                    pygame.mixer.init()
+                except Exception as init_error:
+                    if self.config.debug:
+                        logging.error(f"pygame mixer.init() raised an exception: {init_error}")
+                    raise
+
                 if not pygame.mixer.get_init():
-                    raise RuntimeError("pygame mixer init failed")
+                    error_msg = "pygame mixer initialization failed: pygame.mixer.get_init() returned None after mixer.init()"
+                    if self.config.debug:
+                        logging.error(error_msg)
+                    raise RuntimeError(error_msg)
             pygame.mixer.music.load(file_path)
             pygame.mixer.music.play()
 
@@ -175,3 +184,45 @@ class Audio:
                 logging.error(f"Audio playback error: {e}")
             print(f"Error: {error_msg}")
             raise
+
+    def play_audio_files(self, file_paths):
+        """Play a list of audio files sequentially.
+
+        Returns:
+            (success, failed_file, error):
+                - success: True if all files played successfully
+                - failed_file: path that failed (or None)
+                - error: exception instance (or None)
+        """
+
+        failed_file = None
+        error = None
+
+        for idx, file_path in enumerate(file_paths):
+            delete_file = True
+            try:
+                self.play_audio_file(file_path)
+            except Exception as e:
+                failed_file = file_path
+                error = e
+
+                if self.config.debug:
+                    delete_file = False
+
+                # Always clean up remaining, unplayed chunk files to avoid leaks.
+                for remaining_file in file_paths[idx + 1:]:
+                    try:
+                        if os.path.exists(remaining_file):
+                            os.remove(remaining_file)
+                    except Exception:
+                        pass
+                break
+            finally:
+                if delete_file:
+                    try:
+                        if os.path.exists(file_path):
+                            os.remove(file_path)
+                    except Exception:
+                        pass
+
+        return failed_file is None, failed_file, error

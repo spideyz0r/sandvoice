@@ -144,7 +144,8 @@ class TestTextToSpeechChunking(unittest.TestCase):
     @patch('common.ai.setup_error_logging')
     @patch('common.ai.uuid.uuid4')
     @patch('common.ai.split_text_for_tts')
-    def test_text_to_speech_cleanup_on_chunk_failure_with_fallback(self, mock_split, mock_uuid4, mock_setup, mock_openai_class):
+    @patch('builtins.print')
+    def test_text_to_speech_cleanup_on_chunk_failure_with_fallback(self, mock_print, mock_split, mock_uuid4, mock_setup, mock_openai_class):
         mock_split.return_value = ["chunk1", "chunk2"]
         mock_uuid4.return_value = Mock(hex='abc123')
 

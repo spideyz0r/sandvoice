@@ -305,9 +305,7 @@ class AI:
                 logging.error(f"Text-to-speech error: {e}")
 
             if self.config.fallback_to_text_on_audio_error:
-                if self.config.debug:
-                    print("Something went wrong while generating voice. Showing text only.")
-                    print(handle_api_error(e, service_name="OpenAI TTS"))
+                print(handle_api_error(e, service_name="OpenAI TTS"))
                 return []
 
             print(handle_api_error(e, service_name="OpenAI TTS"))
