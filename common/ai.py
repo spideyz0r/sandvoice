@@ -13,7 +13,20 @@ SENTENCE_BREAK_RE = re.compile(r"[.!?]\s+")
 
 
 def split_text_for_tts(text, max_chars = DEFAULT_TTS_MAX_CHARS):
-    """Split text into chunks that fit within the TTS input size limit."""
+    """Split text into chunks that fit within the TTS input size limit.
+
+    Heuristic split priority within each window of up to max_chars:
+    1) paragraph breaks ("\n\n")
+    2) single newlines ("\n")
+    3) sentence boundaries (SENTENCE_BREAK_RE)
+    4) spaces
+    5) hard cut at max_chars
+
+    Notes/limitations:
+    - sentence boundary detection is heuristic and may behave oddly for
+      abbreviations ("Dr."), URLs, etc.
+    - chunks are stripped; the remaining text is left-stripped after each split.
+    """
     if text is None:
         return []
 
@@ -30,12 +43,12 @@ def split_text_for_tts(text, max_chars = DEFAULT_TTS_MAX_CHARS):
 
         split_at = window.rfind("\n\n")
         if split_at != -1:
-            split_at = split_at + 2
+            # Do not include delimiter; remaining text is lstrip()'d below.
             split_at = min(split_at, max_chars)
         else:
             split_at = window.rfind("\n")
             if split_at != -1:
-                split_at = split_at + 1
+                # Do not include delimiter; remaining text is lstrip()'d below.
                 split_at = min(split_at, max_chars)
 
         if split_at == -1:

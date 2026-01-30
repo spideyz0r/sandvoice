@@ -156,6 +156,8 @@ class Audio:
         try:
             if not pygame.mixer.get_init():
                 pygame.mixer.init()
+                if not pygame.mixer.get_init():
+                    raise RuntimeError("pygame mixer init failed")
             pygame.mixer.music.load(file_path)
             pygame.mixer.music.play()
 
