@@ -154,7 +154,8 @@ class Audio:
 
     def play_audio_file(self, file_path):
         try:
-            pygame.mixer.init()
+            if not pygame.mixer.get_init():
+                pygame.mixer.init()
             pygame.mixer.music.load(file_path)
             pygame.mixer.music.play()
 

@@ -75,14 +75,20 @@ class SandVoice:
 
         if self.config.bot_voice:
             tts_files = self.ai.text_to_speech(response)
-            for tts_file in tts_files:
-                audio.play_audio_file(tts_file)
-                try:
-                    if os.path.exists(tts_file):
-                        os.remove(tts_file)
-                except Exception:
-                    # Best effort cleanup; don't fail the interaction
-                    pass
+            if not tts_files:
+                if self.config.debug:
+                    print("TTS was requested (bot_voice enabled) but no audio files were generated; skipping audio playback.")
+            else:
+                for tts_file in tts_files:
+                    try:
+                        audio.play_audio_file(tts_file)
+                    finally:
+                        try:
+                            if os.path.exists(tts_file):
+                                os.remove(tts_file)
+                        except Exception:
+                            # Best-effort cleanup: ignore errors while deleting temporary audio files
+                            pass
 
         if self.config.push_to_talk and not self.config.cli_input:
             input("Press any key to speak...")

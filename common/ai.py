@@ -1,6 +1,6 @@
 from openai import OpenAI
 from jinja2 import Template
-import datetime, json, yaml, warnings, os, logging, time, re
+import datetime, json, yaml, warnings, os, logging, re, uuid
 from common.error_handling import retry_with_backoff, setup_error_logging, handle_api_error, handle_file_error
 
 
@@ -246,12 +246,15 @@ class AI:
             if not chunks:
                 return []
 
-            response_id = int(time.time() * 1000)
+            response_id = uuid.uuid4().hex
             output_files = []
 
             try:
                 for i, chunk in enumerate(chunks, start=1):
-                    speech_file_path = self.config.tmp_files_path + f"tts-response-{response_id}-chunk-{i:03d}.mp3"
+                    speech_file_path = os.path.join(
+                        self.config.tmp_files_path,
+                        f"tts-response-{response_id}-chunk-{i:03d}.mp3",
+                    )
                     response = self.openai_client.audio.speech.create(
                         model = model,
                         voice = voice,
@@ -273,11 +276,10 @@ class AI:
             logging.exception("Text-to-speech error")
 
             if self.config.fallback_to_text_on_audio_error:
-                print("Something went wrong while generating voice. Showing text only.")
                 if self.config.debug:
+                    print("Something went wrong while generating voice. Showing text only.")
                     print(handle_api_error(e, service_name="OpenAI TTS"))
                 return []
 
-            if self.config.debug:
-                print(handle_api_error(e, service_name="OpenAI TTS"))
+            print(handle_api_error(e, service_name="OpenAI TTS"))
             raise
