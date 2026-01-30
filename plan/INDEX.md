@@ -22,7 +22,7 @@ This directory contains planning documentation for SandVoice features and improv
 **Description**: Automatically detect platform (macOS/Linux) and configure audio settings appropriately. Eliminate manual configuration footguns like `linux_warnings` and `channels`.
 
 ### Priority 3: Unit Tests
-**Status**: 📋 Planned
+**Status**: ✅ Completed
 **Document**: [03-unit-tests.md](./03-unit-tests.md)
 **Description**: Establish comprehensive test suite with >80% code coverage. Mock external dependencies (OpenAI, audio hardware) and test core business logic.
 
