@@ -87,16 +87,26 @@ class SandVoice:
                             "Skipping audio playback."
                         )
             else:
-                for tts_file in tts_files:
+                for idx, tts_file in enumerate(tts_files):
                     delete_file = True
                     try:
                         audio.play_audio_file(tts_file)
                     except Exception as e:
                         if self.config.debug:
                             print(f"Error during audio playback for file '{tts_file}': {e}")
+                            print("Stopping voice playback and continuing with text only.")
                             print(f"Preserving TTS file '{tts_file}' for debugging.")
                             delete_file = False
-                        raise
+
+                        # Clean up any remaining, unplayed chunk files to avoid leaks.
+                        for remaining_file in tts_files[idx + 1:]:
+                            try:
+                                if os.path.exists(remaining_file):
+                                    os.remove(remaining_file)
+                            except Exception:
+                                # Best-effort cleanup: ignore errors while deleting temporary audio files
+                                pass
+                        break
                     finally:
                         if delete_file:
                             try:

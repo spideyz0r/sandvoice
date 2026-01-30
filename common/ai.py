@@ -7,7 +7,7 @@ from common.error_handling import retry_with_backoff, setup_error_logging, handl
 DEFAULT_TTS_MAX_CHARS = 3800
 
 
-def split_text_for_tts(text, max_chars=DEFAULT_TTS_MAX_CHARS):
+def split_text_for_tts(text, max_chars = DEFAULT_TTS_MAX_CHARS):
     """Split text into chunks that fit within the TTS input size limit."""
     if text is None:
         return []
@@ -17,6 +17,7 @@ def split_text_for_tts(text, max_chars=DEFAULT_TTS_MAX_CHARS):
         return []
 
     chunks = []
+    # Heuristic sentence splitting; may not be perfect for abbreviations/URLs.
     sentence_break_re = re.compile(r"[.!?;:]\s")
 
     while len(remaining) > max_chars:
@@ -242,7 +243,7 @@ class AI:
 
         try:
             warnings.filterwarnings("ignore", category=DeprecationWarning)
-            chunks = split_text_for_tts(text, DEFAULT_TTS_MAX_CHARS)
+            chunks = split_text_for_tts(text)
             if not chunks:
                 return []
 
