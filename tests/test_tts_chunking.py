@@ -1,5 +1,6 @@
 import os
 import shutil
+import logging
 import unittest
 import tempfile
 from unittest.mock import Mock, patch
@@ -27,8 +28,22 @@ class TestSplitTextForTTS(unittest.TestCase):
         text = ("a" * 15) + "\n\n" + ("b" * 15)
         chunks = split_text_for_tts(text, max_chars=16)
         self.assertEqual(len(chunks), 2)
+        self.assertTrue(all(len(c) <= 16 for c in chunks))
         self.assertTrue(chunks[0].startswith("a"))
         self.assertTrue(chunks[1].startswith("b"))
+
+    def test_prefers_single_newline_boundary(self):
+        text = ("a" * 20) + "\n" + ("b" * 20)
+        chunks = split_text_for_tts(text, max_chars=25)
+        self.assertEqual(len(chunks), 2)
+        self.assertTrue(all(len(c) <= 25 for c in chunks))
+        self.assertEqual(chunks[0], "a" * 20)
+        self.assertEqual(chunks[1], "b" * 20)
+
+    def test_prefers_space_boundary(self):
+        text = "hello worldagain"
+        chunks = split_text_for_tts(text, max_chars=8)
+        self.assertEqual(chunks[0], "hello")
 
     def test_prefers_sentence_boundary(self):
         text = "One. Two. Three. Four."
@@ -44,7 +59,12 @@ class TestTextToSpeechChunking(unittest.TestCase):
         self.original_api_key = os.environ.get('OPENAI_API_KEY')
         os.environ['OPENAI_API_KEY'] = 'test-key'
 
+        # Keep unit test output clean (text_to_speech logs errors on failure paths).
+        logging.disable(logging.CRITICAL)
+
     def tearDown(self):
+        logging.disable(logging.NOTSET)
+
         if self.original_api_key is not None:
             os.environ['OPENAI_API_KEY'] = self.original_api_key
         else:
@@ -159,6 +179,31 @@ class TestTextToSpeechChunking(unittest.TestCase):
 
         first_path = os.path.join(self.temp_dir, 'tts-response-abc123-chunk-001.mp3')
         self.assertFalse(os.path.exists(first_path))
+
+    @patch('common.ai.OpenAI')
+    @patch('common.ai.setup_error_logging')
+    @patch('common.ai.split_text_for_tts')
+    @patch('builtins.print')
+    def test_text_to_speech_raises_when_no_fallback(self, mock_print, mock_split, mock_setup, mock_openai_class):
+        mock_split.return_value = ["chunk1"]
+
+        mock_config = Mock()
+        mock_config.api_timeout = 10
+        mock_config.api_retry_attempts = 1
+        mock_config.text_to_speech_model = 'tts-1'
+        mock_config.bot_voice_model = 'nova'
+        mock_config.tmp_files_path = self.temp_dir
+        mock_config.fallback_to_text_on_audio_error = False
+        mock_config.enable_error_logging = False
+        mock_config.debug = False
+
+        mock_client = Mock()
+        mock_openai_class.return_value = mock_client
+        mock_client.audio.speech.create.side_effect = Exception("TTS Error")
+
+        ai = AI(mock_config)
+        with self.assertRaises(Exception):
+            ai.text_to_speech("ignored")
 
 
 if __name__ == '__main__':

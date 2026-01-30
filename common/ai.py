@@ -284,8 +284,8 @@ class AI:
                         voice = voice,
                         input = chunk
                     )
-                    response.stream_to_file(speech_file_path)
                     output_files.append(speech_file_path)
+                    response.stream_to_file(speech_file_path)
             except Exception:
                 for f in output_files:
                     try:
@@ -299,7 +299,7 @@ class AI:
             return output_files
         except Exception as e:
             # Avoid noisy tracebacks by default; keep details in debug or when file logging is enabled.
-            if self.config.debug or self.config.enable_error_logging:
+            if self.config.debug:
                 logging.exception("Text-to-speech error")
             else:
                 logging.error(f"Text-to-speech error: {e}")

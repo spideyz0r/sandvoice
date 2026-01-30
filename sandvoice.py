@@ -83,8 +83,9 @@ class SandVoice:
                     else:
                         print(
                             "TTS was requested (bot_voice enabled) for a non-empty response, "
-                            "but no audio files were generated; TTS may have failed or returned no output. "
-                            "Skipping audio playback."
+                            "but no audio files were generated. This may indicate that the TTS API failed, "
+                            "that the response text was filtered out as empty/whitespace during preprocessing, "
+                            "or another internal TTS issue. Skipping audio playback."
                         )
             else:
                 for idx, tts_file in enumerate(tts_files):
