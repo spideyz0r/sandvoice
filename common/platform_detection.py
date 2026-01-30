@@ -82,6 +82,9 @@ def get_platform_info():
     return {
         'system': system,
         'platform': system.lower(),
+        # Backward/consumer-facing key used by log_platform_info()
+        # (architecture is the machine type as reported by platform.machine())
+        'architecture': machine,
         'machine': machine,
         'release': platform.release(),
         'version': platform.version(),
