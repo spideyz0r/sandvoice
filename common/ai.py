@@ -47,8 +47,10 @@ def split_text_for_tts(text, max_chars = DEFAULT_TTS_MAX_CHARS):
 
         if split_at == -1 or split_at < 1:
             split_at = window.rfind(" ")
+            # Unlike newline splitting, do not include the delimiter. We lstrip()
+            # the remaining text below, so the space is removed without affecting
+            # the chunk size.
             if split_at != -1:
-                split_at = split_at + 1
                 split_at = min(split_at, max_chars)
 
         if split_at == -1 or split_at < 1:
