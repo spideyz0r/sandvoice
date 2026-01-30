@@ -56,7 +56,7 @@ def split_text_for_tts(text, max_chars = DEFAULT_TTS_MAX_CHARS):
             for m in SENTENCE_BREAK_RE.finditer(window):
                 last_sentence_end = m.end()
             if last_sentence_end is not None:
-                split_at = last_sentence_end
+                split_at = min(last_sentence_end, max_chars)
 
         if split_at == -1 or split_at < 1:
             split_at = window.rfind(" ")
