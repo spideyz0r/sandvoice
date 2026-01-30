@@ -106,6 +106,7 @@ class SandVoice:
                             except Exception:
                                 # Best-effort cleanup: ignore errors while deleting temporary audio files
                                 pass
+
                         break
                     finally:
                         if delete_file:

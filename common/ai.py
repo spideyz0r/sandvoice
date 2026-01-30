@@ -4,6 +4,8 @@ import datetime, json, yaml, warnings, os, logging, re, uuid
 from common.error_handling import retry_with_backoff, setup_error_logging, handle_api_error, handle_file_error
 
 
+# OpenAI TTS rejects inputs above ~4096 characters. Use 3800 as a conservative
+# default to leave headroom for any encoding/edge-case variations in length.
 DEFAULT_TTS_MAX_CHARS = 3800
 
 
@@ -18,7 +20,8 @@ def split_text_for_tts(text, max_chars = DEFAULT_TTS_MAX_CHARS):
 
     chunks = []
     # Heuristic sentence splitting; may not be perfect for abbreviations/URLs.
-    sentence_break_re = re.compile(r"[.!?;:]\s")
+    # Keep this conservative to avoid splitting on ':' (timestamps) and ';' (lists).
+    sentence_break_re = re.compile(r"[.!?]\s+")
 
     while len(remaining) > max_chars:
         window = remaining[: max_chars + 1]
@@ -276,7 +279,7 @@ class AI:
             return output_files
         except Exception as e:
             # Avoid noisy tracebacks by default; keep details in debug or when file logging is enabled.
-            if getattr(self.config, 'debug', False) or getattr(self.config, 'enable_error_logging', False):
+            if self.config.debug or self.config.enable_error_logging:
                 logging.exception("Text-to-speech error")
             else:
                 logging.error(f"Text-to-speech error: {e}")
