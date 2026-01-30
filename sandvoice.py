@@ -74,8 +74,15 @@ class SandVoice:
         print(f"{self.config.botname}: {response}\n")
 
         if self.config.bot_voice:
-            self.ai.text_to_speech(response)
-            audio.play_audio()
+            tts_files = self.ai.text_to_speech(response)
+            for tts_file in tts_files:
+                audio.play_audio_file(tts_file)
+                try:
+                    if os.path.exists(tts_file):
+                        os.remove(tts_file)
+                except Exception:
+                    # Best effort cleanup; don't fail the interaction
+                    pass
 
         if self.config.push_to_talk and not self.config.cli_input:
             input("Press any key to speak...")

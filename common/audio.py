@@ -150,15 +150,18 @@ class Audio:
             raise
 
     def play_audio(self):
+        return self.play_audio_file(self.config.tmp_recording + ".mp3")
+
+    def play_audio_file(self, file_path):
         try:
             pygame.mixer.init()
-            pygame.mixer.music.load(self.config.tmp_recording + ".mp3")
+            pygame.mixer.music.load(file_path)
             pygame.mixer.music.play()
 
             while pygame.mixer.music.get_busy():
                 pygame.time.Clock().tick(10)
         except FileNotFoundError as e:
-            error_msg = handle_file_error(e, operation="read", filename="recording.mp3")
+            error_msg = handle_file_error(e, operation="read", filename=os.path.basename(file_path))
             if self.config.debug:
                 logging.error(f"Audio playback file error: {e}")
             print(error_msg)

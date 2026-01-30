@@ -1,7 +1,59 @@
 from openai import OpenAI
 from jinja2 import Template
-import datetime, json, yaml, warnings, os, logging
+import datetime, json, yaml, warnings, os, logging, time, re
 from common.error_handling import retry_with_backoff, setup_error_logging, handle_api_error, handle_file_error
+
+
+DEFAULT_TTS_MAX_CHARS = 3800
+
+
+def split_text_for_tts(text, max_chars=DEFAULT_TTS_MAX_CHARS):
+    """Split text into chunks that fit within the TTS input size limit."""
+    if text is None:
+        return []
+
+    remaining = str(text).strip()
+    if not remaining:
+        return []
+
+    chunks = []
+    sentence_break_re = re.compile(r"[.!?;:]\s")
+
+    while len(remaining) > max_chars:
+        window = remaining[: max_chars + 1]
+
+        split_at = window.rfind("\n\n")
+        if split_at != -1:
+            split_at = split_at + 2
+        else:
+            split_at = window.rfind("\n")
+            if split_at != -1:
+                split_at = split_at + 1
+
+        if split_at == -1:
+            last_sentence_end = None
+            for m in sentence_break_re.finditer(window):
+                last_sentence_end = m.end()
+            if last_sentence_end is not None:
+                split_at = last_sentence_end
+
+        if split_at == -1 or split_at < 1:
+            split_at = window.rfind(" ")
+            if split_at != -1:
+                split_at = split_at + 1
+
+        if split_at == -1 or split_at < 1:
+            split_at = max_chars
+
+        chunk = remaining[:split_at].strip()
+        if chunk:
+            chunks.append(chunk)
+        remaining = remaining[split_at:].lstrip()
+
+    if remaining:
+        chunks.append(remaining)
+
+    return chunks
 
 
 class ErrorMessage:
@@ -190,22 +242,42 @@ class AI:
 
         try:
             warnings.filterwarnings("ignore", category=DeprecationWarning)
-            speech_file_path = self.config.tmp_recording + ".mp3"
-            response = self.openai_client.audio.speech.create(
-                model = model,
-                voice = "nova",
-                input = text
-            )
-            response.stream_to_file(speech_file_path)
-            return True
-        except Exception as e:
-            error_msg = handle_api_error(e, service_name="OpenAI TTS")
-            if self.config.debug:
-                logging.error(f"Text-to-speech error: {e}")
-            print(error_msg)
-            # Don't raise - allow fallback to text-only mode
-            if self.config.fallback_to_text_on_audio_error:
-                print("Falling back to text-only mode.")
-                return False
-            else:
+            chunks = split_text_for_tts(text, DEFAULT_TTS_MAX_CHARS)
+            if not chunks:
+                return []
+
+            response_id = int(time.time() * 1000)
+            output_files = []
+
+            try:
+                for i, chunk in enumerate(chunks, start=1):
+                    speech_file_path = self.config.tmp_files_path + f"tts-response-{response_id}-chunk-{i:03d}.mp3"
+                    response = self.openai_client.audio.speech.create(
+                        model = model,
+                        voice = voice,
+                        input = chunk
+                    )
+                    response.stream_to_file(speech_file_path)
+                    output_files.append(speech_file_path)
+            except Exception:
+                for f in output_files:
+                    try:
+                        if os.path.exists(f):
+                            os.remove(f)
+                    except Exception:
+                        pass
                 raise
+
+            return output_files
+        except Exception as e:
+            logging.exception("Text-to-speech error")
+
+            if self.config.fallback_to_text_on_audio_error:
+                print("Something went wrong while generating voice. Showing text only.")
+                if self.config.debug:
+                    print(handle_api_error(e, service_name="OpenAI TTS"))
+                return []
+
+            if self.config.debug:
+                print(handle_api_error(e, service_name="OpenAI TTS"))
+            raise
