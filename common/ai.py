@@ -9,6 +9,9 @@ from common.error_handling import retry_with_backoff, setup_error_logging, handl
 DEFAULT_TTS_MAX_CHARS = 3800
 
 
+SENTENCE_BREAK_RE = re.compile(r"[.!?]\s+")
+
+
 def split_text_for_tts(text, max_chars = DEFAULT_TTS_MAX_CHARS):
     """Split text into chunks that fit within the TTS input size limit."""
     if text is None:
@@ -21,7 +24,6 @@ def split_text_for_tts(text, max_chars = DEFAULT_TTS_MAX_CHARS):
     chunks = []
     # Heuristic sentence splitting; may not be perfect for abbreviations/URLs.
     # Keep this conservative to avoid splitting on ':' (timestamps) and ';' (lists).
-    sentence_break_re = re.compile(r"[.!?]\s+")
 
     while len(remaining) > max_chars:
         window = remaining[: max_chars + 1]
@@ -29,14 +31,16 @@ def split_text_for_tts(text, max_chars = DEFAULT_TTS_MAX_CHARS):
         split_at = window.rfind("\n\n")
         if split_at != -1:
             split_at = split_at + 2
+            split_at = min(split_at, max_chars)
         else:
             split_at = window.rfind("\n")
             if split_at != -1:
                 split_at = split_at + 1
+                split_at = min(split_at, max_chars)
 
         if split_at == -1:
             last_sentence_end = None
-            for m in sentence_break_re.finditer(window):
+            for m in SENTENCE_BREAK_RE.finditer(window):
                 last_sentence_end = m.end()
             if last_sentence_end is not None:
                 split_at = last_sentence_end
@@ -45,6 +49,7 @@ def split_text_for_tts(text, max_chars = DEFAULT_TTS_MAX_CHARS):
             split_at = window.rfind(" ")
             if split_at != -1:
                 split_at = split_at + 1
+                split_at = min(split_at, max_chars)
 
         if split_at == -1 or split_at < 1:
             split_at = max_chars

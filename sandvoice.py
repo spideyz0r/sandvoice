@@ -97,6 +97,8 @@ class SandVoice:
                             print("Stopping voice playback and continuing with text only.")
                             print(f"Preserving TTS file '{tts_file}' for debugging.")
                             delete_file = False
+                        else:
+                            print("Audio playback failed. Continuing with text only.")
 
                         # Clean up any remaining, unplayed chunk files to avoid leaks.
                         for remaining_file in tts_files[idx + 1:]:
