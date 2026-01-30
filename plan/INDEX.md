@@ -36,6 +36,11 @@ This directory contains planning documentation for SandVoice features and improv
 **Document**: [05-raspberry-pi-compatibility.md](./05-raspberry-pi-compatibility.md)
 **Description**: Ensure full compatibility with Raspberry Pi 3B. Document setup process, dependencies, and testing procedures for Pi deployment.
 
+### Priority 6: TTS Chunked Playback
+**Status**: 📋 Planned
+**Document**: [06-tts-chunked-playback.md](./06-tts-chunked-playback.md)
+**Description**: Split long responses into safe TTS chunks and play sequentially to avoid the 4096-character TTS input limit.
+
 ## Future Enhancements
 
 See [FUTURE.md](./FUTURE.md) for detailed descriptions of planned future features:
