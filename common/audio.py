@@ -214,15 +214,23 @@ class Audio:
                     try:
                         if os.path.exists(remaining_file):
                             os.remove(remaining_file)
-                    except Exception:
-                        pass
+                    except OSError as cleanup_error:
+                        # Best-effort cleanup: ignore file deletion errors.
+                        if self.config.debug:
+                            logging.warning(
+                                f"Failed to delete remaining temporary audio chunk file '{remaining_file}': {cleanup_error}"
+                            )
                 break
             finally:
                 if delete_file:
                     try:
                         if os.path.exists(file_path):
                             os.remove(file_path)
-                    except Exception:
-                        pass
+                    except OSError as cleanup_error:
+                        # Best-effort cleanup: ignore file deletion errors.
+                        if self.config.debug:
+                            logging.warning(
+                                f"Failed to delete temporary audio file '{file_path}': {cleanup_error}"
+                            )
 
         return failed_file is None, failed_file, error
