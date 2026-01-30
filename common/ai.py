@@ -1,7 +1,83 @@
 from openai import OpenAI
 from jinja2 import Template
-import datetime, json, yaml, warnings, os, logging
+import datetime, json, yaml, warnings, os, logging, re, uuid
 from common.error_handling import retry_with_backoff, setup_error_logging, handle_api_error, handle_file_error
+
+
+# OpenAI TTS rejects inputs above ~4096 characters. Use 3800 as a conservative
+# default to leave headroom for any encoding/edge-case variations in length.
+DEFAULT_TTS_MAX_CHARS = 3800
+
+
+SENTENCE_BREAK_RE = re.compile(r"[.!?]\s+")
+
+
+def split_text_for_tts(text, max_chars = DEFAULT_TTS_MAX_CHARS):
+    """Split text into chunks that fit within the TTS input size limit.
+
+    Heuristic split priority within each window of up to max_chars:
+    1) paragraph breaks ("\n\n")
+    2) single newlines ("\n")
+    3) sentence boundaries (SENTENCE_BREAK_RE)
+    4) spaces
+    5) hard cut at max_chars
+
+    Notes/limitations:
+    - sentence boundary detection is heuristic and may behave oddly for
+      abbreviations ("Dr."), URLs, etc.
+    - chunks are stripped; the remaining text is left-stripped after each split.
+    """
+    if text is None:
+        return []
+
+    remaining = str(text).strip()
+    if not remaining:
+        return []
+
+    chunks = []
+    # Heuristic sentence splitting; may not be perfect for abbreviations/URLs.
+    # Keep this conservative to avoid splitting on ':' (timestamps) and ';' (lists).
+
+    while len(remaining) > max_chars:
+        window = remaining[: max_chars + 1]
+
+        split_at = window.rfind("\n\n")
+        if split_at != -1:
+            # Do not include delimiter; remaining text is lstrip()'d below.
+            split_at = min(split_at, max_chars)
+        else:
+            split_at = window.rfind("\n")
+            if split_at != -1:
+                # Do not include delimiter; remaining text is lstrip()'d below.
+                split_at = min(split_at, max_chars)
+
+        if split_at == -1:
+            last_sentence_end = None
+            for m in SENTENCE_BREAK_RE.finditer(window):
+                last_sentence_end = m.end()
+            if last_sentence_end is not None:
+                split_at = min(last_sentence_end, max_chars)
+
+        if split_at == -1 or split_at < 1:
+            split_at = window.rfind(" ")
+            # Unlike newline splitting, do not include the delimiter. We lstrip()
+            # the remaining text below, so the space is removed without affecting
+            # the chunk size.
+            if split_at != -1:
+                split_at = min(split_at, max_chars)
+
+        if split_at == -1 or split_at < 1:
+            split_at = max_chars
+
+        chunk = remaining[:split_at].strip()
+        if chunk:
+            chunks.append(chunk)
+        remaining = remaining[split_at:].lstrip()
+
+    if remaining:
+        chunks.append(remaining)
+
+    return chunks
 
 
 class ErrorMessage:
@@ -190,22 +266,47 @@ class AI:
 
         try:
             warnings.filterwarnings("ignore", category=DeprecationWarning)
-            speech_file_path = self.config.tmp_recording + ".mp3"
-            response = self.openai_client.audio.speech.create(
-                model = model,
-                voice = "nova",
-                input = text
-            )
-            response.stream_to_file(speech_file_path)
-            return True
-        except Exception as e:
-            error_msg = handle_api_error(e, service_name="OpenAI TTS")
-            if self.config.debug:
-                logging.error(f"Text-to-speech error: {e}")
-            print(error_msg)
-            # Don't raise - allow fallback to text-only mode
-            if self.config.fallback_to_text_on_audio_error:
-                print("Falling back to text-only mode.")
-                return False
-            else:
+            chunks = split_text_for_tts(text)
+            if not chunks:
+                return []
+
+            response_id = uuid.uuid4().hex
+            output_files = []
+
+            try:
+                for i, chunk in enumerate(chunks, start=1):
+                    speech_file_path = os.path.join(
+                        self.config.tmp_files_path,
+                        f"tts-response-{response_id}-chunk-{i:03d}.mp3",
+                    )
+                    response = self.openai_client.audio.speech.create(
+                        model = model,
+                        voice = voice,
+                        input = chunk
+                    )
+                    output_files.append(speech_file_path)
+                    response.stream_to_file(speech_file_path)
+            except Exception:
+                for f in output_files:
+                    try:
+                        if os.path.exists(f):
+                            os.remove(f)
+                    except Exception:
+                        # Best-effort cleanup: ignore errors when deleting temporary files
+                        pass
                 raise
+
+            return output_files
+        except Exception as e:
+            # Avoid noisy tracebacks by default; keep details in debug or when file logging is enabled.
+            if self.config.debug:
+                logging.exception("Text-to-speech error")
+            else:
+                logging.error(f"Text-to-speech error: {e}")
+
+            if self.config.fallback_to_text_on_audio_error:
+                print(handle_api_error(e, service_name="OpenAI TTS"))
+                return []
+
+            print(handle_api_error(e, service_name="OpenAI TTS"))
+            raise

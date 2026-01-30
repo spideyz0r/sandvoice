@@ -150,15 +150,30 @@ class Audio:
             raise
 
     def play_audio(self):
+        return self.play_audio_file(self.config.tmp_recording + ".mp3")
+
+    def play_audio_file(self, file_path):
         try:
-            pygame.mixer.init()
-            pygame.mixer.music.load(self.config.tmp_recording + ".mp3")
+            if not pygame.mixer.get_init():
+                try:
+                    pygame.mixer.init()
+                except Exception as init_error:
+                    if self.config.debug:
+                        logging.error(f"pygame mixer.init() raised an exception: {init_error}")
+                    raise
+
+                if not pygame.mixer.get_init():
+                    error_msg = "pygame mixer initialization failed: pygame.mixer.get_init() returned None after mixer.init()"
+                    if self.config.debug:
+                        logging.error(error_msg)
+                    raise RuntimeError(error_msg)
+            pygame.mixer.music.load(file_path)
             pygame.mixer.music.play()
 
             while pygame.mixer.music.get_busy():
                 pygame.time.Clock().tick(10)
         except FileNotFoundError as e:
-            error_msg = handle_file_error(e, operation="read", filename="recording.mp3")
+            error_msg = handle_file_error(e, operation="read", filename=os.path.basename(file_path))
             if self.config.debug:
                 logging.error(f"Audio playback file error: {e}")
             print(error_msg)
@@ -169,3 +184,53 @@ class Audio:
                 logging.error(f"Audio playback error: {e}")
             print(f"Error: {error_msg}")
             raise
+
+    def play_audio_files(self, file_paths):
+        """Play a list of audio files sequentially.
+
+        Returns:
+            (success, failed_file, error):
+                - success: True if all files played successfully
+                - failed_file: path that failed (or None)
+                - error: exception instance (or None)
+        """
+
+        failed_file = None
+        error = None
+
+        for idx, file_path in enumerate(file_paths):
+            delete_file = True
+            try:
+                self.play_audio_file(file_path)
+            except Exception as e:
+                failed_file = file_path
+                error = e
+
+                if self.config.debug:
+                    delete_file = False
+
+                # Always clean up remaining, unplayed chunk files to avoid leaks.
+                for remaining_file in file_paths[idx + 1:]:
+                    try:
+                        if os.path.exists(remaining_file):
+                            os.remove(remaining_file)
+                    except OSError as cleanup_error:
+                        # Best-effort cleanup: ignore file deletion errors.
+                        if self.config.debug:
+                            logging.warning(
+                                f"Failed to delete remaining temporary audio chunk file '{remaining_file}': {cleanup_error}"
+                            )
+                break
+            finally:
+                if delete_file:
+                    try:
+                        if os.path.exists(file_path):
+                            os.remove(file_path)
+                    except OSError as cleanup_error:
+                        # Best-effort cleanup: ignore file deletion errors.
+                        if self.config.debug:
+                            logging.warning(
+                                f"Failed to delete temporary audio file '{file_path}': {cleanup_error}"
+                            )
+
+        return failed_file is None, failed_file, error

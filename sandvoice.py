@@ -74,8 +74,28 @@ class SandVoice:
         print(f"{self.config.botname}: {response}\n")
 
         if self.config.bot_voice:
-            self.ai.text_to_speech(response)
-            audio.play_audio()
+            tts_files = self.ai.text_to_speech(response)
+            if not tts_files:
+                if self.config.debug:
+                    response_str = "" if response is None else str(response)
+                    if not response_str.strip():
+                        print("TTS was requested (bot_voice enabled) but response text was empty; skipping audio playback.")
+                    else:
+                        print(
+                            "TTS was requested (bot_voice enabled) for a non-empty response, "
+                            "but no audio files were generated. This may indicate that the TTS API failed, "
+                            "that the response text was filtered out as empty/whitespace during preprocessing, "
+                            "or another internal TTS issue. Skipping audio playback."
+                        )
+            else:
+                success, failed_file, error = audio.play_audio_files(tts_files)
+                if not success:
+                    if self.config.debug:
+                        print(f"Error during audio playback for file '{failed_file}': {error}")
+                        print("Stopping voice playback and continuing with text only.")
+                        print(f"Preserving TTS file '{failed_file}' for debugging.")
+                    else:
+                        print("Audio playback failed. Continuing with text only.")
 
         if self.config.push_to_talk and not self.config.cli_input:
             input("Press any key to speak...")
