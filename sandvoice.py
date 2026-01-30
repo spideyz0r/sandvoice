@@ -77,18 +77,34 @@ class SandVoice:
             tts_files = self.ai.text_to_speech(response)
             if not tts_files:
                 if self.config.debug:
-                    print("TTS was requested (bot_voice enabled) but no audio files were generated; skipping audio playback.")
+                    response_str = "" if response is None else str(response)
+                    if not response_str.strip():
+                        print("TTS was requested (bot_voice enabled) but response text was empty; skipping audio playback.")
+                    else:
+                        print(
+                            "TTS was requested (bot_voice enabled) for a non-empty response, "
+                            "but no audio files were generated; TTS may have failed or returned no output. "
+                            "Skipping audio playback."
+                        )
             else:
                 for tts_file in tts_files:
+                    delete_file = True
                     try:
                         audio.play_audio_file(tts_file)
+                    except Exception as e:
+                        if self.config.debug:
+                            print(f"Error during audio playback for file '{tts_file}': {e}")
+                            print(f"Preserving TTS file '{tts_file}' for debugging.")
+                            delete_file = False
+                        raise
                     finally:
-                        try:
-                            if os.path.exists(tts_file):
-                                os.remove(tts_file)
-                        except Exception:
-                            # Best-effort cleanup: ignore errors while deleting temporary audio files
-                            pass
+                        if delete_file:
+                            try:
+                                if os.path.exists(tts_file):
+                                    os.remove(tts_file)
+                            except Exception:
+                                # Best-effort cleanup: ignore errors while deleting temporary audio files
+                                pass
 
         if self.config.push_to_talk and not self.config.cli_input:
             input("Press any key to speak...")

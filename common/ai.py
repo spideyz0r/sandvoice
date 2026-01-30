@@ -268,12 +268,17 @@ class AI:
                         if os.path.exists(f):
                             os.remove(f)
                     except Exception:
+                        # Best-effort cleanup: ignore errors when deleting temporary files
                         pass
                 raise
 
             return output_files
         except Exception as e:
-            logging.exception("Text-to-speech error")
+            # Avoid noisy tracebacks by default; keep details in debug or when file logging is enabled.
+            if getattr(self.config, 'debug', False) or getattr(self.config, 'enable_error_logging', False):
+                logging.exception("Text-to-speech error")
+            else:
+                logging.error(f"Text-to-speech error: {e}")
 
             if self.config.fallback_to_text_on_audio_error:
                 if self.config.debug:
