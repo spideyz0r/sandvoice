@@ -47,7 +47,6 @@ class WakeWordMode:
         self.running = False
 
         self.porcupine = None
-        self.vad = None
         self.confirmation_beep_path = None
         self.recorded_audio_path = None
 
@@ -180,10 +179,11 @@ class WakeWordMode:
         if self.config.visual_state_indicator:
             print(f"⏸️  Waiting for wake word ('{self.config.wake_phrase}')...")
 
-        pa = pyaudio.PyAudio()
+        pa = None
         audio_stream = None
 
         try:
+            pa = pyaudio.PyAudio()
             audio_stream = pa.open(
                 rate=self.porcupine.sample_rate,
                 channels=1,
@@ -226,11 +226,12 @@ class WakeWordMode:
                 except Exception as e:
                     if self.config.debug:
                         logging.warning(f"Failed to close audio stream: {e}")
-            try:
-                pa.terminate()
-            except Exception as e:
-                if self.config.debug:
-                    logging.warning(f"Failed to terminate PyAudio: {e}")
+            if pa is not None:
+                try:
+                    pa.terminate()
+                except Exception as e:
+                    if self.config.debug:
+                        logging.warning(f"Failed to terminate PyAudio: {e}")
 
     def _state_listening(self):
         """LISTENING state: Record audio with VAD until silence detected.
@@ -268,13 +269,14 @@ class WakeWordMode:
         # Recalculate frame size for VAD sample rate
         vad_frame_size = int(vad_sample_rate * frame_duration_ms / 1000)
 
-        pa = pyaudio.PyAudio()
+        pa = None
         audio_stream = None
         frames = []
         silence_start = None
         recording_start = time.time()
 
         try:
+            pa = pyaudio.PyAudio()
             audio_stream = pa.open(
                 rate=vad_sample_rate,
                 channels=1,  # VAD requires mono
@@ -370,11 +372,12 @@ class WakeWordMode:
                 except Exception as e:
                     if self.config.debug:
                         logging.warning(f"Failed to close audio stream: {e}")
-            try:
-                pa.terminate()
-            except Exception as e:
-                if self.config.debug:
-                    logging.warning(f"Failed to terminate PyAudio: {e}")
+            if pa is not None:
+                try:
+                    pa.terminate()
+                except Exception as e:
+                    if self.config.debug:
+                        logging.warning(f"Failed to terminate PyAudio: {e}")
 
     def _state_processing(self):
         """PROCESSING state: Transcribe audio and generate response.

@@ -33,7 +33,6 @@ class TestWakeWordModeInitialization(unittest.TestCase):
         self.assertEqual(mode.state, State.IDLE)
         self.assertFalse(mode.running)
         self.assertIsNone(mode.porcupine)
-        self.assertIsNone(mode.vad)
         self.assertIsNone(mode.confirmation_beep_path)
 
     def test_init_stores_dependencies(self):
@@ -363,7 +362,8 @@ class TestWakeWordModeStateListening(unittest.TestCase):
         time_values = [0.0, 0.0]  # recording_start
         for i in range(6):  # 6 frames
             time_values.append(0.0 + i * 0.03)  # elapsed checks
-        time_values.extend([1.5, 1.6, 1.6, 1.6])  # silence_start, silence_duration checks, final elapsed
+        # silence_start, silence_duration checks (ensure >= vad_silence_duration), final elapsed
+        time_values.extend([1.5, 3.0, 3.0, 3.0])  # 3.0 - 1.5 = 1.5s >= vad_silence_duration
         mock_time.side_effect = time_values
 
         # Mock VAD
@@ -529,14 +529,20 @@ class TestWakeWordModeStateListening(unittest.TestCase):
         # Should NOT write WAV file
         mock_wave_open.assert_not_called()
 
+    @patch('common.wake_word.time.time')
     @patch('common.wake_word.pyaudio.PyAudio')
     @patch('common.wake_word.webrtcvad.Vad')
     @patch('common.wake_word.wave.open')
     @patch('common.wake_word.os.makedirs')
     def test_state_listening_handles_vad_processing_error(self, mock_makedirs,
-                                                          mock_wave_open, mock_vad_class, mock_pyaudio_class):
-        # Use realistic timeout but exit loop via stream read error
+                                                          mock_wave_open, mock_vad_class, mock_pyaudio_class,
+                                                          mock_time):
+        # Use realistic timeout with mocked time for deterministic behavior
         self.mock_config.vad_timeout = 30
+
+        # Mock time to stay well below timeout (exit via stream error instead)
+        # recording_start, 4 elapsed checks (loop iterations), final elapsed, filename timestamp
+        mock_time.side_effect = [0.0, 0.0, 0.1, 0.2, 0.3, 0.3, 0.3]
 
         # Mock VAD that raises exception
         mock_vad = Mock()
