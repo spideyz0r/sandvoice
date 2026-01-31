@@ -1,8 +1,9 @@
 # Wake Word Mode
 
-**Status**: 📋 Planned
+**Status**: 🚧 In Progress
 **Priority**: 4
 **Platforms**: macOS M1, Raspberry Pi 3B
+**Branch**: `feature/wake-word-mode`
 
 ---
 
@@ -230,3 +231,84 @@ webrtcvad>=2.0.10  # Voice activity detection
 - CPU usage <10% when idle (Pi 3B)
 - Works reliably on both Mac M1 and Pi 3B
 - **Traditional ESC key mode and CLI mode remain fully functional**
+
+---
+
+## Implementation Plan
+
+### Architecture Decisions
+
+1. **Separate Wake Word Module**: Create `common/wake_word.py` - keeps logic isolated, prevents breaking existing audio.py
+2. **Threading Model**: Main thread handles wake word loop (blocking on Porcupine) - no background threads initially for simplicity
+3. **Mode Selection**: New `--wake-word` flag in sandvoice.py - ESC key and CLI modes completely unchanged
+4. **State Machine**: Explicit enum-based states with transition functions in `WakeWordMode` class
+5. **Audio Stream Strategy**: Sequential stream acquisition - wake word detection uses 16kHz mono, recording uses existing 44.1kHz config
+
+### Files to Create
+
+1. **`common/wake_word.py`** - Main wake word mode implementation with state machine
+2. **`common/beep_generator.py`** - Audio feedback (confirmation beeps)
+3. **`tests/test_wake_word.py`** - Unit tests with mocked Porcupine/webrtcvad
+4. **`tests/test_integration_wake_word.py`** - Integration tests for mode isolation
+
+### Files to Modify
+
+1. **`requirements.txt`** - Add pvporcupine==2.2.0, webrtcvad==2.0.10, numpy
+2. **`sandvoice.py`** - Add --wake-word flag and conditional branch
+3. **`common/configuration.py`** - Add 13 wake word config options with validation
+
+### Implementation Phases
+
+**Phase 1: Infrastructure Setup**
+- Add dependencies to requirements.txt
+- Create beep_generator.py with sine wave generation
+- Add config options to configuration.py with validation
+- Test beep playback and config loading
+- **Checkpoint**: Beep plays, config loads, tests pass
+
+**Phase 2: Wake Word Detection**
+- Create wake_word.py skeleton with State enum
+- Implement WakeWordMode class with _state_idle()
+- Integrate Porcupine wake word detection
+- Add error handling for missing access key
+- Write unit tests with mocked Porcupine
+- **Checkpoint**: Wake word detected reliably, unit tests pass
+
+**Phase 3: Voice Activity Detection**
+- Implement _state_listening() with VAD
+- Add silence detection with configurable threshold
+- Save recorded audio to file
+- Add timeout protection
+- Write unit tests for VAD logic
+- **Checkpoint**: VAD detects silence correctly, audio saved
+
+**Phase 4: State Machine Integration**
+- Implement _state_processing() (use existing AI methods)
+- Implement _state_responding() (use existing TTS playback)
+- Wire up state transitions with cleanup
+- Add visual indicators and confirmation beeps
+- Write integration tests
+- **Checkpoint**: Full cycle works end-to-end
+
+**Phase 5: Mode Isolation & CLI**
+- Add --wake-word flag to argparse in sandvoice.py
+- Add conditional branch in __main__
+- Test all three modes independently
+- Add Ctrl+C handling
+- **Checkpoint**: All modes work, no interference
+
+**Phase 6: Raspberry Pi Testing**
+- Test Porcupine on Pi 3B
+- Measure CPU usage in IDLE (<10% target)
+- Test audio device compatibility
+- Optimize if needed
+- Document Pi-specific requirements
+- **Checkpoint**: Works on both Mac M1 and Pi 3B
+
+### Risk Mitigation
+
+- **Breaking ESC Key Mode**: Zero changes to audio.py initially; comprehensive mode isolation tests
+- **Porcupine Issues**: Clear setup docs, fallback errors, early testing on both platforms
+- **VAD Accuracy**: All parameters configurable, conservative defaults
+- **Audio Stream Conflicts**: Explicit lifecycle management, never hold multiple streams
+- **Pi Performance**: Test CPU early in Phase 2, use optimized ARM models

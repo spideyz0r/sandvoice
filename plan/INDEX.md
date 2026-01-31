@@ -27,8 +27,9 @@ This directory contains planning documentation for SandVoice features and improv
 **Description**: Establish comprehensive test suite with >80% code coverage. Mock external dependencies (OpenAI, audio hardware) and test core business logic.
 
 ### Priority 4: Wake Word Mode
-**Status**: 📋 Planned
+**Status**: 🚧 In Progress
 **Document**: [04-wake-word-mode.md](./04-wake-word-mode.md)
+**Branch**: `feature/wake-word-mode`
 **Description**: Add always-on listening mode activated by "Hey Sandvoice" wake phrase. Include voice activity detection to automatically detect when user stops speaking.
 
 ### Priority 5: Raspberry Pi Compatibility
