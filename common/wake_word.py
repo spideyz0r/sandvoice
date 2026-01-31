@@ -1,4 +1,3 @@
-import os
 import logging
 import struct
 from enum import Enum
@@ -98,17 +97,54 @@ class WakeWordMode:
             raise RuntimeError(error_msg)
 
         try:
-            self.porcupine = pvporcupine.create(
-                access_key=self.config.porcupine_access_key,
-                keywords=[self.config.wake_phrase.lower()],
-                sensitivities=[self.config.wake_word_sensitivity]
-            )
+            keyword_paths = getattr(self.config, "porcupine_keyword_paths", None)
+
+            if keyword_paths:
+                if not isinstance(keyword_paths, (list, tuple)):
+                    keyword_paths = [keyword_paths]
+
+                base_sensitivity = self.config.wake_word_sensitivity
+                sensitivities = [base_sensitivity] * len(keyword_paths)
+
+                self.porcupine = pvporcupine.create(
+                    access_key=self.config.porcupine_access_key,
+                    keyword_paths=keyword_paths,
+                    sensitivities=sensitivities
+                )
+
+                if self.config.debug:
+                    logging.info(f"Porcupine initialized with custom keyword paths: {keyword_paths}")
+            else:
+                wake_keyword = self.config.wake_phrase.lower()
+
+                if hasattr(pvporcupine, "KEYWORDS") and wake_keyword not in pvporcupine.KEYWORDS:
+                    supported = ", ".join(sorted(pvporcupine.KEYWORDS)) if hasattr(pvporcupine, "KEYWORDS") else "unknown"
+                    error_msg = (
+                        f"Invalid Porcupine wake phrase '{self.config.wake_phrase}'. "
+                        f"When using built-in keywords, wake_phrase must be one of: {supported}. "
+                        "For a custom wake phrase, create a .ppn model at https://console.picovoice.ai/ "
+                        "and configure its path via 'porcupine_keyword_paths' in your config."
+                    )
+                    if self.config.debug:
+                        logging.error(error_msg)
+                    print(f"Error: {error_msg}")
+                    raise RuntimeError(error_msg)
+
+                self.porcupine = pvporcupine.create(
+                    access_key=self.config.porcupine_access_key,
+                    keywords=[wake_keyword],
+                    sensitivities=[self.config.wake_word_sensitivity]
+                )
+
+                if self.config.debug:
+                    logging.info(f"Porcupine initialized with built-in wake phrase: '{self.config.wake_phrase}'")
 
             if self.config.debug:
-                logging.info(f"Porcupine initialized with wake phrase: '{self.config.wake_phrase}'")
                 logging.info(f"Porcupine sample rate: {self.porcupine.sample_rate}")
                 logging.info(f"Porcupine frame length: {self.porcupine.frame_length}")
 
+        except RuntimeError:
+            raise
         except Exception as e:
             error_msg = f"Failed to initialize Porcupine: {str(e)}"
             if self.config.debug:
@@ -179,9 +215,17 @@ class WakeWordMode:
             self.running = False
         finally:
             if audio_stream is not None:
-                audio_stream.stop_stream()
-                audio_stream.close()
-            pa.terminate()
+                try:
+                    audio_stream.stop_stream()
+                    audio_stream.close()
+                except Exception as e:
+                    if self.config.debug:
+                        logging.warning(f"Failed to close audio stream: {e}")
+            try:
+                pa.terminate()
+            except Exception as e:
+                if self.config.debug:
+                    logging.warning(f"Failed to terminate PyAudio: {e}")
 
     def _state_listening(self):
         """LISTENING state: Record audio with VAD until silence detected.
@@ -225,7 +269,12 @@ class WakeWordMode:
             logging.info("Cleaning up wake word mode")
 
         if self.porcupine is not None:
-            self.porcupine.delete()
-            self.porcupine = None
+            try:
+                self.porcupine.delete()
+            except Exception as e:
+                if self.config.debug:
+                    logging.warning(f"Failed to delete Porcupine instance: {e}")
+            finally:
+                self.porcupine = None
 
         self.running = False
