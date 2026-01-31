@@ -272,6 +272,154 @@ class TestConfigurationValidation(unittest.TestCase):
         # Should have fallen back to 2 channels
         self.assertEqual(config.channels, 2)
 
+    def test_wake_word_default_configuration(self):
+        """Test that default wake word configuration is valid"""
+        config = Config()
+
+        self.assertTrue(config.wake_word_enabled)
+        self.assertEqual(config.wake_phrase, "hey sandvoice")
+        self.assertEqual(config.wake_word_sensitivity, 0.5)
+        self.assertEqual(config.porcupine_access_key, "")
+        self.assertTrue(config.vad_enabled)
+        self.assertEqual(config.vad_aggressiveness, 3)
+        self.assertEqual(config.vad_silence_duration, 1.5)
+        self.assertEqual(config.vad_frame_duration, 30)
+        self.assertEqual(config.vad_timeout, 30)
+        self.assertTrue(config.wake_confirmation_beep)
+        self.assertEqual(config.wake_confirmation_beep_freq, 800)
+        self.assertEqual(config.wake_confirmation_beep_duration, 0.1)
+        self.assertTrue(config.visual_state_indicator)
+
+    def test_invalid_wake_word_sensitivity_high(self):
+        """Test that wake_word_sensitivity above 1.0 raises error"""
+        self.write_config({"wake_word_sensitivity": 1.5})
+
+        with self.assertRaises(ValueError) as context:
+            Config()
+
+        self.assertIn("wake_word_sensitivity must be between 0.0 and 1.0", str(context.exception))
+
+    def test_invalid_wake_word_sensitivity_low(self):
+        """Test that wake_word_sensitivity below 0.0 raises error"""
+        self.write_config({"wake_word_sensitivity": -0.1})
+
+        with self.assertRaises(ValueError) as context:
+            Config()
+
+        self.assertIn("wake_word_sensitivity must be between 0.0 and 1.0", str(context.exception))
+
+    def test_empty_wake_phrase(self):
+        """Test that empty wake_phrase raises error"""
+        self.write_config({"wake_phrase": ""})
+
+        with self.assertRaises(ValueError) as context:
+            Config()
+
+        self.assertIn("wake_phrase must be a non-empty string", str(context.exception))
+
+    def test_invalid_vad_aggressiveness_high(self):
+        """Test that vad_aggressiveness above 3 raises error"""
+        self.write_config({"vad_aggressiveness": 5})
+
+        with self.assertRaises(ValueError) as context:
+            Config()
+
+        self.assertIn("vad_aggressiveness must be between 0 and 3", str(context.exception))
+
+    def test_invalid_vad_aggressiveness_low(self):
+        """Test that vad_aggressiveness below 0 raises error"""
+        self.write_config({"vad_aggressiveness": -1})
+
+        with self.assertRaises(ValueError) as context:
+            Config()
+
+        self.assertIn("vad_aggressiveness must be between 0 and 3", str(context.exception))
+
+    def test_invalid_vad_silence_duration(self):
+        """Test that negative vad_silence_duration raises error"""
+        self.write_config({"vad_silence_duration": -1.0})
+
+        with self.assertRaises(ValueError) as context:
+            Config()
+
+        self.assertIn("vad_silence_duration must be a positive number", str(context.exception))
+
+    def test_invalid_vad_frame_duration(self):
+        """Test that invalid vad_frame_duration raises error"""
+        self.write_config({"vad_frame_duration": 15})
+
+        with self.assertRaises(ValueError) as context:
+            Config()
+
+        self.assertIn("vad_frame_duration must be 10, 20, or 30", str(context.exception))
+
+    def test_valid_vad_frame_durations(self):
+        """Test that valid vad_frame_duration values are accepted"""
+        for duration in [10, 20, 30]:
+            self.write_config({"vad_frame_duration": duration})
+            config = Config()
+            self.assertEqual(config.vad_frame_duration, duration)
+
+    def test_invalid_vad_timeout(self):
+        """Test that negative vad_timeout raises error"""
+        self.write_config({"vad_timeout": -5})
+
+        with self.assertRaises(ValueError) as context:
+            Config()
+
+        self.assertIn("vad_timeout must be a positive number", str(context.exception))
+
+    def test_invalid_beep_freq(self):
+        """Test that negative beep frequency raises error"""
+        self.write_config({"wake_confirmation_beep_freq": -100})
+
+        with self.assertRaises(ValueError) as context:
+            Config()
+
+        self.assertIn("wake_confirmation_beep_freq must be a positive integer", str(context.exception))
+
+    def test_invalid_beep_duration(self):
+        """Test that negative beep duration raises error"""
+        self.write_config({"wake_confirmation_beep_duration": -0.5})
+
+        with self.assertRaises(ValueError) as context:
+            Config()
+
+        self.assertIn("wake_confirmation_beep_duration must be a positive number", str(context.exception))
+
+    def test_valid_wake_word_configuration(self):
+        """Test that valid custom wake word configuration is accepted"""
+        self.write_config({
+            "wake_word_enabled": "enabled",
+            "wake_phrase": "hey assistant",
+            "wake_word_sensitivity": 0.7,
+            "porcupine_access_key": "test_key_123",
+            "vad_enabled": "disabled",
+            "vad_aggressiveness": 1,
+            "vad_silence_duration": 2.0,
+            "vad_frame_duration": 20,
+            "vad_timeout": 45,
+            "wake_confirmation_beep": "disabled",
+            "wake_confirmation_beep_freq": 1000,
+            "wake_confirmation_beep_duration": 0.2,
+            "visual_state_indicator": "disabled"
+        })
+
+        config = Config()
+        self.assertTrue(config.wake_word_enabled)
+        self.assertEqual(config.wake_phrase, "hey assistant")
+        self.assertEqual(config.wake_word_sensitivity, 0.7)
+        self.assertEqual(config.porcupine_access_key, "test_key_123")
+        self.assertFalse(config.vad_enabled)
+        self.assertEqual(config.vad_aggressiveness, 1)
+        self.assertEqual(config.vad_silence_duration, 2.0)
+        self.assertEqual(config.vad_frame_duration, 20)
+        self.assertEqual(config.vad_timeout, 45)
+        self.assertFalse(config.wake_confirmation_beep)
+        self.assertEqual(config.wake_confirmation_beep_freq, 1000)
+        self.assertEqual(config.wake_confirmation_beep_duration, 0.2)
+        self.assertFalse(config.visual_state_indicator)
+
 
 if __name__ == '__main__':
     unittest.main()
