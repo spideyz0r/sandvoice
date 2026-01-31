@@ -51,7 +51,7 @@ class TestAIInitialization(unittest.TestCase):
 
         self.assertIsNotNone(ai.openai_client)
         self.assertEqual(ai.conversation_history, [])
-        mock_setup_logging.assert_called_once_with(mock_config)
+        mock_setup_logging.assert_called_once_with(ai.config)
         mock_openai.assert_called_once_with(timeout=10)
 
     @patch('common.ai.OpenAI')
@@ -117,6 +117,7 @@ class TestTranscribeAndTranslate(unittest.TestCase):
         result = ai.transcribe_and_translate()
 
         self.assertEqual(result, "Hello world")
+        mock_file.assert_called_once_with('/tmp/recording.mp3', 'rb')
         mock_client.audio.translations.create.assert_called_once()
 
     @patch('common.ai.OpenAI')
@@ -159,6 +160,7 @@ class TestTranscribeAndTranslate(unittest.TestCase):
             ai.transcribe_and_translate()
 
         self.assertIn("API Error", str(context.exception))
+        self.assertEqual(mock_client.audio.translations.create.call_count, 3)
 
 
 class TestGenerateResponse(unittest.TestCase):
@@ -203,6 +205,7 @@ class TestGenerateResponse(unittest.TestCase):
         self.assertEqual(result.content, "Hello! How can I help?")
         self.assertEqual(len(ai.conversation_history), 2)
         self.assertIn("User: Hello", ai.conversation_history[0])
+        self.assertIn("TestBot: Hello! How can I help?", ai.conversation_history[1])
 
     @patch('common.ai.OpenAI')
     @patch('common.ai.setup_error_logging')
