@@ -16,13 +16,25 @@ def generate_sine_wave_beep(freq=800, duration=0.1, sample_rate=44100, volume=0.
 
     Returns:
         bytes: PCM audio data (16-bit signed integers)
+
+    Raises:
+        ValueError: If parameters are invalid
     """
+    if freq <= 0:
+        raise ValueError("freq must be positive")
+    if duration <= 0:
+        raise ValueError("duration must be positive")
+    if sample_rate <= 0:
+        raise ValueError("sample_rate must be positive")
+    if not 0.0 <= volume <= 1.0:
+        raise ValueError("volume must be between 0.0 and 1.0")
+
     num_samples = int(sample_rate * duration)
     t = np.linspace(0, duration, num_samples, endpoint=False)
 
     audio = volume * np.sin(2 * np.pi * freq * t)
 
-    audio_int16 = (audio * 32767).astype(np.int16)
+    audio_int16 = np.clip(audio * 32767, -32768, 32767).astype(np.int16)
 
     return audio_int16.tobytes()
 
@@ -44,7 +56,9 @@ def create_confirmation_beep(freq=800, duration=0.1, tmp_path=None, bitrate=128)
 
     os.makedirs(tmp_path, exist_ok=True)
 
-    beep_path = os.path.join(tmp_path, "confirmation_beep.mp3")
+    duration_ms = int(duration * 1000)
+    beep_filename = f"confirmation_beep_{int(freq)}Hz_{duration_ms}ms_{int(bitrate)}kbps.mp3"
+    beep_path = os.path.join(tmp_path, beep_filename)
 
     if os.path.exists(beep_path):
         return beep_path
@@ -72,6 +86,7 @@ def create_confirmation_beep(freq=800, duration=0.1, tmp_path=None, bitrate=128)
 
         with open(wav_temp_path, "rb") as wav_file, open(beep_path, "wb") as mp3_file:
             mp3_data = lame.encode(wav_file.read())
+            mp3_data += lame.flush()
             mp3_file.write(mp3_data)
 
     finally:

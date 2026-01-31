@@ -356,9 +356,10 @@ class TestConfigurationValidation(unittest.TestCase):
     def test_valid_vad_frame_durations(self):
         """Test that valid vad_frame_duration values are accepted"""
         for duration in [10, 20, 30]:
-            self.write_config({"vad_frame_duration": duration})
-            config = Config()
-            self.assertEqual(config.vad_frame_duration, duration)
+            with self.subTest(vad_frame_duration=duration):
+                self.write_config({"vad_frame_duration": duration})
+                config = Config()
+                self.assertEqual(config.vad_frame_duration, duration)
 
     def test_invalid_vad_timeout(self):
         """Test that negative vad_timeout raises error"""

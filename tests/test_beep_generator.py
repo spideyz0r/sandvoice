@@ -2,7 +2,6 @@ import os
 import unittest
 import tempfile
 import shutil
-from unittest.mock import patch, Mock
 
 from common.beep_generator import generate_sine_wave_beep, create_confirmation_beep
 
