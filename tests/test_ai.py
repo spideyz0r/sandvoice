@@ -2,7 +2,7 @@ import unittest
 import tempfile
 import os
 import json
-from unittest.mock import Mock, patch, mock_open, MagicMock
+from unittest.mock import Mock, patch, mock_open
 from common.ai import AI, ErrorMessage
 
 
@@ -125,7 +125,15 @@ class TestTranscribeAndTranslate(unittest.TestCase):
 class TestGenerateResponse(unittest.TestCase):
     def setUp(self):
         """Set up test environment"""
+        self.original_api_key = os.environ.get('OPENAI_API_KEY')
         os.environ['OPENAI_API_KEY'] = 'test-key'
+
+    def tearDown(self):
+        """Restore environment"""
+        if self.original_api_key is not None:
+            os.environ['OPENAI_API_KEY'] = self.original_api_key
+        else:
+            os.environ.pop('OPENAI_API_KEY', None)
 
     @patch('common.ai.OpenAI')
     @patch('common.ai.setup_error_logging')
@@ -213,11 +221,19 @@ class TestGenerateResponse(unittest.TestCase):
 class TestDefineRoute(unittest.TestCase):
     def setUp(self):
         """Set up test environment"""
+        self.original_api_key = os.environ.get('OPENAI_API_KEY')
         os.environ['OPENAI_API_KEY'] = 'test-key'
         self.routes_yaml = """
 route_role: |
   You are a routing bot.
 """
+
+    def tearDown(self):
+        """Restore original OPENAI_API_KEY environment variable"""
+        if self.original_api_key is not None:
+            os.environ['OPENAI_API_KEY'] = self.original_api_key
+        elif 'OPENAI_API_KEY' in os.environ:
+            del os.environ['OPENAI_API_KEY']
 
     @patch('common.ai.OpenAI')
     @patch('common.ai.setup_error_logging')
@@ -302,7 +318,15 @@ route_role: |
 class TestTextSummary(unittest.TestCase):
     def setUp(self):
         """Set up test environment"""
+        self.original_api_key = os.environ.get('OPENAI_API_KEY')
         os.environ['OPENAI_API_KEY'] = 'test-key'
+
+    def tearDown(self):
+        """Restore environment"""
+        if self.original_api_key is not None:
+            os.environ['OPENAI_API_KEY'] = self.original_api_key
+        else:
+            os.environ.pop('OPENAI_API_KEY', None)
 
     @patch('common.ai.OpenAI')
     @patch('common.ai.setup_error_logging')
