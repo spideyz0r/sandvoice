@@ -1,9 +1,13 @@
 import logging
+import os
 import struct
+import time
+import wave
 from enum import Enum
 
 import pvporcupine
 import pyaudio
+import webrtcvad
 
 from common.beep_generator import create_confirmation_beep
 
@@ -45,6 +49,7 @@ class WakeWordMode:
         self.porcupine = None
         self.vad = None
         self.confirmation_beep_path = None
+        self.recorded_audio_path = None
 
         if self.config.debug:
             logging.info("Initializing wake word mode")
@@ -236,8 +241,139 @@ class WakeWordMode:
         if self.config.visual_state_indicator:
             print("🎤 Listening...")
 
-        # Will be implemented in Phase 3
-        self.state = State.PROCESSING
+        if not self.config.vad_enabled:
+            if self.config.debug:
+                logging.warning("VAD is disabled in config. Skipping recording.")
+            self.state = State.PROCESSING
+            return
+
+        # Initialize VAD
+        vad = webrtcvad.Vad(self.config.vad_aggressiveness)
+
+        # Audio parameters
+        sample_rate = self.config.rate
+        channels = self.config.channels
+        frame_duration_ms = self.config.vad_frame_duration
+        frame_size = int(sample_rate * frame_duration_ms / 1000)  # samples per frame
+
+        # VAD requires 16-bit PCM audio at 8kHz, 16kHz, 32kHz, or 48kHz
+        # If config.rate doesn't match, we need to handle it
+        vad_sample_rates = [8000, 16000, 32000, 48000]
+        if sample_rate not in vad_sample_rates:
+            # Find closest supported rate
+            vad_sample_rate = min(vad_sample_rates, key=lambda x: abs(x - sample_rate))
+            if self.config.debug:
+                logging.info(f"VAD requires specific sample rates. Using {vad_sample_rate}Hz instead of {sample_rate}Hz")
+        else:
+            vad_sample_rate = sample_rate
+
+        # Recalculate frame size for VAD sample rate
+        vad_frame_size = int(vad_sample_rate * frame_duration_ms / 1000)
+
+        pa = pyaudio.PyAudio()
+        audio_stream = None
+        frames = []
+        silence_start = None
+        recording_start = time.time()
+
+        try:
+            audio_stream = pa.open(
+                rate=vad_sample_rate,
+                channels=1,  # VAD requires mono
+                format=pyaudio.paInt16,
+                input=True,
+                frames_per_buffer=vad_frame_size
+            )
+
+            if self.config.debug:
+                logging.info(f"Recording with VAD: {vad_sample_rate}Hz, frame_duration={frame_duration_ms}ms")
+
+            while self.running and self.state == State.LISTENING:
+                # Check timeout
+                elapsed = time.time() - recording_start
+                if elapsed > self.config.vad_timeout:
+                    if self.config.debug:
+                        logging.info(f"VAD timeout reached ({self.config.vad_timeout}s)")
+                    break
+
+                # Read audio frame
+                try:
+                    pcm = audio_stream.read(vad_frame_size, exception_on_overflow=False)
+                except Exception as e:
+                    if self.config.debug:
+                        logging.error(f"Error reading audio frame: {e}")
+                    break
+
+                frames.append(pcm)
+
+                # Run VAD on frame
+                try:
+                    is_speech = vad.is_speech(pcm, vad_sample_rate)
+                except Exception as e:
+                    if self.config.debug:
+                        logging.warning(f"VAD processing error: {e}")
+                    is_speech = True  # Assume speech on error
+
+                if is_speech:
+                    # Reset silence timer
+                    silence_start = None
+                else:
+                    # Track silence duration
+                    if silence_start is None:
+                        silence_start = time.time()
+                    else:
+                        silence_duration = time.time() - silence_start
+                        if silence_duration >= self.config.vad_silence_duration:
+                            if self.config.debug:
+                                logging.info(f"Silence detected ({silence_duration:.2f}s)")
+                            break
+
+            # Save recorded audio to temporary WAV file
+            if frames:
+                self.recorded_audio_path = os.path.join(
+                    self.config.tmp_files_path,
+                    f"wake_word_recording_{int(time.time())}.wav"
+                )
+
+                # Ensure tmp directory exists
+                os.makedirs(self.config.tmp_files_path, exist_ok=True)
+
+                # Write WAV file
+                with wave.open(self.recorded_audio_path, 'wb') as wf:
+                    wf.setnchannels(1)  # Mono
+                    wf.setsampwidth(pa.get_sample_size(pyaudio.paInt16))
+                    wf.setframerate(vad_sample_rate)
+                    wf.writeframes(b''.join(frames))
+
+                if self.config.debug:
+                    logging.info(f"Recorded audio saved: {self.recorded_audio_path}")
+                    logging.info(f"Recording duration: {elapsed:.2f}s, {len(frames)} frames")
+
+                self.state = State.PROCESSING
+            else:
+                if self.config.debug:
+                    logging.warning("No audio recorded, returning to IDLE")
+                self.state = State.IDLE
+
+        except Exception as e:
+            error_msg = f"Recording error: {str(e)}"
+            if self.config.debug:
+                logging.error(error_msg)
+            print(f"Error: {error_msg}")
+            self.state = State.IDLE
+        finally:
+            if audio_stream is not None:
+                try:
+                    audio_stream.stop_stream()
+                    audio_stream.close()
+                except Exception as e:
+                    if self.config.debug:
+                        logging.warning(f"Failed to close audio stream: {e}")
+            try:
+                pa.terminate()
+            except Exception as e:
+                if self.config.debug:
+                    logging.warning(f"Failed to terminate PyAudio: {e}")
 
     def _state_processing(self):
         """PROCESSING state: Transcribe audio and generate response.
