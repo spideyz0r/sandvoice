@@ -25,12 +25,12 @@ class TestAIInitialization(unittest.TestCase):
 
     def tearDown(self):
         """Clean up test environment"""
-        if self.original_home:
+        if self.original_home is not None:
             os.environ['HOME'] = self.original_home
         else:
             del os.environ['HOME']
 
-        if self.original_api_key:
+        if self.original_api_key is not None:
             os.environ['OPENAI_API_KEY'] = self.original_api_key
         else:
             if 'OPENAI_API_KEY' in os.environ:
