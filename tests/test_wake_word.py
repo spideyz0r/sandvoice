@@ -535,8 +535,8 @@ class TestWakeWordModeStateListening(unittest.TestCase):
     @patch('common.wake_word.os.makedirs')
     def test_state_listening_handles_vad_processing_error(self, mock_makedirs,
                                                           mock_wave_open, mock_vad_class, mock_pyaudio_class):
-        # Simplify: Use very short timeout to exit loop quickly
-        self.mock_config.vad_timeout = 0.0001  # Essentially immediate timeout
+        # Use realistic timeout but exit loop via stream read error
+        self.mock_config.vad_timeout = 30
 
         # Mock VAD that raises exception
         mock_vad = Mock()
@@ -544,9 +544,15 @@ class TestWakeWordModeStateListening(unittest.TestCase):
         mock_vad.is_speech.side_effect = Exception("VAD error")
         mock_vad_class.return_value = mock_vad
 
-        # Mock PyAudio stream
+        # Mock PyAudio stream - succeed a few times then fail to exit loop
         mock_stream = Mock()
-        mock_stream.read.return_value = b'\x00' * 960
+        read_count = [0]
+        def mock_read(size, exception_on_overflow=False):
+            read_count[0] += 1
+            if read_count[0] <= 3:  # Return 3 frames successfully
+                return b'\x00' * 960
+            raise Exception("End recording")  # Then exit loop
+        mock_stream.read = mock_read
 
         mock_pa = Mock()
         mock_pa.open.return_value = mock_stream
@@ -563,11 +569,11 @@ class TestWakeWordModeStateListening(unittest.TestCase):
 
         mode._state_listening()
 
-        # Should transition to PROCESSING (timeout saves audio)
+        # Should transition to PROCESSING (has frames saved)
         self.assertEqual(mode.state, State.PROCESSING)
 
-        # Verify VAD was called and error was handled gracefully
-        self.assertGreater(mock_vad.is_speech.call_count, 0)
+        # Verify VAD was called and error was handled gracefully (3 times)
+        self.assertEqual(mock_vad.is_speech.call_count, 3)
 
         # Should have saved audio file
         self.assertTrue(mock_wave_open.called)
