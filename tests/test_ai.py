@@ -28,13 +28,12 @@ class TestAIInitialization(unittest.TestCase):
         if self.original_home is not None:
             os.environ['HOME'] = self.original_home
         else:
-            del os.environ['HOME']
+            os.environ.pop('HOME', None)
 
         if self.original_api_key is not None:
             os.environ['OPENAI_API_KEY'] = self.original_api_key
         else:
-            if 'OPENAI_API_KEY' in os.environ:
-                del os.environ['OPENAI_API_KEY']
+            os.environ.pop('OPENAI_API_KEY', None)
 
         import shutil
         shutil.rmtree(self.temp_dir, ignore_errors=True)
