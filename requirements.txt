@@ -5,9 +5,12 @@ google
 googlesearch_python
 Jinja2
 lameenc
+numpy
 openai
+pvporcupine==2.2.0
 PyAudio
 pygame
 pynput
 PyYAML
 Requests
+webrtcvad==2.0.10

@@ -35,7 +35,23 @@ class Config:
             "api_retry_attempts": 3,
             "enable_error_logging": "disabled",
             "error_log_path": f"{os.environ['HOME']}/.sandvoice/error.log",
-            "fallback_to_text_on_audio_error": "enabled"
+            "fallback_to_text_on_audio_error": "enabled",
+            # Wake word mode settings (only active with --wake-word flag)
+            "wake_word_enabled": "enabled",
+            "wake_phrase": "hey sandvoice",
+            "wake_word_sensitivity": 0.5,
+            "porcupine_access_key": "",
+            # Voice Activity Detection
+            "vad_enabled": "enabled",
+            "vad_aggressiveness": 3,
+            "vad_silence_duration": 1.5,
+            "vad_frame_duration": 30,
+            "vad_timeout": 30,
+            # Audio feedback
+            "wake_confirmation_beep": "enabled",
+            "wake_confirmation_beep_freq": 800,
+            "wake_confirmation_beep_duration": 0.1,
+            "visual_state_indicator": "enabled"
         }
         self.config = self.load_defaults()
         self.load_config()
@@ -82,6 +98,23 @@ class Config:
         self.enable_error_logging = self.get("enable_error_logging").lower() == "enabled"
         self.error_log_path = self.get("error_log_path")
         self.fallback_to_text_on_audio_error = self.get("fallback_to_text_on_audio_error").lower() == "enabled"
+
+        # Wake word mode settings
+        self.wake_word_enabled = self.get("wake_word_enabled").lower() == "enabled"
+        self.wake_phrase = self.get("wake_phrase")
+        self.wake_word_sensitivity = self.get("wake_word_sensitivity")
+        self.porcupine_access_key = self.get("porcupine_access_key")
+        # Voice Activity Detection
+        self.vad_enabled = self.get("vad_enabled").lower() == "enabled"
+        self.vad_aggressiveness = self.get("vad_aggressiveness")
+        self.vad_silence_duration = self.get("vad_silence_duration")
+        self.vad_frame_duration = self.get("vad_frame_duration")
+        self.vad_timeout = self.get("vad_timeout")
+        # Audio feedback
+        self.wake_confirmation_beep = self.get("wake_confirmation_beep").lower() == "enabled"
+        self.wake_confirmation_beep_freq = self.get("wake_confirmation_beep_freq")
+        self.wake_confirmation_beep_duration = self.get("wake_confirmation_beep_duration")
+        self.visual_state_indicator = self.get("visual_state_indicator").lower() == "enabled"
 
         # Auto-detect channels if not explicitly configured
         if self.channels is None:
@@ -148,6 +181,36 @@ class Config:
         # Validate paths
         if not self.tmp_files_path or not isinstance(self.tmp_files_path, str):
             errors.append("tmp_files_path must be a non-empty string")
+
+        # Validate wake word settings
+        if not isinstance(self.wake_word_sensitivity, (int, float)) or not (0.0 <= self.wake_word_sensitivity <= 1.0):
+            errors.append("wake_word_sensitivity must be between 0.0 and 1.0")
+
+        if not self.wake_phrase or not isinstance(self.wake_phrase, str):
+            errors.append("wake_phrase must be a non-empty string")
+
+        if not isinstance(self.porcupine_access_key, str):
+            errors.append("porcupine_access_key must be a string")
+
+        # Validate VAD settings
+        if not isinstance(self.vad_aggressiveness, int) or not (0 <= self.vad_aggressiveness <= 3):
+            errors.append("vad_aggressiveness must be between 0 and 3")
+
+        if not isinstance(self.vad_silence_duration, (int, float)) or self.vad_silence_duration <= 0:
+            errors.append("vad_silence_duration must be a positive number")
+
+        if self.vad_frame_duration not in [10, 20, 30]:
+            errors.append("vad_frame_duration must be 10, 20, or 30")
+
+        if not isinstance(self.vad_timeout, (int, float)) or self.vad_timeout <= 0:
+            errors.append("vad_timeout must be a positive number")
+
+        # Validate audio feedback settings
+        if not isinstance(self.wake_confirmation_beep_freq, int) or self.wake_confirmation_beep_freq <= 0:
+            errors.append("wake_confirmation_beep_freq must be a positive integer")
+
+        if not isinstance(self.wake_confirmation_beep_duration, (int, float)) or self.wake_confirmation_beep_duration <= 0:
+            errors.append("wake_confirmation_beep_duration must be a positive number")
 
         # Report all errors
         if errors:
