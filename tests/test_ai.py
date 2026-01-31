@@ -104,6 +104,7 @@ class TestTranscribeAndTranslate(unittest.TestCase):
         mock_config.api_retry_attempts = 3
         mock_config.speech_to_text_model = 'whisper-1'
         mock_config.tmp_recording = '/tmp/recording'
+        mock_config.debug = False
 
         mock_client = Mock()
         mock_openai_class.return_value = mock_client
