@@ -137,6 +137,29 @@ class TestTranscribeAndTranslate(unittest.TestCase):
         with self.assertRaises(FileNotFoundError):
             ai.transcribe_and_translate()
 
+    @patch('common.ai.OpenAI')
+    @patch('common.ai.setup_error_logging')
+    @patch('builtins.open', new_callable=mock_open, read_data=b'fake audio data')
+    def test_transcribe_generic_exception(self, mock_file, mock_setup, mock_openai_class):
+        """Test transcription with generic API exception"""
+        mock_config = Mock()
+        mock_config.api_timeout = 10
+        mock_config.api_retry_attempts = 3
+        mock_config.speech_to_text_model = 'whisper-1'
+        mock_config.tmp_recording = '/tmp/recording'
+        mock_config.debug = False
+
+        mock_client = Mock()
+        mock_openai_class.return_value = mock_client
+        mock_client.audio.translations.create.side_effect = Exception("API Error")
+
+        ai = AI(mock_config)
+
+        with self.assertRaises(Exception) as context:
+            ai.transcribe_and_translate()
+
+        self.assertIn("API Error", str(context.exception))
+
 
 class TestGenerateResponse(unittest.TestCase):
     def setUp(self):
@@ -330,6 +353,31 @@ route_role: |
         self.assertEqual(result["route"], "default-route")
         self.assertIn("Parse error", result["reason"])
 
+    @patch('common.ai.OpenAI')
+    @patch('common.ai.setup_error_logging')
+    @patch('builtins.open', new_callable=mock_open)
+    def test_define_route_api_exception(self, mock_file, mock_setup, mock_openai_class):
+        """Test route definition with API exception"""
+        mock_file.return_value.read.return_value = self.routes_yaml
+
+        mock_config = Mock()
+        mock_config.api_timeout = 10
+        mock_config.api_retry_attempts = 3
+        mock_config.gpt_route_model = 'gpt-3.5-turbo'
+        mock_config.location = 'Test City'
+        mock_config.sandvoice_path = '/test/path'
+        mock_config.debug = False
+
+        mock_client = Mock()
+        mock_openai_class.return_value = mock_client
+        mock_client.chat.completions.create.side_effect = Exception("API Error")
+
+        ai = AI(mock_config)
+        result = ai.define_route("Hello")
+
+        self.assertEqual(result["route"], "default-route")
+        self.assertIn("API error", result["reason"])
+
 
 class TestTextSummary(unittest.TestCase):
     def setUp(self):
@@ -389,6 +437,27 @@ class TestTextSummary(unittest.TestCase):
         mock_completion = Mock()
         mock_completion.choices = [Mock(message=mock_message)]
         mock_client.chat.completions.create.return_value = mock_completion
+
+        ai = AI(mock_config)
+        result = ai.text_summary("Long text")
+
+        self.assertEqual(result["title"], "Error")
+        self.assertIn("Unable", result["text"])
+
+    @patch('common.ai.OpenAI')
+    @patch('common.ai.setup_error_logging')
+    def test_text_summary_api_exception(self, mock_setup, mock_openai_class):
+        """Test summary with API exception"""
+        mock_config = Mock()
+        mock_config.api_timeout = 10
+        mock_config.api_retry_attempts = 3
+        mock_config.gpt_summary_model = 'gpt-3.5-turbo'
+        mock_config.language = 'English'
+        mock_config.debug = False
+
+        mock_client = Mock()
+        mock_openai_class.return_value = mock_client
+        mock_client.chat.completions.create.side_effect = Exception("API Error")
 
         ai = AI(mock_config)
         result = ai.text_summary("Long text")
