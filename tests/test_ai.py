@@ -54,7 +54,9 @@ class TestAIInitialization(unittest.TestCase):
         mock_setup_logging.assert_called_once_with(mock_config)
         mock_openai.assert_called_once_with(timeout=10)
 
-    def test_init_missing_api_key(self):
+    @patch('common.ai.OpenAI')
+    @patch('common.ai.setup_error_logging')
+    def test_init_missing_api_key(self, mock_setup_logging, mock_openai):
         """Test initialization fails without API key"""
         del os.environ['OPENAI_API_KEY']
         mock_config = Mock()
@@ -71,12 +73,25 @@ class TestTranscribeAndTranslate(unittest.TestCase):
     def setUp(self):
         """Set up test environment"""
         self.temp_dir = tempfile.mkdtemp()
+        self.original_home = os.environ.get('HOME')
+        self.original_api_key = os.environ.get('OPENAI_API_KEY')
         os.environ['HOME'] = self.temp_dir
         os.environ['OPENAI_API_KEY'] = 'test-key'
 
     def tearDown(self):
         """Clean up"""
         import shutil
+        # Restore original environment variables
+        if self.original_home is not None:
+            os.environ['HOME'] = self.original_home
+        elif 'HOME' in os.environ:
+            del os.environ['HOME']
+
+        if self.original_api_key is not None:
+            os.environ['OPENAI_API_KEY'] = self.original_api_key
+        elif 'OPENAI_API_KEY' in os.environ:
+            del os.environ['OPENAI_API_KEY']
+
         shutil.rmtree(self.temp_dir, ignore_errors=True)
 
     @patch('common.ai.OpenAI')

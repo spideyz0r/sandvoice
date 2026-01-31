@@ -140,7 +140,7 @@ class TestWebTextExtractor(unittest.TestCase):
         mock_soup.side_effect = [mock_soup_instance, mock_clean_soup]
 
         extractor = WebTextExtractor("https://example.com")
-        result = extractor.get_text()
+        extractor.get_text()
 
         # Verify extract was called on script and style elements
         mock_script.extract.assert_called_once()
