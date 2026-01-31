@@ -363,7 +363,7 @@ class TestWakeWordModeStateListening(unittest.TestCase):
         time_values = [0.0, 0.0]  # recording_start
         for i in range(6):  # 6 frames
             time_values.append(0.0 + i * 0.03)  # elapsed checks
-        time_values.extend([1.5, 1.6, 1.6])  # silence_start, silence_duration checks
+        time_values.extend([1.5, 1.6, 1.6, 1.6])  # silence_start, silence_duration checks, final elapsed
         mock_time.side_effect = time_values
 
         # Mock VAD
@@ -424,7 +424,7 @@ class TestWakeWordModeStateListening(unittest.TestCase):
     def test_state_listening_handles_timeout(self, mock_pyaudio_class, mock_vad_class,
                                              mock_wave_open, mock_makedirs, mock_time):
         # Mock time to trigger timeout after 1 frame
-        mock_time.side_effect = [0.0, 0.0, 31.0, 31.0]  # Exceed 30s timeout
+        mock_time.side_effect = [0.0, 0.0, 31.0, 31.0, 31.0]  # Exceed 30s timeout, final elapsed
 
         mock_vad = Mock()
         mock_vad.is_speech.return_value = True
@@ -494,6 +494,7 @@ class TestWakeWordModeStateListening(unittest.TestCase):
         # Should clean up stream
         mock_stream.stop_stream.assert_called_once()
         mock_stream.close.assert_called_once()
+        mock_pa.terminate.assert_called_once()
 
     @patch('common.wake_word.pyaudio.PyAudio')
     @patch('common.wake_word.webrtcvad.Vad')
@@ -527,6 +528,54 @@ class TestWakeWordModeStateListening(unittest.TestCase):
 
         # Should NOT write WAV file
         mock_wave_open.assert_not_called()
+
+    @patch('common.wake_word.pyaudio.PyAudio')
+    @patch('common.wake_word.webrtcvad.Vad')
+    @patch('common.wake_word.wave.open')
+    @patch('common.wake_word.os.makedirs')
+    def test_state_listening_handles_vad_processing_error(self, mock_makedirs,
+                                                          mock_wave_open, mock_vad_class, mock_pyaudio_class):
+        # Simplify: Use very short timeout to exit loop quickly
+        self.mock_config.vad_timeout = 0.0001  # Essentially immediate timeout
+
+        # Mock VAD that raises exception
+        mock_vad = Mock()
+        # Exception should be caught and recording continues
+        mock_vad.is_speech.side_effect = Exception("VAD error")
+        mock_vad_class.return_value = mock_vad
+
+        # Mock PyAudio stream
+        mock_stream = Mock()
+        mock_stream.read.return_value = b'\x00' * 960
+
+        mock_pa = Mock()
+        mock_pa.open.return_value = mock_stream
+        mock_pa.get_sample_size.return_value = 2
+        mock_pyaudio_class.return_value = mock_pa
+
+        # Mock wave file
+        mock_wf = Mock()
+        mock_wave_open.return_value.__enter__.return_value = mock_wf
+
+        mode = WakeWordMode(self.mock_config, self.mock_ai, self.mock_audio)
+        mode.running = True
+        mode.state = State.LISTENING
+
+        mode._state_listening()
+
+        # Should transition to PROCESSING (timeout saves audio)
+        self.assertEqual(mode.state, State.PROCESSING)
+
+        # Verify VAD was called and error was handled gracefully
+        self.assertGreater(mock_vad.is_speech.call_count, 0)
+
+        # Should have saved audio file
+        self.assertTrue(mock_wave_open.called)
+
+        # Should clean up
+        mock_stream.stop_stream.assert_called_once()
+        mock_stream.close.assert_called_once()
+        mock_pa.terminate.assert_called_once()
 
 
 class TestWakeWordModeCleanup(unittest.TestCase):

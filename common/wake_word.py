@@ -252,9 +252,7 @@ class WakeWordMode:
 
         # Audio parameters
         sample_rate = self.config.rate
-        channels = self.config.channels
         frame_duration_ms = self.config.vad_frame_duration
-        frame_size = int(sample_rate * frame_duration_ms / 1000)  # samples per frame
 
         # VAD requires 16-bit PCM audio at 8kHz, 16kHz, 32kHz, or 48kHz
         # If config.rate doesn't match, we need to handle it
@@ -330,6 +328,9 @@ class WakeWordMode:
 
             # Save recorded audio to temporary WAV file
             if frames:
+                # Calculate final recording duration
+                elapsed = time.time() - recording_start
+
                 self.recorded_audio_path = os.path.join(
                     self.config.tmp_files_path,
                     f"wake_word_recording_{int(time.time())}.wav"
