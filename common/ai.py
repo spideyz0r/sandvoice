@@ -103,12 +103,15 @@ class AI:
         self.conversation_history = []
 
     @retry_with_backoff(max_attempts=3, initial_delay=1)
-    def transcribe_and_translate(self, model = None):
+    def transcribe_and_translate(self, model = None, audio_file_path = None):
         if not model:
             model = self.config.speech_to_text_model
 
+        # Use custom file path if provided, otherwise use default tmp_recording
+        file_path = audio_file_path if audio_file_path else (self.config.tmp_recording + ".mp3")
+
         try:
-            with open(self.config.tmp_recording + ".mp3", "rb") as file:
+            with open(file_path, "rb") as file:
                 transcript = self.openai_client.audio.translations.create(
                     model = model,
                     file = file

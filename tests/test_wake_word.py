@@ -626,5 +626,218 @@ class TestWakeWordModeCleanup(unittest.TestCase):
         self.assertFalse(mode.running)
 
 
+class TestWakeWordModeProcessing(unittest.TestCase):
+    def setUp(self):
+        logging.disable(logging.CRITICAL)
+
+        self.mock_config = Mock()
+        self.mock_config.debug = False
+        self.mock_config.visual_state_indicator = False
+        self.mock_config.botname = "TestBot"
+        self.mock_config.bot_voice = True
+
+        self.mock_ai = Mock()
+        self.mock_audio = Mock()
+
+    def tearDown(self):
+        logging.disable(logging.NOTSET)
+
+    @patch('common.wake_word.os.path.exists')
+    def test_state_processing_transcribes_and_generates_response(self, mock_exists):
+        mock_exists.return_value = True
+
+        # Mock AI methods
+        self.mock_ai.transcribe_and_translate.return_value = "What's the weather?"
+        mock_response = Mock()
+        mock_response.content = "It's sunny today!"
+        self.mock_ai.generate_response.return_value = mock_response
+        self.mock_ai.text_to_speech.return_value = ["/tmp/tts1.mp3", "/tmp/tts2.mp3"]
+
+        mode = WakeWordMode(self.mock_config, self.mock_ai, self.mock_audio)
+        mode.recorded_audio_path = "/tmp/recording.wav"
+        mode.state = State.PROCESSING
+
+        mode._state_processing()
+
+        # Verify transcription was called with correct file path
+        self.mock_ai.transcribe_and_translate.assert_called_once_with(audio_file_path="/tmp/recording.wav")
+
+        # Verify response generation was called
+        self.mock_ai.generate_response.assert_called_once_with("What's the weather?")
+
+        # Verify TTS generation was called
+        self.mock_ai.text_to_speech.assert_called_once_with("It's sunny today!")
+
+        # Verify state transition
+        self.assertEqual(mode.state, State.RESPONDING)
+
+        # Verify data stored for responding state
+        self.assertEqual(mode.response_text, "It's sunny today!")
+        self.assertEqual(mode.tts_files, ["/tmp/tts1.mp3", "/tmp/tts2.mp3"])
+
+    @patch('common.wake_word.os.path.exists')
+    def test_state_processing_without_bot_voice(self, mock_exists):
+        mock_exists.return_value = True
+        self.mock_config.bot_voice = False
+
+        self.mock_ai.transcribe_and_translate.return_value = "Hello"
+        mock_response = Mock()
+        mock_response.content = "Hi there!"
+        self.mock_ai.generate_response.return_value = mock_response
+
+        mode = WakeWordMode(self.mock_config, self.mock_ai, self.mock_audio)
+        mode.recorded_audio_path = "/tmp/recording.wav"
+        mode.state = State.PROCESSING
+
+        mode._state_processing()
+
+        # TTS should not be called when bot_voice is False
+        self.mock_ai.text_to_speech.assert_not_called()
+
+        # Should still transition to RESPONDING
+        self.assertEqual(mode.state, State.RESPONDING)
+        self.assertEqual(mode.response_text, "Hi there!")
+        self.assertIsNone(mode.tts_files)
+
+    @patch('common.wake_word.os.path.exists')
+    def test_state_processing_handles_missing_file(self, mock_exists):
+        mock_exists.return_value = False
+
+        mode = WakeWordMode(self.mock_config, self.mock_ai, self.mock_audio)
+        mode.recorded_audio_path = "/tmp/missing.wav"
+        mode.state = State.PROCESSING
+
+        mode._state_processing()
+
+        # Should return to IDLE when file is missing
+        self.assertEqual(mode.state, State.IDLE)
+
+        # AI methods should not be called
+        self.mock_ai.transcribe_and_translate.assert_not_called()
+        self.mock_ai.generate_response.assert_not_called()
+
+    @patch('common.wake_word.os.path.exists')
+    def test_state_processing_handles_transcription_error(self, mock_exists):
+        mock_exists.return_value = True
+
+        # Mock transcription error
+        self.mock_ai.transcribe_and_translate.side_effect = Exception("Transcription failed")
+
+        mode = WakeWordMode(self.mock_config, self.mock_ai, self.mock_audio)
+        mode.recorded_audio_path = "/tmp/recording.wav"
+        mode.state = State.PROCESSING
+
+        mode._state_processing()
+
+        # Should return to IDLE on error
+        self.assertEqual(mode.state, State.IDLE)
+
+        # Response generation should not be called
+        self.mock_ai.generate_response.assert_not_called()
+
+
+class TestWakeWordModeResponding(unittest.TestCase):
+    def setUp(self):
+        logging.disable(logging.CRITICAL)
+
+        self.mock_config = Mock()
+        self.mock_config.debug = False
+        self.mock_config.visual_state_indicator = False
+
+        self.mock_ai = Mock()
+        self.mock_audio = Mock()
+
+    def tearDown(self):
+        logging.disable(logging.NOTSET)
+
+    @patch('common.wake_word.os.remove')
+    @patch('common.wake_word.os.path.exists')
+    def test_state_responding_plays_tts_and_cleans_up(self, mock_exists, mock_remove):
+        mock_exists.return_value = True
+
+        # Mock successful audio playback
+        self.mock_audio.play_audio_files.return_value = (True, None, None)
+
+        mode = WakeWordMode(self.mock_config, self.mock_ai, self.mock_audio)
+        mode.tts_files = ["/tmp/tts1.mp3", "/tmp/tts2.mp3"]
+        mode.recorded_audio_path = "/tmp/recording.wav"
+        mode.response_text = "Hello!"
+        mode.state = State.RESPONDING
+
+        mode._state_responding()
+
+        # Verify audio playback was called
+        self.mock_audio.play_audio_files.assert_called_once_with(["/tmp/tts1.mp3", "/tmp/tts2.mp3"])
+
+        # Verify cleanup
+        mock_remove.assert_called_once_with("/tmp/recording.wav")
+
+        # Verify state transition to IDLE
+        self.assertEqual(mode.state, State.IDLE)
+
+        # Verify data reset
+        self.assertIsNone(mode.recorded_audio_path)
+        self.assertIsNone(mode.response_text)
+        self.assertIsNone(mode.tts_files)
+
+    @patch('common.wake_word.os.remove')
+    @patch('common.wake_word.os.path.exists')
+    def test_state_responding_handles_playback_error(self, mock_exists, mock_remove):
+        mock_exists.return_value = True
+
+        # Mock failed audio playback
+        self.mock_audio.play_audio_files.return_value = (False, "/tmp/tts1.mp3", "Playback error")
+
+        mode = WakeWordMode(self.mock_config, self.mock_ai, self.mock_audio)
+        mode.tts_files = ["/tmp/tts1.mp3"]
+        mode.recorded_audio_path = "/tmp/recording.wav"
+        mode.state = State.RESPONDING
+
+        mode._state_responding()
+
+        # Should still clean up and transition to IDLE
+        mock_remove.assert_called_once_with("/tmp/recording.wav")
+        self.assertEqual(mode.state, State.IDLE)
+
+    @patch('common.wake_word.os.remove')
+    @patch('common.wake_word.os.path.exists')
+    def test_state_responding_without_tts_files(self, mock_exists, mock_remove):
+        mock_exists.return_value = True
+
+        mode = WakeWordMode(self.mock_config, self.mock_ai, self.mock_audio)
+        mode.tts_files = None  # No TTS files
+        mode.recorded_audio_path = "/tmp/recording.wav"
+        mode.state = State.RESPONDING
+
+        mode._state_responding()
+
+        # Audio playback should not be called
+        self.mock_audio.play_audio_files.assert_not_called()
+
+        # Should still clean up and transition to IDLE
+        mock_remove.assert_called_once_with("/tmp/recording.wav")
+        self.assertEqual(mode.state, State.IDLE)
+
+    @patch('common.wake_word.os.remove')
+    @patch('common.wake_word.os.path.exists')
+    def test_state_responding_handles_cleanup_error(self, mock_exists, mock_remove):
+        mock_exists.return_value = True
+
+        # Mock cleanup error
+        mock_remove.side_effect = Exception("Cleanup failed")
+
+        self.mock_audio.play_audio_files.return_value = (True, None, None)
+
+        mode = WakeWordMode(self.mock_config, self.mock_ai, self.mock_audio)
+        mode.tts_files = ["/tmp/tts1.mp3"]
+        mode.recorded_audio_path = "/tmp/recording.wav"
+        mode.state = State.RESPONDING
+
+        mode._state_responding()
+
+        # Should still transition to IDLE despite cleanup error
+        self.assertEqual(mode.state, State.IDLE)
+
+
 if __name__ == '__main__':
     unittest.main()
