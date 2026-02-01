@@ -2,6 +2,7 @@
 from common.configuration import Config
 from common.audio import Audio
 from common.ai import AI
+from common.wake_word import WakeWordMode
 
 import argparse, importlib, os
 
@@ -26,6 +27,11 @@ class SandVoice:
             '--cli',
             action='store_true',
             help='enter cli mode (equivalent to yaml option cli_input: enabled)'
+        )
+        self.parser.add_argument(
+            '--wake-word',
+            action='store_true',
+            help='enter wake word mode (hands-free voice activation with "hey sandvoice")'
         )
         self.args = self.parser.parse_args()
 
@@ -102,11 +108,19 @@ class SandVoice:
 
 if __name__ == "__main__":
     sandvoice = SandVoice()
-    while True:
-        if sandvoice.config.debug:
-            print(sandvoice.ai.conversation_history)
-            print(sandvoice.__str__())
-        sandvoice.runIt()
+
+    # Wake word mode: hands-free voice activation
+    if sandvoice.args.wake_word:
+        audio = Audio(sandvoice.config)
+        wake_word_mode = WakeWordMode(sandvoice.config, sandvoice.ai, audio)
+        wake_word_mode.run()
+    # Default mode (ESC key) or CLI mode
+    else:
+        while True:
+            if sandvoice.config.debug:
+                print(sandvoice.ai.conversation_history)
+                print(sandvoice.__str__())
+            sandvoice.runIt()
 
 ## TODO
 # Add some tests
