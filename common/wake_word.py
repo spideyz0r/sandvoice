@@ -440,6 +440,21 @@ class WakeWordMode:
                 logging.error(error_msg)
             print(f"Error: {error_msg}")
 
+            # Clean up recorded audio file on error
+            if self.recorded_audio_path and os.path.exists(self.recorded_audio_path):
+                try:
+                    os.remove(self.recorded_audio_path)
+                    if self.config.debug:
+                        logging.info(f"Cleaned up recording after error: {self.recorded_audio_path}")
+                except Exception as cleanup_error:
+                    if self.config.debug:
+                        logging.warning(f"Failed to clean up recording file after error: {cleanup_error}")
+
+            # Reset state
+            self.recorded_audio_path = None
+            self.response_text = None
+            self.tts_files = None
+
             # Return to IDLE on error
             self.state = State.IDLE
 
@@ -485,6 +500,18 @@ class WakeWordMode:
             except Exception as e:
                 if self.config.debug:
                     logging.warning(f"Failed to clean up recording file: {e}")
+
+        # Clean up TTS files
+        if self.tts_files:
+            for tts_file in self.tts_files:
+                if os.path.exists(tts_file):
+                    try:
+                        os.remove(tts_file)
+                        if self.config.debug:
+                            logging.info(f"Cleaned up TTS file: {tts_file}")
+                    except Exception as e:
+                        if self.config.debug:
+                            logging.warning(f"Failed to clean up TTS file {tts_file}: {e}")
 
         # Reset for next cycle
         self.recorded_audio_path = None
