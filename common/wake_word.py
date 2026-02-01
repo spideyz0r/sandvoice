@@ -49,6 +49,8 @@ class WakeWordMode:
         self.porcupine = None
         self.confirmation_beep_path = None
         self.recorded_audio_path = None
+        self.response_text = None
+        self.tts_files = None
 
         if self.config.debug:
             logging.info("Initializing wake word mode")
@@ -388,8 +390,75 @@ class WakeWordMode:
         if self.config.visual_state_indicator:
             print("🤔 Processing...")
 
-        # Will be implemented in Phase 4
-        self.state = State.RESPONDING
+        # Reset response data
+        self.response_text = None
+        self.tts_files = None
+
+        # Check if we have a recorded audio file
+        if not self.recorded_audio_path or not os.path.exists(self.recorded_audio_path):
+            if self.config.debug:
+                logging.warning("No recorded audio file found, returning to IDLE")
+            # Clear any stale recorded audio path to avoid repeated processing attempts
+            self.recorded_audio_path = None
+            self.state = State.IDLE
+            return
+
+        try:
+            # Transcribe the audio
+            if self.config.debug:
+                logging.info(f"Transcribing audio from: {self.recorded_audio_path}")
+
+            user_input = self.ai.transcribe_and_translate(audio_file_path=self.recorded_audio_path)
+
+            if self.config.debug:
+                logging.info(f"Transcription: {user_input}")
+
+            print(f"You: {user_input}")
+
+            # Generate response using AI
+            response = self.ai.generate_response(user_input)
+            self.response_text = response.content if hasattr(response, 'content') else str(response)
+
+            if self.config.debug:
+                logging.info(f"Response: {self.response_text}")
+
+            print(f"{self.config.botname}: {self.response_text}\n")
+
+            # Generate TTS if bot_voice is enabled
+            if self.config.bot_voice:
+                self.tts_files = self.ai.text_to_speech(self.response_text)
+                if self.config.debug:
+                    if self.tts_files:
+                        logging.info(f"Generated {len(self.tts_files)} TTS files")
+                    else:
+                        logging.warning("No TTS files generated")
+
+            # Transition to RESPONDING state
+            self.state = State.RESPONDING
+
+        except Exception as e:
+            error_msg = f"Processing error: {str(e)}"
+            if self.config.debug:
+                logging.error(error_msg)
+            print(f"Error: {error_msg}")
+
+            # Clean up recorded audio file on error
+            if self.recorded_audio_path and os.path.exists(self.recorded_audio_path):
+                try:
+                    os.remove(self.recorded_audio_path)
+                    if self.config.debug:
+                        logging.info(f"Cleaned up recording after error: {self.recorded_audio_path}")
+                except Exception as cleanup_error:
+                    if self.config.debug:
+                        logging.warning(f"Failed to clean up recording file after error: {cleanup_error}")
+
+            # Reset state
+            self.recorded_audio_path = None
+            self.response_text = None
+            self.tts_files = None
+
+            # Return to IDLE on error
+            self.state = State.IDLE
 
     def _state_responding(self):
         """RESPONDING state: Play TTS response audio.
@@ -400,7 +469,49 @@ class WakeWordMode:
         if self.config.visual_state_indicator:
             print("🔊 Responding...")
 
-        # Will be implemented in Phase 4
+        # Play TTS audio if available
+        if self.tts_files and len(self.tts_files) > 0:
+            try:
+                if self.config.debug:
+                    logging.info(f"Playing {len(self.tts_files)} TTS files")
+
+                success, failed_file, error = self.audio.play_audio_files(self.tts_files)
+
+                if not success:
+                    if self.config.debug:
+                        logging.error(f"Audio playback failed for file '{failed_file}': {error}")
+                        print(f"Error during audio playback for file '{failed_file}': {error}")
+                    else:
+                        print("Audio playback failed. Continuing with text only.")
+
+            except Exception as e:
+                if self.config.debug:
+                    logging.error(f"TTS playback error: {e}")
+                print(f"Error playing TTS: {str(e)}")
+
+        else:
+            if self.config.debug:
+                logging.info("No TTS files to play (bot_voice disabled or TTS generation failed)")
+
+        # Clean up temporary recorded audio file
+        if self.recorded_audio_path and os.path.exists(self.recorded_audio_path):
+            try:
+                os.remove(self.recorded_audio_path)
+                if self.config.debug:
+                    logging.info(f"Cleaned up recording: {self.recorded_audio_path}")
+            except Exception as e:
+                if self.config.debug:
+                    logging.warning(f"Failed to clean up recording file: {e}")
+
+        # TTS files are automatically cleaned up by audio.play_audio_files()
+        # (preserves failed files in debug mode for diagnostics)
+
+        # Reset for next cycle
+        self.recorded_audio_path = None
+        self.response_text = None
+        self.tts_files = None
+
+        # Return to IDLE to listen for next wake word
         self.state = State.IDLE
 
     def _cleanup(self):
