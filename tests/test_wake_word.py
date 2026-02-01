@@ -716,8 +716,9 @@ class TestWakeWordModeProcessing(unittest.TestCase):
         self.mock_ai.transcribe_and_translate.assert_not_called()
         self.mock_ai.generate_response.assert_not_called()
 
+    @patch('common.wake_word.os.remove')
     @patch('common.wake_word.os.path.exists')
-    def test_state_processing_handles_transcription_error(self, mock_exists):
+    def test_state_processing_handles_transcription_error(self, mock_exists, mock_remove):
         mock_exists.return_value = True
 
         # Mock transcription error
@@ -731,6 +732,9 @@ class TestWakeWordModeProcessing(unittest.TestCase):
 
         # Should return to IDLE on error
         self.assertEqual(mode.state, State.IDLE)
+
+        # Should have attempted cleanup of recording file
+        mock_remove.assert_called_once_with("/tmp/recording.wav")
 
         # Response generation should not be called
         self.mock_ai.generate_response.assert_not_called()

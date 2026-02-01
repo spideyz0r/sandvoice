@@ -398,6 +398,8 @@ class WakeWordMode:
         if not self.recorded_audio_path or not os.path.exists(self.recorded_audio_path):
             if self.config.debug:
                 logging.warning("No recorded audio file found, returning to IDLE")
+            # Clear any stale recorded audio path to avoid repeated processing attempts
+            self.recorded_audio_path = None
             self.state = State.IDLE
             return
 
