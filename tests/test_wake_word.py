@@ -769,11 +769,8 @@ class TestWakeWordModeResponding(unittest.TestCase):
         # Verify audio playback was called
         self.mock_audio.play_audio_files.assert_called_once_with(["/tmp/tts1.mp3", "/tmp/tts2.mp3"])
 
-        # Verify cleanup - should remove recording + 2 TTS files
-        self.assertEqual(mock_remove.call_count, 3)
-        mock_remove.assert_any_call("/tmp/recording.wav")
-        mock_remove.assert_any_call("/tmp/tts1.mp3")
-        mock_remove.assert_any_call("/tmp/tts2.mp3")
+        # Verify cleanup - recording file only (TTS files cleaned by play_audio_files)
+        mock_remove.assert_called_once_with("/tmp/recording.wav")
 
         # Verify state transition to IDLE
         self.assertEqual(mode.state, State.IDLE)
@@ -798,10 +795,8 @@ class TestWakeWordModeResponding(unittest.TestCase):
 
         mode._state_responding()
 
-        # Should still clean up and transition to IDLE - recording + TTS file
-        self.assertEqual(mock_remove.call_count, 2)
-        mock_remove.assert_any_call("/tmp/recording.wav")
-        mock_remove.assert_any_call("/tmp/tts1.mp3")
+        # Should still clean up and transition to IDLE - recording file only
+        mock_remove.assert_called_once_with("/tmp/recording.wav")
         self.assertEqual(mode.state, State.IDLE)
 
     @patch('common.wake_word.os.remove')

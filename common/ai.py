@@ -118,7 +118,7 @@ class AI:
                 )
             return transcript.text
         except FileNotFoundError as e:
-            error_msg = handle_file_error(e, operation="read", filename="recording")
+            error_msg = handle_file_error(e, operation="read", filename=os.path.basename(file_path))
             if self.config.debug:
                 logging.error(f"Transcription file error: {e}")
             print(error_msg)

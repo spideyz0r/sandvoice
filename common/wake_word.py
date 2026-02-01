@@ -501,17 +501,8 @@ class WakeWordMode:
                 if self.config.debug:
                     logging.warning(f"Failed to clean up recording file: {e}")
 
-        # Clean up TTS files
-        if self.tts_files:
-            for tts_file in self.tts_files:
-                if os.path.exists(tts_file):
-                    try:
-                        os.remove(tts_file)
-                        if self.config.debug:
-                            logging.info(f"Cleaned up TTS file: {tts_file}")
-                    except Exception as e:
-                        if self.config.debug:
-                            logging.warning(f"Failed to clean up TTS file {tts_file}: {e}")
+        # TTS files are automatically cleaned up by audio.play_audio_files()
+        # (preserves failed files in debug mode for diagnostics)
 
         # Reset for next cycle
         self.recorded_audio_path = None
