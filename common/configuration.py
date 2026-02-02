@@ -41,6 +41,7 @@ class Config:
             "wake_phrase": "hey sandvoice",
             "wake_word_sensitivity": 0.5,
             "porcupine_access_key": "",
+            "porcupine_keyword_paths": None,
             # Voice Activity Detection
             "vad_enabled": "enabled",
             "vad_aggressiveness": 3,
@@ -104,6 +105,7 @@ class Config:
         self.wake_phrase = self.get("wake_phrase")
         self.wake_word_sensitivity = self.get("wake_word_sensitivity")
         self.porcupine_access_key = self.get("porcupine_access_key")
+        self.porcupine_keyword_paths = self.get("porcupine_keyword_paths")
         # Voice Activity Detection
         self.vad_enabled = self.get("vad_enabled").lower() == "enabled"
         self.vad_aggressiveness = self.get("vad_aggressiveness")
