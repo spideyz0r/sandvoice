@@ -115,7 +115,7 @@ if __name__ == "__main__":
             from common.wake_word import WakeWordMode
         except ImportError as e:
             print("Error: Wake word mode requires additional dependencies.")
-            print("Please install: pip install pvporcupine==2.2.0 webrtcvad==2.0.10")
+            print("Please install: pip install pvporcupine==2.2.0 webrtcvad==2.0.10 PyAudio")
             print(f"Details: {e}")
             exit(1)
 
