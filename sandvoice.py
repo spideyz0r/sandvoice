@@ -2,7 +2,6 @@
 from common.configuration import Config
 from common.audio import Audio
 from common.ai import AI
-from common.wake_word import WakeWordMode
 
 import argparse, importlib, os
 
@@ -20,15 +19,16 @@ class SandVoice:
 
     def load_cli(self):
         self.parser = argparse.ArgumentParser(
-            description='Cli mode for SandVoice'
+            description='SandVoice - Voice assistant with multiple modes'
         )
 
-        self.parser.add_argument(
+        mode_group = self.parser.add_mutually_exclusive_group()
+        mode_group.add_argument(
             '--cli',
             action='store_true',
-            help='enter cli mode (equivalent to yaml option cli_input: enabled)'
+            help='enter cli mode (text input only, no audio)'
         )
-        self.parser.add_argument(
+        mode_group.add_argument(
             '--wake-word',
             action='store_true',
             help='enter wake word mode (hands-free voice activation with "hey sandvoice")'
@@ -111,6 +111,14 @@ if __name__ == "__main__":
 
     # Wake word mode: hands-free voice activation
     if sandvoice.args.wake_word:
+        try:
+            from common.wake_word import WakeWordMode
+        except ImportError as e:
+            print("Error: Wake word mode requires additional dependencies.")
+            print("Please install: pip install pvporcupine==2.2.0 webrtcvad==2.0.10")
+            print(f"Details: {e}")
+            exit(1)
+
         audio = Audio(sandvoice.config)
         wake_word_mode = WakeWordMode(sandvoice.config, sandvoice.ai, audio)
         wake_word_mode.run()
