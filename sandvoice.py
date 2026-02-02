@@ -13,11 +13,11 @@ class SandVoice:
             os.makedirs(self.config.tmp_files_path)
         self.plugins = {}
         self.load_plugins()
-        self.load_cli()
+        self.parse_args()
         if self.args.cli:
             self.config.cli_input = True
 
-    def load_cli(self):
+    def parse_args(self):
         self.parser = argparse.ArgumentParser(
             description='SandVoice - Voice assistant with multiple modes'
         )
