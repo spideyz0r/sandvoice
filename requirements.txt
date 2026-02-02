@@ -7,7 +7,7 @@ Jinja2
 lameenc
 numpy
 openai
-pvporcupine==2.2.0
+pvporcupine==4.0.1
 PyAudio
 pygame
 pynput
