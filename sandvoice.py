@@ -26,7 +26,7 @@ class SandVoice:
         mode_group.add_argument(
             '--cli',
             action='store_true',
-            help='enter cli mode (text input only, no audio)'
+            help='enter cli mode (text input only, no microphone recording; audio output such as TTS may still be used)'
         )
         mode_group.add_argument(
             '--wake-word',
