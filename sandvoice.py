@@ -3,17 +3,17 @@ from common.configuration import Config
 from common.audio import Audio
 from common.ai import AI
 
-import argparse, importlib, os
+import argparse, importlib, os, sys
 
 class SandVoice:
     def __init__(self):
+        self.parse_args()
         self.config = Config()
         self.ai = AI(self.config)
         if not os.path.exists(self.config.tmp_files_path):
             os.makedirs(self.config.tmp_files_path)
         self.plugins = {}
         self.load_plugins()
-        self.parse_args()
         if self.args.cli:
             self.config.cli_input = True
 
@@ -114,10 +114,11 @@ if __name__ == "__main__":
         try:
             from common.wake_word import WakeWordMode
         except ImportError as e:
-            print("Error: Wake word mode requires additional dependencies.")
-            print("Please install: pip install pvporcupine==2.2.0 webrtcvad==2.0.10 PyAudio")
-            print(f"Details: {e}")
-            exit(1)
+            print("Error: Wake word mode failed to import one or more required packages.")
+            print("Please ensure all project dependencies are installed (e.g., 'pip install -r requirements.txt'),")
+            print("including pvporcupine==2.2.0, webrtcvad==2.0.10, and PyAudio. Details:")
+            print(f"  {e}")
+            sys.exit(1)
 
         audio = Audio(sandvoice.config)
         wake_word_mode = WakeWordMode(sandvoice.config, sandvoice.ai, audio)
