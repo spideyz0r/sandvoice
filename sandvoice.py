@@ -116,7 +116,7 @@ if __name__ == "__main__":
         except ImportError as e:
             print("Error: Wake word mode failed to import one or more required packages.")
             print("Please ensure all project dependencies are installed (e.g., 'pip install -r requirements.txt'),")
-            print("including pvporcupine==2.2.0, webrtcvad==2.0.10, and PyAudio. Details:")
+            print("including pvporcupine==4.0.1, webrtcvad==2.0.10, and PyAudio. Details:")
             print(f"  {e}")
             sys.exit(1)
 
