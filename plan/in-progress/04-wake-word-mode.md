@@ -1,9 +1,9 @@
 # Wake Word Mode
 
-**Status**: 🚧 In Progress
+**Status**: 🚧 In Progress (Phases 1-5 ✅ Complete, Phase 6 📋 Pending)
 **Priority**: 4
-**Platforms**: macOS M1, Raspberry Pi 3B
-**Branch**: `feature/wake-word-mode`
+**Platforms**: macOS M1 ✅, Raspberry Pi 3B ⏸️ (pending testing)
+**Branch**: Merged to main
 
 ---
 
