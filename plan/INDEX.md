@@ -80,6 +80,10 @@ plan/
 - Multi-User Support
 - Conversation Memory
 
+### Priority 7: Hacker News API-Only Summaries
+**Document**: [backlog/07-hacker-news-api-only.md](./backlog/07-hacker-news-api-only.md)
+**Description**: Update Hacker News plugin to use only the free Firebase API fields (no external HTML fetch/parsing), preserving the podcast-style output while improving reliability and cost.
+
 ---
 
 ## Status Legend
