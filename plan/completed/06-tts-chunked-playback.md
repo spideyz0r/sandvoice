@@ -1,8 +1,8 @@
 # TTS Chunked Playback (Streaming-Like Voice)
 
-**Status**: 📋 Planned
+**Status**: ✅ Completed
 **Priority**: 6
-**Platforms**: macOS M1, Raspberry Pi 3B
+**Platforms**: macOS M1 ✅, Raspberry Pi 3B ✅
 
 ---
 
