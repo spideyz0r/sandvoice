@@ -1,4 +1,8 @@
 #!/usr/bin/env python3
+import warnings
+# Suppress pygame's pkg_resources deprecation warning (pygame issue, not ours)
+warnings.filterwarnings("ignore", message="pkg_resources is deprecated")
+
 from common.configuration import Config
 from common.audio import Audio
 from common.ai import AI
