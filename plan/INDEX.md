@@ -39,6 +39,10 @@ plan/
 **Document**: [completed/06-tts-chunked-playback.md](./completed/06-tts-chunked-playback.md)
 **Description**: Split long responses into safe TTS chunks to avoid 4096-character input limit. Sequential playback for smooth voice output.
 
+### Priority 7: Hacker News API-Only Summaries
+**Document**: [completed/07-hacker-news-api-only.md](./completed/07-hacker-news-api-only.md)
+**Description**: Hacker News plugin uses only free Firebase API fields (no external HTML fetch/parsing), preserving the podcast-style output while improving reliability and cost.
+
 ---
 
 ## In Progress 🚧
@@ -66,6 +70,10 @@ plan/
 **Document**: [backlog/05-raspberry-pi-compatibility.md](./backlog/05-raspberry-pi-compatibility.md)
 **Description**: Full compatibility testing and documentation for Raspberry Pi 3B deployment. Setup process, dependencies, and performance validation.
 
+### Priority 8: Streaming Responses (And Optional Streaming TTS)
+**Document**: [backlog/08-streaming-responses-and-tts.md](./backlog/08-streaming-responses-and-tts.md)
+**Description**: Stream LLM responses to stdout for lower perceived latency; optional follow-up to pipeline streaming text into chunked TTS for earlier voice playback.
+
 ### Future Enhancements
 **Document**: [backlog/FUTURE.md](./backlog/FUTURE.md)
 **Description**: Long-term feature ideas including:
@@ -79,10 +87,6 @@ plan/
 - Todo List Management
 - Multi-User Support
 - Conversation Memory
-
-### Priority 7: Hacker News API-Only Summaries
-**Document**: [backlog/07-hacker-news-api-only.md](./backlog/07-hacker-news-api-only.md)
-**Description**: Update Hacker News plugin to use only the free Firebase API fields (no external HTML fetch/parsing), preserving the podcast-style output while improving reliability and cost.
 
 ---
 
