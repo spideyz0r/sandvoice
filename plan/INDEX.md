@@ -102,15 +102,6 @@ plan/
 
 ---
 
-## Recent Changes
-
-- **2026-02-02**: Reorganized plan structure into completed/in-progress/backlog folders
-- **2026-02-02**: Wake Word Mode Phases 1-5 completed and merged
-- **2026-01-31**: TTS Chunked Playback completed
-- **2026-01-25**: Error Handling, Platform Auto-Detection, and Unit Tests completed
-
----
-
 ## Notes
 
 - All features must maintain compatibility with both Mac M1 and Raspberry Pi 3B
