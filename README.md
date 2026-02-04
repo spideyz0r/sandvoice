@@ -19,7 +19,7 @@ Each plugin has a file under the plugins directory. All the plugins must impleme
 ### Add plugins
 To add a plugin you need to:
 1) Update the routes.yaml; add the appropriate route for your plugin.
-2) Create a file under the plugins directory with the route name, implementing the process function
+2) Create a file under the plugins directory with the route name (filename without `.py` must match the route name), implementing the process function
 3) Use the commons directory if your function could be helpful to other plugins
 4) Currently all plugins have access to the "sandvoice" object and all its properties
 
@@ -30,13 +30,15 @@ See the echo plugin in `plugins/echo.py` for an example.
 - Interaction with OpenAI's GPT model (more to be added in the future)
 - Text to voice conversion
 - Terminal-based conversation history
+- Wake word mode (`--wake-word`) with VAD
+- Real-time web search route (`realtime_websearch`)
 
 ## Mac OSX Support
-To run it on mac, on the default speaker/mic use the `channel` configuration as "1".
+SandVoice auto-detects audio settings when possible. If you have issues with the default mic/speaker, you can force mono recording by setting `channels: 1` in the config.
 
 ### Clone the repository:
 ```
-git checkout https://github.com/spideyz0r/sandvoice
+git clone https://github.com/spideyz0r/sandvoice
 cd sandvoice
 ```
 
@@ -52,21 +54,34 @@ source env/bin/activate
 ```
 
 ## API setup
-Ensure you have your API key set in both environment variables `OPENAI_API_KEY` and `OPENWEATHERMAP_API_KEY`.
+Ensure you have your API key set in environment variables:
+- `OPENAI_API_KEY` (required)
+- `OPENWEATHERMAP_API_KEY` (required only for the `weather` plugin)
+
+If you use wake word mode, you'll also need a Porcupine access key (configured in `~/.sandvoice/config.yaml`).
 
 ## CLI mode
 ```
-usage: sandvoice.py [-h] [--cli]
+usage: sandvoice.py [-h] [--cli | --wake-word]
 
 CLI mode for SandVoice
 
 options:
   -h, --help  show this help message and exit
   --cli       enter cli mode (equivalent to yaml option cli_input: enabled)
+  --wake-word enter wake word mode (hands-free voice activation with "hey sandvoice")
   ```
+
+## Wake word mode
+Run:
+```
+./sandvoice --wake-word
+```
 
 ## Configuration file
 It should be installed in `~/.sandvoice/config.yaml`
+
+Note: use absolute paths for file/directory settings (YAML `~` is not expanded by SandVoice).
 
 ```
 ---
@@ -74,29 +89,110 @@ channels: 2
 bitrate: 128
 rate: 44100
 chunk: 1024
-tmp_files_path: /tmp/sandvoice
-botname: Sandbot
+tmp_files_path: /Users/YOUR_USER/.sandvoice/tmp/
+botname: SandVoice
 timezone: EST
-location: Stoney Creek, Ontario, Canada
+location: Toronto, ON, CA
+unit: metric
 language: English
-bot_voice: enabled
 debug: disabled
 summary_words: 100
-search_sources: 3
+search_sources: 4
 push_to_talk: disabled
 rss_news: https://feeds.bbci.co.uk/news/rss.xml
 rss_news_max_items: 5
-linux_warnings: disabled
-cli_input: disabled
+linux_warnings: enabled
+
 gpt_summary_model: gpt-3.5-turbo
 gpt_route_model: gpt-3.5-turbo
 gpt_response_model: gpt-3.5-turbo
+
 speech_to_text_model: whisper-1
 text_to_speech_model: tts-1
 bot_voice_model: nova
 
+cli_input: disabled
+bot_voice: enabled
+
+api_timeout: 10
+api_retry_attempts: 3
+enable_error_logging: disabled
+error_log_path: /Users/YOUR_USER/.sandvoice/error.log
+fallback_to_text_on_audio_error: enabled
+
+wake_word_enabled: enabled
+wake_phrase: hey sandvoice
+wake_word_sensitivity: 0.5
+porcupine_access_key: ""
+porcupine_keyword_paths: null
+
+vad_enabled: enabled
+vad_aggressiveness: 3
+vad_silence_duration: 1.5
+vad_frame_duration: 30
+vad_timeout: 30
+
+wake_confirmation_beep: enabled
+wake_confirmation_beep_freq: 800
+wake_confirmation_beep_duration: 0.1
+visual_state_indicator: enabled
+
 ```
+
+### Configuration options
+
+All configuration keys are loaded from `common/configuration.py` defaults and can be overridden in `~/.sandvoice/config.yaml`.
+
+- `channels`: microphone recording channels (`1` or `2`); `null` enables auto-detection
+- `bitrate`: MP3 bitrate (32-320)
+- `rate`: sample rate in Hz (>= 8000)
+- `chunk`: audio frames per buffer (>= 256)
+- `tmp_files_path`: temp directory for recordings and generated audio (absolute path)
+- `botname`: assistant display name
+- `timezone`: user timezone string (used in system prompt)
+- `location`: user location string (used in system prompt and routing defaults)
+- `unit`: `metric` or `imperial` (used by weather routing/plugin)
+- `language`: language string for assistant replies (used in system prompt)
+- `debug`: `enabled`/`disabled` (prints extra information and logs more details)
+- `summary_words`: target word count for summaries (used by some plugins)
+- `search_sources`: number of sources to use for search-like plugins (plugin-dependent)
+- `push_to_talk`: `enabled`/`disabled`; when enabled, prompts for a keypress before recording again
+- `rss_news`: RSS feed URL used by the `news` plugin
+- `rss_news_max_items`: max RSS items read per request
+- `linux_warnings`: `enabled`/`disabled`; deprecated (platform audio is now auto-detected)
+
+- `gpt_summary_model`: model used for summarization (`AI.text_summary()`)
+- `gpt_route_model`: model used for routing (`AI.define_route()`)
+- `gpt_response_model`: model used for normal responses (`AI.generate_response()`)
+- `speech_to_text_model`: model used for speech-to-text/translation (Whisper)
+- `text_to_speech_model`: model used for TTS generation
+- `bot_voice_model`: voice name for TTS (e.g. `nova`)
+
+- `cli_input`: `enabled`/`disabled`; enables CLI input mode without `--cli`
+- `bot_voice`: `enabled`/`disabled`; controls whether SandVoice speaks responses
+
+- `api_timeout`: OpenAI client timeout in seconds
+- `api_retry_attempts`: retry attempts for OpenAI calls (backoff)
+- `enable_error_logging`: `enabled`/`disabled`; writes errors to a file
+- `error_log_path`: file path used when error logging is enabled (absolute path)
+- `fallback_to_text_on_audio_error`: `enabled`/`disabled`; if enabled, keep going if TTS/audio fails
+
+- `wake_word_enabled`: `enabled`/`disabled`; wake word functionality toggle (used by `--wake-word` mode)
+- `wake_phrase`: wake phrase keyword name (built-in Porcupine keyword) when not using custom `.ppn`
+- `wake_word_sensitivity`: float 0.0-1.0
+- `porcupine_access_key`: Picovoice access key (required for `--wake-word` mode)
+- `porcupine_keyword_paths`: custom Porcupine keyword model path(s) (`.ppn`) or `null`
+
+- `vad_enabled`: `enabled`/`disabled`; voice activity detection toggle
+- `vad_aggressiveness`: 0-3
+- `vad_silence_duration`: seconds of silence before stopping recording
+- `vad_frame_duration`: 10, 20, or 30 (ms)
+- `vad_timeout`: max seconds to wait for speech
+
+- `wake_confirmation_beep`: `enabled`/`disabled`; play beep on wake
+- `wake_confirmation_beep_freq`: beep frequency (Hz)
+- `wake_confirmation_beep_duration`: beep duration (seconds)
+- `visual_state_indicator`: `enabled`/`disabled`; show terminal state indicators in wake word mode
 
 
 Enjoy the experience!
-
