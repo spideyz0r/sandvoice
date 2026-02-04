@@ -471,6 +471,20 @@ class WakeWordMode:
             # Return to IDLE on error
             self.state = State.IDLE
 
+    def _cleanup_remaining_tts_files(self, file_list):
+        """Clean up a list of TTS files.
+        
+        Args:
+            file_list: List of file paths to delete
+        """
+        for file_path in file_list:
+            try:
+                if os.path.exists(file_path):
+                    os.remove(file_path)
+            except OSError as e:
+                if self.config.debug:
+                    logging.warning(f"Failed to delete TTS file '{file_path}': {e}")
+
     def _listen_for_barge_in(self, barge_in_event):
         """Background thread to listen for wake word during TTS playback.
         
@@ -566,13 +580,7 @@ class WakeWordMode:
                         if self.config.debug:
                             logging.info("Barge-in detected, stopping TTS playback")
                         # Clean up remaining files
-                        for remaining_file in self.tts_files[idx:]:
-                            try:
-                                if os.path.exists(remaining_file):
-                                    os.remove(remaining_file)
-                            except OSError as e:
-                                if self.config.debug:
-                                    logging.warning(f"Failed to delete remaining TTS file: {e}")
+                        self._cleanup_remaining_tts_files(self.tts_files[idx:])
                         break
                     
                     # Play the file with barge-in monitoring
@@ -581,24 +589,13 @@ class WakeWordMode:
                     except Exception as e:
                         if self.config.debug:
                             logging.error(f"Audio playback failed for file '{file_path}': {e}")
-                            # Don't delete failed file in debug mode
-                            # Clean up remaining files
-                            for remaining_file in self.tts_files[idx + 1:]:
-                                try:
-                                    if os.path.exists(remaining_file):
-                                        os.remove(remaining_file)
-                                except OSError as cleanup_error:
-                                    if self.config.debug:
-                                        logging.warning(f"Failed to delete remaining TTS file: {cleanup_error}")
+                            # Preserve the failed file in debug mode for diagnostics
+                            # Clean up remaining unplayed files
+                            self._cleanup_remaining_tts_files(self.tts_files[idx + 1:])
                         else:
                             print("Audio playback failed. Continuing with text only.")
-                            # Clean up all remaining files on error
-                            for remaining_file in self.tts_files[idx:]:
-                                try:
-                                    if os.path.exists(remaining_file):
-                                        os.remove(remaining_file)
-                                except OSError as cleanup_error:
-                                    pass
+                            # Clean up all remaining files including the failed one
+                            self._cleanup_remaining_tts_files(self.tts_files[idx:])
                         break
                     
                     # Check for barge-in after playing file
@@ -606,14 +603,8 @@ class WakeWordMode:
                         if self.config.debug:
                             logging.info("Barge-in detected after file playback")
                         self.audio.stop_playback()
-                        # Clean up remaining files
-                        for remaining_file in self.tts_files[idx + 1:]:
-                            try:
-                                if os.path.exists(remaining_file):
-                                    os.remove(remaining_file)
-                            except OSError as e:
-                                if self.config.debug:
-                                    logging.warning(f"Failed to delete remaining TTS file: {e}")
+                        # Clean up remaining unplayed files
+                        self._cleanup_remaining_tts_files(self.tts_files[idx + 1:])
                         break
                     
                     # Clean up the file we just played successfully

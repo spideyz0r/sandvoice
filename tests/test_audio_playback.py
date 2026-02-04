@@ -184,7 +184,11 @@ class TestStopPlayback(unittest.TestCase):
         audio.config = Mock(debug=False)
         
         import pygame
-        pygame.mixer._init = None
+        # Properly uninitialize the mixer
+        try:
+            pygame.mixer.quit()
+        except:
+            pass
         
         # Should not raise exception
         audio.stop_playback()
