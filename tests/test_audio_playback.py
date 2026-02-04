@@ -15,14 +15,22 @@ def _install_fake_deps_for_common_audio():
     fake_pynput = types.SimpleNamespace(keyboard=fake_keyboard)
 
     class _FakeMusic:
+        def __init__(self):
+            self._stopped = False
+
         def load(self, _path):
             return None
 
         def play(self):
+            self._stopped = False
             return None
 
         def get_busy(self):
             return False
+
+        def stop(self):
+            self._stopped = True
+            return None
 
     class _FakeMixer:
         def __init__(self):
@@ -135,3 +143,61 @@ class TestMixerInitialization(unittest.TestCase):
 
         self.Audio.play_audio_file(audio, '/tmp/fake.mp3')
         self.assertIsNotNone(pygame.mixer.get_init())
+
+
+class TestStopPlayback(unittest.TestCase):
+    """Test stop_playback method for barge-in functionality."""
+    
+    def setUp(self):
+        _install_fake_deps_for_common_audio()
+        from common.audio import Audio
+        self.Audio = Audio
+
+    def test_stop_playback_calls_mixer_stop(self):
+        """Test that stop_playback calls pygame.mixer.music.stop()."""
+        audio = self.Audio.__new__(self.Audio)
+        audio.config = Mock(debug=False)
+        
+        import pygame
+        # Initialize mixer
+        pygame.mixer.init()
+        
+        # Track if stop was called
+        original_stop = pygame.mixer.music.stop
+        stop_called = []
+        
+        def track_stop():
+            stop_called.append(True)
+            return original_stop()
+        
+        pygame.mixer.music.stop = track_stop
+        
+        # Call stop_playback
+        audio.stop_playback()
+        
+        # Verify stop was called
+        self.assertTrue(len(stop_called) > 0)
+    
+    def test_stop_playback_safe_when_mixer_not_initialized(self):
+        """Test that stop_playback is safe to call when mixer not initialized."""
+        audio = self.Audio.__new__(self.Audio)
+        audio.config = Mock(debug=False)
+        
+        import pygame
+        pygame.mixer._init = None
+        
+        # Should not raise exception
+        audio.stop_playback()
+    
+    def test_stop_playback_logs_in_debug_mode(self):
+        """Test that stop_playback logs when debug is enabled."""
+        audio = self.Audio.__new__(self.Audio)
+        audio.config = Mock(debug=True)
+        
+        import pygame
+        pygame.mixer.init()
+        
+        with patch('common.audio.logging.info') as mock_log:
+            audio.stop_playback()
+            mock_log.assert_called_with("Audio playback stopped")
+

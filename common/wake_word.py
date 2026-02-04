@@ -1,6 +1,7 @@
 import logging
 import os
 import struct
+import threading
 import time
 import wave
 from enum import Enum
@@ -54,6 +55,7 @@ class WakeWordMode:
         self.recorded_audio_path = None
         self.response_text = None
         self.tts_files = None
+        self.barge_in_event = None  # Event to signal barge-in during TTS
 
         if self.config.debug:
             logging.info("Initializing wake word mode")
@@ -469,14 +471,87 @@ class WakeWordMode:
             # Return to IDLE on error
             self.state = State.IDLE
 
+    def _listen_for_barge_in(self, barge_in_event):
+        """Background thread to listen for wake word during TTS playback.
+        
+        Args:
+            barge_in_event: threading.Event to signal when wake word detected
+        """
+        if not self.porcupine:
+            return
+            
+        pa = None
+        audio_stream = None
+        
+        try:
+            pa = pyaudio.PyAudio()
+            audio_stream = pa.open(
+                rate=self.porcupine.sample_rate,
+                channels=1,
+                format=pyaudio.paInt16,
+                input=True,
+                frames_per_buffer=self.porcupine.frame_length
+            )
+            
+            if self.config.debug:
+                logging.info("Barge-in detection thread started")
+            
+            while self.running and self.state == State.RESPONDING and not barge_in_event.is_set():
+                try:
+                    pcm = audio_stream.read(self.porcupine.frame_length, exception_on_overflow=False)
+                    pcm = struct.unpack_from("h" * self.porcupine.frame_length, pcm)
+                    
+                    keyword_index = self.porcupine.process(pcm)
+                    
+                    if keyword_index >= 0:
+                        if self.config.debug:
+                            logging.info(f"Barge-in: Wake word detected during TTS")
+                        barge_in_event.set()
+                        break
+                        
+                except Exception as e:
+                    if self.config.debug:
+                        logging.warning(f"Error in barge-in detection: {e}")
+                    break
+                    
+        except Exception as e:
+            if self.config.debug:
+                logging.error(f"Barge-in detection thread error: {e}")
+        finally:
+            if audio_stream is not None:
+                try:
+                    audio_stream.stop_stream()
+                    audio_stream.close()
+                except Exception as e:
+                    if self.config.debug:
+                        logging.warning(f"Failed to close barge-in audio stream: {e}")
+            if pa is not None:
+                try:
+                    pa.terminate()
+                except Exception as e:
+                    if self.config.debug:
+                        logging.warning(f"Failed to terminate barge-in PyAudio: {e}")
+
     def _state_responding(self):
         """RESPONDING state: Play TTS response audio.
 
         Uses existing audio.play_audio_files() method.
-        Transitions back to IDLE.
+        Supports barge-in if enabled: stops TTS when wake word detected.
+        Transitions back to IDLE or LISTENING (if barge-in).
         """
         if self.config.visual_state_indicator:
             print("🔊 Responding...")
+
+        # Start barge-in detection thread if enabled
+        barge_in_thread = None
+        if self.config.barge_in and self.porcupine:
+            self.barge_in_event = threading.Event()
+            barge_in_thread = threading.Thread(
+                target=self._listen_for_barge_in,
+                args=(self.barge_in_event,),
+                daemon=True
+            )
+            barge_in_thread.start()
 
         # Play TTS audio if available
         if self.tts_files and len(self.tts_files) > 0:
@@ -484,14 +559,70 @@ class WakeWordMode:
                 if self.config.debug:
                     logging.info(f"Playing {len(self.tts_files)} TTS files")
 
-                success, failed_file, error = self.audio.play_audio_files(self.tts_files)
-
-                if not success:
-                    if self.config.debug:
-                        logging.error(f"Audio playback failed for file '{failed_file}': {error}")
-                        print(f"Error during audio playback for file '{failed_file}': {error}")
-                    else:
-                        print("Audio playback failed. Continuing with text only.")
+                # Play files with barge-in check
+                for idx, file_path in enumerate(self.tts_files):
+                    # Check for barge-in before playing each file
+                    if self.config.barge_in and self.barge_in_event and self.barge_in_event.is_set():
+                        if self.config.debug:
+                            logging.info("Barge-in detected, stopping TTS playback")
+                        # Clean up remaining files
+                        for remaining_file in self.tts_files[idx:]:
+                            try:
+                                if os.path.exists(remaining_file):
+                                    os.remove(remaining_file)
+                            except OSError as e:
+                                if self.config.debug:
+                                    logging.warning(f"Failed to delete remaining TTS file: {e}")
+                        break
+                    
+                    # Play the file with barge-in monitoring
+                    try:
+                        self.audio.play_audio_file(file_path)
+                    except Exception as e:
+                        if self.config.debug:
+                            logging.error(f"Audio playback failed for file '{file_path}': {e}")
+                            # Don't delete failed file in debug mode
+                            # Clean up remaining files
+                            for remaining_file in self.tts_files[idx + 1:]:
+                                try:
+                                    if os.path.exists(remaining_file):
+                                        os.remove(remaining_file)
+                                except OSError as cleanup_error:
+                                    if self.config.debug:
+                                        logging.warning(f"Failed to delete remaining TTS file: {cleanup_error}")
+                        else:
+                            print("Audio playback failed. Continuing with text only.")
+                            # Clean up all remaining files on error
+                            for remaining_file in self.tts_files[idx:]:
+                                try:
+                                    if os.path.exists(remaining_file):
+                                        os.remove(remaining_file)
+                                except OSError as cleanup_error:
+                                    pass
+                        break
+                    
+                    # Check for barge-in after playing file
+                    if self.config.barge_in and self.barge_in_event and self.barge_in_event.is_set():
+                        if self.config.debug:
+                            logging.info("Barge-in detected after file playback")
+                        self.audio.stop_playback()
+                        # Clean up remaining files
+                        for remaining_file in self.tts_files[idx + 1:]:
+                            try:
+                                if os.path.exists(remaining_file):
+                                    os.remove(remaining_file)
+                            except OSError as e:
+                                if self.config.debug:
+                                    logging.warning(f"Failed to delete remaining TTS file: {e}")
+                        break
+                    
+                    # Clean up the file we just played successfully
+                    try:
+                        if os.path.exists(file_path):
+                            os.remove(file_path)
+                    except OSError as e:
+                        if self.config.debug:
+                            logging.warning(f"Failed to delete TTS file: {e}")
 
             except Exception as e:
                 if self.config.debug:
@@ -501,6 +632,10 @@ class WakeWordMode:
         else:
             if self.config.debug:
                 logging.info("No TTS files to play (bot_voice disabled or TTS generation failed)")
+
+        # Wait for barge-in thread to finish
+        if barge_in_thread:
+            barge_in_thread.join(timeout=0.5)
 
         # Clean up temporary recorded audio file
         if self.recorded_audio_path and os.path.exists(self.recorded_audio_path):
@@ -512,16 +647,29 @@ class WakeWordMode:
                 if self.config.debug:
                     logging.warning(f"Failed to clean up recording file: {e}")
 
-        # TTS files are automatically cleaned up by audio.play_audio_files()
-        # (preserves failed files in debug mode for diagnostics)
-
         # Reset for next cycle
         self.recorded_audio_path = None
         self.response_text = None
         self.tts_files = None
 
-        # Return to IDLE to listen for next wake word
-        self.state = State.IDLE
+        # Transition to LISTENING if barge-in occurred, otherwise back to IDLE
+        if self.config.barge_in and self.barge_in_event and self.barge_in_event.is_set():
+            if self.config.debug:
+                logging.info("Transitioning to LISTENING after barge-in")
+            
+            # Play confirmation beep
+            if self.config.wake_confirmation_beep and self.confirmation_beep_path:
+                try:
+                    self.audio.play_audio_file(self.confirmation_beep_path)
+                except Exception as e:
+                    if self.config.debug:
+                        logging.warning(f"Failed to play confirmation beep after barge-in: {e}")
+            
+            self.barge_in_event = None
+            self.state = State.LISTENING
+        else:
+            self.barge_in_event = None
+            self.state = State.IDLE
 
     def _cleanup(self):
         """Clean up Porcupine, VAD, and audio resources."""

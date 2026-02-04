@@ -152,6 +152,21 @@ class Audio:
     def play_audio(self):
         return self.play_audio_file(self.config.tmp_recording + ".mp3")
 
+    def stop_playback(self):
+        """Stop audio playback immediately.
+        
+        This method stops pygame mixer music playback, which is used for TTS.
+        Safe to call even if no audio is playing.
+        """
+        try:
+            if pygame.mixer.get_init():
+                pygame.mixer.music.stop()
+                if self.config.debug:
+                    logging.info("Audio playback stopped")
+        except Exception as e:
+            if self.config.debug:
+                logging.warning(f"Error stopping audio playback: {e}")
+
     def play_audio_file(self, file_path):
         try:
             if not pygame.mixer.get_init():

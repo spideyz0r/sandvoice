@@ -783,9 +783,6 @@ class TestWakeWordModeResponding(unittest.TestCase):
     def test_state_responding_plays_tts_and_cleans_up(self, mock_exists, mock_remove):
         mock_exists.return_value = True
 
-        # Mock successful audio playback
-        self.mock_audio.play_audio_files.return_value = (True, None, None)
-
         mode = WakeWordMode(self.mock_config, self.mock_ai, self.mock_audio)
         mode.tts_files = ["/tmp/tts1.mp3", "/tmp/tts2.mp3"]
         mode.recorded_audio_path = "/tmp/recording.wav"
@@ -794,11 +791,13 @@ class TestWakeWordModeResponding(unittest.TestCase):
 
         mode._state_responding()
 
-        # Verify audio playback was called
-        self.mock_audio.play_audio_files.assert_called_once_with(["/tmp/tts1.mp3", "/tmp/tts2.mp3"])
+        # Verify audio playback was called for each file (with new implementation)
+        # play_audio_file is called instead of play_audio_files
+        self.assertEqual(self.mock_audio.play_audio_file.call_count, 2)
 
-        # Verify cleanup - recording file only (TTS files cleaned by play_audio_files)
-        mock_remove.assert_called_once_with("/tmp/recording.wav")
+        # Verify cleanup - both TTS files and recording file
+        # With new implementation, we clean up TTS files as we go
+        self.assertEqual(mock_remove.call_count, 3)  # 2 TTS + 1 recording
 
         # Verify state transition to IDLE
         self.assertEqual(mode.state, State.IDLE)
@@ -814,7 +813,7 @@ class TestWakeWordModeResponding(unittest.TestCase):
         mock_exists.return_value = True
 
         # Mock failed audio playback
-        self.mock_audio.play_audio_files.return_value = (False, "/tmp/tts1.mp3", "Playback error")
+        self.mock_audio.play_audio_file.side_effect = Exception("Playback error")
 
         mode = WakeWordMode(self.mock_config, self.mock_ai, self.mock_audio)
         mode.tts_files = ["/tmp/tts1.mp3"]
@@ -823,8 +822,9 @@ class TestWakeWordModeResponding(unittest.TestCase):
 
         mode._state_responding()
 
-        # Should still clean up and transition to IDLE - recording file only
-        mock_remove.assert_called_once_with("/tmp/recording.wav")
+        # Should still clean up and transition to IDLE
+        # With new implementation: TTS file + recording file
+        self.assertEqual(mock_remove.call_count, 2)
         self.assertEqual(mode.state, State.IDLE)
 
     @patch('common.wake_word.os.remove')
@@ -865,6 +865,140 @@ class TestWakeWordModeResponding(unittest.TestCase):
 
         # Should still transition to IDLE despite cleanup error
         self.assertEqual(mode.state, State.IDLE)
+
+
+class TestBargeIn(unittest.TestCase):
+    """Test barge-in functionality (interrupt TTS with wake word)."""
+    
+    def setUp(self):
+        logging.disable(logging.CRITICAL)
+
+        self.mock_config = Mock()
+        self.mock_config.debug = False
+        self.mock_config.barge_in = True
+        self.mock_config.wake_confirmation_beep = False
+        self.mock_config.visual_state_indicator = False
+
+        self.mock_ai = Mock()
+        self.mock_audio = Mock()
+        
+    def tearDown(self):
+        logging.disable(logging.NOTSET)
+
+    @patch('common.wake_word.threading.Thread')
+    @patch('common.wake_word.threading.Event')
+    @patch('common.wake_word.os.path.exists')
+    @patch('common.wake_word.os.remove')
+    def test_barge_in_starts_detection_thread(self, mock_remove, mock_exists, mock_event_class, mock_thread_class):
+        """Test that barge-in detection thread is started when enabled."""
+        mock_exists.return_value = False
+        mock_event = Mock()
+        mock_event.is_set.return_value = False
+        mock_event_class.return_value = mock_event
+        
+        mock_thread = Mock()
+        mock_thread_class.return_value = mock_thread
+        
+        # Create porcupine mock for barge-in thread
+        mock_porcupine = Mock()
+        
+        mode = WakeWordMode(self.mock_config, self.mock_ai, self.mock_audio)
+        mode.porcupine = mock_porcupine
+        mode.tts_files = []
+        mode.state = State.RESPONDING
+        
+        mode._state_responding()
+        
+        # Verify thread was created and started
+        mock_thread_class.assert_called_once()
+        mock_thread.start.assert_called_once()
+        
+    @patch('common.wake_word.threading.Thread')
+    @patch('common.wake_word.threading.Event')
+    @patch('common.wake_word.os.path.exists')
+    @patch('common.wake_word.os.remove')
+    def test_barge_in_transitions_to_listening_on_wake_word(self, mock_remove, mock_exists, mock_event_class, mock_thread_class):
+        """Test that barge-in transitions to LISTENING when wake word detected."""
+        mock_exists.return_value = False
+        
+        # Simulate wake word detected (event is set)
+        mock_event = Mock()
+        mock_event.is_set.return_value = True
+        mock_event_class.return_value = mock_event
+        
+        mock_thread = Mock()
+        mock_thread_class.return_value = mock_thread
+        
+        mock_porcupine = Mock()
+        
+        mode = WakeWordMode(self.mock_config, self.mock_ai, self.mock_audio)
+        mode.porcupine = mock_porcupine
+        mode.tts_files = []
+        mode.state = State.RESPONDING
+        
+        mode._state_responding()
+        
+        # Should transition to LISTENING, not IDLE
+        self.assertEqual(mode.state, State.LISTENING)
+    
+    @patch('common.wake_word.threading.Thread')
+    @patch('common.wake_word.threading.Event')
+    @patch('common.wake_word.os.path.exists')
+    @patch('common.wake_word.os.remove')
+    def test_barge_in_disabled_transitions_to_idle(self, mock_remove, mock_exists, mock_event_class, mock_thread_class):
+        """Test that without barge-in, state transitions to IDLE."""
+        mock_exists.return_value = False
+        
+        # Disable barge-in
+        self.mock_config.barge_in = False
+        
+        mode = WakeWordMode(self.mock_config, self.mock_ai, self.mock_audio)
+        mode.tts_files = []
+        mode.state = State.RESPONDING
+        
+        mode._state_responding()
+        
+        # Should transition to IDLE (no thread started)
+        self.assertEqual(mode.state, State.IDLE)
+        mock_thread_class.assert_not_called()
+
+    @patch('common.wake_word.threading.Thread')
+    @patch('common.wake_word.threading.Event')
+    @patch('common.wake_word.os.path.exists')
+    @patch('common.wake_word.os.remove')
+    def test_barge_in_stops_playback_on_wake_word(self, mock_remove, mock_exists, mock_event_class, mock_thread_class):
+        """Test that barge-in stops audio playback when wake word detected during playback."""
+        mock_exists.return_value = False
+        
+        # Simulate wake word detected after first file plays
+        mock_event = Mock()
+        call_count = [0]
+        def is_set_side_effect():
+            call_count[0] += 1
+            # Set to True after 3 calls (after first file is played, before cleanup check)
+            return call_count[0] > 3
+        mock_event.is_set.side_effect = is_set_side_effect
+        mock_event_class.return_value = mock_event
+        
+        mock_thread = Mock()
+        mock_thread_class.return_value = mock_thread
+        
+        mock_porcupine = Mock()
+        
+        mode = WakeWordMode(self.mock_config, self.mock_ai, self.mock_audio)
+        mode.porcupine = mock_porcupine
+        mode.tts_files = ["/tmp/tts1.mp3", "/tmp/tts2.mp3"]
+        mode.state = State.RESPONDING
+        
+        # Mock play_audio_file to succeed
+        self.mock_audio.play_audio_file.return_value = None
+        
+        mode._state_responding()
+        
+        # Should call stop_playback when barge-in detected after file plays
+        self.mock_audio.stop_playback.assert_called()
+        # Should transition to LISTENING
+        self.assertEqual(mode.state, State.LISTENING)
 
 
 if __name__ == '__main__':
