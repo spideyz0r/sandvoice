@@ -7,9 +7,11 @@
 
 ## Overview
 
-SandVoice currently waits for full model responses before printing. This makes the CLI feel slower compared to tools that stream tokens as they are generated.
+SandVoice is voice-first. Today, it typically waits for the full model response before generating any audio, which makes the experience feel slow even when the model is working normally.
 
-This plan introduces streaming text output for responses, and (optionally) a follow-up enhancement to pipeline text streaming into chunked TTS generation so voice mode can start speaking before the full response is complete.
+This plan introduces a "buffer then play" approach (similar to Spotify): stream the model output, quickly form a first speakable chunk (targeting ~1-10 seconds of audio), start playback as soon as that first chunk is ready, and continue generating/playing subsequent chunks while the model keeps streaming.
+
+Streaming text output to the terminal is a secondary benefit (useful for debug/CLI), not the primary goal.
 
 ---
 
@@ -22,15 +24,17 @@ Current behavior:
 
 User impact:
 - Perceived latency is high, especially for longer responses
+- Voice mode feels unresponsive even when the model could begin speaking earlier
 
 ---
 
 ## Goals
 
-- Make CLI output feel immediate by streaming response text
+- Voice-first: reduce time-to-first-audio by starting speech before the full response is complete
+- Keep audio playing smoothly once it starts (avoid gaps by staying ahead of playback)
+- Stream text output as a secondary benefit (useful for debug/CLI)
 - Preserve existing conversation history behavior and return values
 - Keep implementation small and compatible with macOS + Raspberry Pi
-- Optional: enable earlier audio playback by streaming-to-TTS in chunks
 
 ---
 
@@ -43,30 +47,36 @@ User impact:
 
 ## Proposed Design
 
-### Phase 1: Stream Text Output
+### Phase 1: Streaming Text Assembly (Foundation)
 
 - Update `AI.generate_response()` to support `stream=True`
-- Print incremental deltas to stdout as they arrive
-- Accumulate deltas into a final string to:
-  - return the final content
-  - append to `conversation_history`
+- As deltas arrive, accumulate into a final string for:
+  - conversation history
+  - any non-voice pathways
+- (Optional) print deltas to stdout when `debug` is enabled
 
 Acceptance criteria:
-- [ ] Response text appears progressively during generation
-- [ ] Final response is identical to the non-streaming version
+- [ ] When streaming is enabled, output text can be assembled deterministically from deltas
+- [ ] Final response text matches the non-streaming version for the same prompt/model
 - [ ] Errors and retries remain user-friendly
 
-### Phase 2 (Optional): Streaming TTS Pipeline
+### Phase 2: Voice-First Buffer Then Play (Primary Deliverable)
 
 High-level pipeline:
 - Stream text from the LLM
-- Buffer until a chunk boundary is reached (sentence/paragraph or max chars)
-- Call TTS per chunk (respecting the 4096-char limit; keep a safety margin)
-- Play chunk audio sequentially while the model continues generating
+- Maintain a buffer of unspoken text
+- As soon as the buffer contains a "first chunk" worth speaking (target ~1-10 seconds of audio), generate TTS and start playback
+- Continue producing subsequent chunks (sentence/paragraph boundaries, plus max char limit) and enqueue them so playback stays ahead
+
+Chunking strategy:
+- First chunk: prefer 1-2 complete sentences; fallback to a short character threshold if no punctuation
+- Subsequent chunks: re-use the existing TTS-safe splitting rules (<=4096 chars with margin)
 
 Acceptance criteria:
-- [ ] In voice mode, time-to-first-audio improves for longer responses
-- [ ] If chunk TTS fails mid-stream, fall back to text-only for that response and log the error
+- [ ] Time-to-first-audio improves (goal: start speaking within ~1-10 seconds for typical responses)
+- [ ] Playback continues smoothly for long answers (no long gaps between chunks)
+- [ ] If any chunk fails TTS, stop voice for that response, fall back to text-only, and log the error
+- [ ] Temporary chunk files are cleaned up (unless debug preservation is enabled)
 
 ---
 
@@ -76,8 +86,10 @@ Proposed config keys (optional):
 
 ```yaml
 stream_responses: enabled
-stream_tts: disabled
-stream_tts_boundary: sentence  # sentence|paragraph
+stream_tts: enabled
+stream_tts_boundary: sentence      # sentence|paragraph
+stream_tts_first_chunk_target_s: 6 # target 1-10 seconds of initial audio
+stream_tts_buffer_chunks: 2        # how many chunks to keep ahead of playback
 ```
 
 ---
@@ -86,3 +98,4 @@ stream_tts_boundary: sentence  # sentence|paragraph
 
 - Unit test streaming assembly: given simulated deltas, final string matches expected
 - Unit test chunk boundary logic for streaming-to-TTS (Phase 2)
+- Mocked integration test: TTS failure mid-queue falls back to text-only and cleans up temp files
