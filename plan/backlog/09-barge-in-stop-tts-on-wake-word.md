@@ -74,7 +74,7 @@ We should allow wake word detection to preempt `RESPONDING`:
 Proposed config key:
 
 ```yaml
-barge_in_enabled: enabled
+barge_in: enabled
 ```
 
 ---
