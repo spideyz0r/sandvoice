@@ -74,6 +74,10 @@ plan/
 **Document**: [backlog/08-streaming-responses-and-tts.md](./backlog/08-streaming-responses-and-tts.md)
 **Description**: Stream LLM responses to stdout for lower perceived latency; optional follow-up to pipeline streaming text into chunked TTS for earlier voice playback.
 
+### Priority 9: Barge-In (Stop TTS on Wake Word)
+**Document**: [backlog/09-barge-in-stop-tts-on-wake-word.md](./backlog/09-barge-in-stop-tts-on-wake-word.md)
+**Description**: Allow users to interrupt SandVoice speech by saying the wake word, stopping TTS immediately and transitioning into command listening.
+
 ### Future Enhancements
 **Document**: [backlog/FUTURE.md](./backlog/FUTURE.md)
 **Description**: Long-term feature ideas including:
