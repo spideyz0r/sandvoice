@@ -125,7 +125,12 @@ if __name__ == "__main__":
             sys.exit(1)
 
         audio = Audio(sandvoice.config)
-        wake_word_mode = WakeWordMode(sandvoice.config, sandvoice.ai, audio)
+        wake_word_mode = WakeWordMode(
+            sandvoice.config,
+            sandvoice.ai,
+            audio,
+            route_message=sandvoice.route_message,
+        )
         wake_word_mode.run()
     # Default mode (ESC key) or CLI mode
     else:
