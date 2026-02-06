@@ -1053,70 +1053,42 @@ class TestBargeIn(unittest.TestCase):
         # Should transition to LISTENING (barge-in triggered)
         self.assertEqual(mode.state, State.LISTENING)
 
-    @patch('common.wake_word.threading.Thread')
-    @patch('common.wake_word.threading.Event')
     @patch('common.wake_word.os.path.exists')
     @patch('common.wake_word.os.remove')
-    def test_barge_in_during_processing(self, mock_remove, mock_exists, mock_event_class, mock_thread_class):
-        """Test that barge-in can interrupt during PROCESSING state."""
+    def test_barge_in_during_processing(self, mock_remove, mock_exists):
+        """Test immediate barge-in handler works correctly."""
         mock_exists.return_value = True
-
-        # Create separate mocks for barge_in_event and stop_flag
-        mock_barge_in_event = Mock()
-        mock_stop_flag = Mock()
-
-        # Track which Event() call this is
-        event_call_count = [0]
-        def event_factory():
-            event_call_count[0] += 1
-            if event_call_count[0] == 1:
-                return mock_barge_in_event  # First Event() is barge_in_event
-            else:
-                return mock_stop_flag  # Second Event() is stop_flag
-
-        mock_event_class.side_effect = event_factory
-
-        # Simulate barge-in triggered after transcription completes
-        # First call (_check_barge_in_interrupt after transcription): return True to trigger interrupt
-        mock_barge_in_event.is_set.return_value = True
-        mock_stop_flag.is_set.return_value = False
-
-        mock_thread = Mock()
-        mock_thread_class.return_value = mock_thread
-
-        mock_porcupine = Mock()
-        mock_response = Mock()
-        mock_response.content = "Test response"
+        self.mock_config.wake_confirmation_beep = True
 
         mode = WakeWordMode(self.mock_config, self.mock_ai, self.mock_audio)
-        mode.porcupine = mock_porcupine
         mode.recorded_audio_path = "/tmp/test.mp3"
+        mode.confirmation_beep_path = "/tmp/beep.mp3"
         mode.state = State.PROCESSING
 
-        # Mock AI methods
-        self.mock_ai.transcribe_and_translate.return_value = "Test input"
+        # Set up mock barge-in thread and flags
+        mock_barge_in_thread = Mock()
+        mock_stop_flag = Mock()
+        mode.barge_in_stop_flag = mock_stop_flag
+        mode.barge_in_event = Mock()
 
-        mode._state_processing()
+        # Call the immediate barge-in handler
+        mode._handle_immediate_barge_in(mock_barge_in_thread)
 
-        # Verify transcription was called
-        self.mock_ai.transcribe_and_translate.assert_called_once()
+        # Verify beep was played
+        self.mock_audio.play_audio_file.assert_called_once_with("/tmp/beep.mp3")
 
-        # Verify response generation was NOT called (interrupted after transcription)
-        self.mock_ai.generate_response.assert_not_called()
-
-        # Verify recorded audio was cleaned up
-        mock_remove.assert_called_once_with("/tmp/test.mp3")
-
-        # Verify barge-in thread was started and stopped
-        mock_thread_class.assert_called_once()
-        call_kwargs = mock_thread_class.call_args.kwargs
-        self.assertEqual(call_kwargs.get('daemon'), True)
-        mock_thread.start.assert_called_once()
+        # Verify barge-in thread was stopped
         mock_stop_flag.set.assert_called_once()
-        mock_thread.join.assert_called_once()
+        mock_barge_in_thread.join.assert_called_once()
 
-        # Should transition to IDLE (user will say wake word again)
-        self.assertEqual(mode.state, State.IDLE)
+        # Verify cleanup
+        mock_remove.assert_called_once_with("/tmp/test.mp3")
+        self.assertIsNone(mode.recorded_audio_path)
+        self.assertIsNone(mode.barge_in_event)
+        self.assertIsNone(mode.barge_in_stop_flag)
+
+        # Should transition to LISTENING (immediate response)
+        self.assertEqual(mode.state, State.LISTENING)
 
 
 if __name__ == '__main__':
