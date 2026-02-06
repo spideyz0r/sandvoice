@@ -31,7 +31,7 @@ class Config:
             # - translate: translate speech to English (Whisper translations endpoint)
             # - transcribe: keep original language (Whisper transcriptions endpoint)
             "speech_to_text_task": "translate",
-            # Optional ISO-639-1 hint for transcriptions (e.g. "pt", "en").
+            # Optional ISO-639-1 language hint used for transcriptions and for the GPT transcribe-then-translate flow (e.g. "pt", "en").
             "speech_to_text_language": "",
             # Translation provider used when speech_to_text_task=translate
             # - whisper: Whisper translations endpoint (single call, auto-detect source language)
