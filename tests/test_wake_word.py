@@ -1115,8 +1115,8 @@ class TestBargeIn(unittest.TestCase):
         mock_stop_flag.set.assert_called_once()
         mock_thread.join.assert_called_once()
 
-        # Should transition to LISTENING (barge-in triggered)
-        self.assertEqual(mode.state, State.LISTENING)
+        # Should transition to IDLE (user will say wake word again)
+        self.assertEqual(mode.state, State.IDLE)
 
 
 if __name__ == '__main__':

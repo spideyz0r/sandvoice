@@ -485,7 +485,7 @@ class WakeWordMode:
             # Check for barge-in after transcription
             if self._check_barge_in_interrupt():
                 if self.config.debug:
-                    logging.info("Barge-in during transcription, skipping to LISTENING")
+                    logging.info("Barge-in during transcription, returning to IDLE")
                 # Clean up recorded audio
                 if os.path.exists(self.recorded_audio_path):
                     os.remove(self.recorded_audio_path)
@@ -497,8 +497,8 @@ class WakeWordMode:
                 # Clear barge-in event for next cycle
                 self.barge_in_event = None
                 self.barge_in_stop_flag = None
-                # Skip confirmation beep and go directly to listening
-                self.state = State.LISTENING
+                # Return to IDLE (user will say wake word again for next query)
+                self.state = State.IDLE
                 return
 
             if self.config.debug:
@@ -519,7 +519,7 @@ class WakeWordMode:
             # Check for barge-in after response generation
             if self._check_barge_in_interrupt():
                 if self.config.debug:
-                    logging.info("Barge-in during response generation, skipping to LISTENING")
+                    logging.info("Barge-in during response generation, returning to IDLE")
                 # Clean up recorded audio
                 if os.path.exists(self.recorded_audio_path):
                     os.remove(self.recorded_audio_path)
@@ -532,8 +532,8 @@ class WakeWordMode:
                 # Clear barge-in event for next cycle
                 self.barge_in_event = None
                 self.barge_in_stop_flag = None
-                # Skip confirmation beep and go directly to listening
-                self.state = State.LISTENING
+                # Return to IDLE (user will say wake word again for next query)
+                self.state = State.IDLE
                 return
 
             if self.config.debug:
@@ -548,7 +548,7 @@ class WakeWordMode:
                 # Check for barge-in after TTS generation
                 if self._check_barge_in_interrupt():
                     if self.config.debug:
-                        logging.info("Barge-in during TTS generation, skipping to LISTENING")
+                        logging.info("Barge-in during TTS generation, returning to IDLE")
                     # Clean up recorded audio and TTS files
                     if os.path.exists(self.recorded_audio_path):
                         os.remove(self.recorded_audio_path)
@@ -564,8 +564,8 @@ class WakeWordMode:
                     # Clear barge-in event for next cycle
                     self.barge_in_event = None
                     self.barge_in_stop_flag = None
-                    # Skip confirmation beep and go directly to listening
-                    self.state = State.LISTENING
+                    # Return to IDLE (user will say wake word again for next query)
+                    self.state = State.IDLE
                     return
 
                 if self.config.debug:
