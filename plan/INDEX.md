@@ -82,6 +82,14 @@ plan/
 **Document**: [backlog/10-speech-to-text-task-and-language.md](./backlog/10-speech-to-text-task-and-language.md)
 **Description**: Make Whisper behavior configurable (transcribe vs translate) and allow explicit language hints for better accuracy.
 
+### Priority 11: Plugin Route Name Normalization
+**Document**: [backlog/11-plugin-route-name-normalization.md](./backlog/11-plugin-route-name-normalization.md)
+**Description**: Standardize plugin module naming (underscore) while supporting hyphenated route names (e.g., `hacker-news`) via normalization/aliases.
+
+### Priority 12: Route Definitions Default Route Alignment
+**Document**: [backlog/12-route-definitions-default-route-alignment.md](./backlog/12-route-definitions-default-route-alignment.md)
+**Description**: Fix `default-rote` typo and align default route naming across `routes.yaml` and routing fallbacks.
+
 ### Future Enhancements
 **Document**: [backlog/FUTURE.md](./backlog/FUTURE.md)
 **Description**: Long-term feature ideas including:
