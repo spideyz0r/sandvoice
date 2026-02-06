@@ -102,6 +102,10 @@ class TestTranscribeAndTranslate(unittest.TestCase):
         mock_config.api_timeout = 10
         mock_config.api_retry_attempts = 3
         mock_config.speech_to_text_model = 'whisper-1'
+        mock_config.speech_to_text_task = 'translate'
+        mock_config.speech_to_text_language = ''
+        mock_config.speech_to_text_translate_provider = 'whisper'
+        mock_config.speech_to_text_translate_model = 'gpt-5-mini'
         mock_config.tmp_recording = '/tmp/recording'
         mock_config.debug = False
 
@@ -152,6 +156,34 @@ class TestTranscribeAndTranslate(unittest.TestCase):
     @patch('common.ai.OpenAI')
     @patch('common.ai.setup_error_logging')
     @patch('builtins.open', new_callable=mock_open, read_data=b'fake audio data')
+    def test_transcribe_task_transcribe_without_language_hint(self, mock_file, mock_setup, mock_openai_class):
+        """Test transcribe task omits language when not provided"""
+        mock_config = Mock()
+        mock_config.api_timeout = 10
+        mock_config.api_retry_attempts = 3
+        mock_config.speech_to_text_model = 'whisper-1'
+        mock_config.speech_to_text_task = 'transcribe'
+        mock_config.speech_to_text_language = ''
+        mock_config.tmp_recording = '/tmp/recording'
+        mock_config.debug = False
+
+        mock_client = Mock()
+        mock_openai_class.return_value = mock_client
+
+        mock_transcript = Mock()
+        mock_transcript.text = "Hello"
+        mock_client.audio.transcriptions.create.return_value = mock_transcript
+
+        ai = AI(mock_config)
+        result = ai.transcribe_and_translate()
+
+        self.assertEqual(result, "Hello")
+        _args, kwargs = mock_client.audio.transcriptions.create.call_args
+        self.assertNotIn('language', kwargs)
+
+    @patch('common.ai.OpenAI')
+    @patch('common.ai.setup_error_logging')
+    @patch('builtins.open', new_callable=mock_open, read_data=b'fake audio data')
     def test_translate_provider_gpt_transcribe_then_translate(self, mock_file, mock_setup, mock_openai_class):
         """Test translate via GPT uses transcribe then chat translate"""
         mock_config = Mock()
@@ -189,6 +221,35 @@ class TestTranscribeAndTranslate(unittest.TestCase):
 
     @patch('common.ai.OpenAI')
     @patch('common.ai.setup_error_logging')
+    @patch('builtins.open', new_callable=mock_open, read_data=b'fake audio data')
+    def test_translate_provider_gpt_skips_chat_on_empty_transcript(self, mock_file, mock_setup, mock_openai_class):
+        """Test translate via GPT returns empty and skips chat on empty transcript"""
+        mock_config = Mock()
+        mock_config.api_timeout = 10
+        mock_config.api_retry_attempts = 3
+        mock_config.speech_to_text_model = 'whisper-1'
+        mock_config.speech_to_text_task = 'translate'
+        mock_config.speech_to_text_language = 'pt'
+        mock_config.speech_to_text_translate_provider = 'gpt'
+        mock_config.speech_to_text_translate_model = 'gpt-5-mini'
+        mock_config.tmp_recording = '/tmp/recording'
+        mock_config.debug = False
+
+        mock_client = Mock()
+        mock_openai_class.return_value = mock_client
+
+        mock_transcript = Mock()
+        mock_transcript.text = "   "
+        mock_client.audio.transcriptions.create.return_value = mock_transcript
+
+        ai = AI(mock_config)
+        result = ai.transcribe_and_translate()
+
+        self.assertEqual(result, "")
+        mock_client.chat.completions.create.assert_not_called()
+
+    @patch('common.ai.OpenAI')
+    @patch('common.ai.setup_error_logging')
     def test_transcribe_file_not_found(self, mock_setup, mock_openai_class):
         """Test transcription with missing file"""
         mock_config = Mock()
@@ -214,6 +275,10 @@ class TestTranscribeAndTranslate(unittest.TestCase):
         mock_config.api_timeout = 10
         mock_config.api_retry_attempts = 3
         mock_config.speech_to_text_model = 'whisper-1'
+        mock_config.speech_to_text_task = 'translate'
+        mock_config.speech_to_text_language = ''
+        mock_config.speech_to_text_translate_provider = 'whisper'
+        mock_config.speech_to_text_translate_model = 'gpt-5-mini'
         mock_config.tmp_recording = '/tmp/recording'
         mock_config.debug = False
 

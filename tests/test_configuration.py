@@ -141,6 +141,33 @@ class TestConfigurationValidation(unittest.TestCase):
 
         self.assertIn("unit must be 'metric' or 'imperial'", str(context.exception))
 
+    def test_invalid_speech_to_text_task(self):
+        """Test that invalid speech_to_text_task raises error"""
+        self.write_config({"speech_to_text_task": "invalid"})
+
+        with self.assertRaises(ValueError) as context:
+            Config()
+
+        self.assertIn("speech_to_text_task must be 'translate' or 'transcribe'", str(context.exception))
+
+    def test_invalid_speech_to_text_translate_provider(self):
+        """Test that invalid speech_to_text_translate_provider raises error"""
+        self.write_config({"speech_to_text_translate_provider": "invalid"})
+
+        with self.assertRaises(ValueError) as context:
+            Config()
+
+        self.assertIn("speech_to_text_translate_provider must be 'whisper' or 'gpt'", str(context.exception))
+
+    def test_empty_speech_to_text_translate_model(self):
+        """Test that empty speech_to_text_translate_model raises error"""
+        self.write_config({"speech_to_text_translate_model": ""})
+
+        with self.assertRaises(ValueError) as context:
+            Config()
+
+        self.assertIn("speech_to_text_translate_model must be a non-empty string", str(context.exception))
+
     def test_valid_metric_unit(self):
         """Test that metric unit is valid"""
         self.write_config({"unit": "metric"})
