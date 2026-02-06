@@ -214,7 +214,7 @@ class AI:
             Reply in a natural and human way.
             {verbosity_instruction}
             """
-            if extra_info != None:
+            if extra_info is not None:
                 system_role = system_role + "Consider the following to answer your question: " + extra_info
             if self.config.debug:
                 print (f"System role: {system_role}")
