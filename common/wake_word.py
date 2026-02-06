@@ -51,11 +51,13 @@ class WakeWordMode:
         self.running = False
 
         self.porcupine = None
+        self.barge_in_porcupine = None  # Separate instance for barge-in thread
         self.confirmation_beep_path = None
         self.recorded_audio_path = None
         self.response_text = None
         self.tts_files = None
         self.barge_in_event = None  # Event to signal barge-in during TTS
+        self.barge_in_stop_flag = None  # Flag to stop barge-in thread immediately
 
         if self.config.debug:
             logging.info("Initializing wake word mode")
@@ -110,22 +112,7 @@ class WakeWordMode:
         try:
             keyword_paths = getattr(self.config, "porcupine_keyword_paths", None)
 
-            if keyword_paths:
-                if not isinstance(keyword_paths, (list, tuple)):
-                    keyword_paths = [keyword_paths]
-
-                base_sensitivity = self.config.wake_word_sensitivity
-                sensitivities = [base_sensitivity] * len(keyword_paths)
-
-                self.porcupine = pvporcupine.create(
-                    access_key=self.config.porcupine_access_key,
-                    keyword_paths=keyword_paths,
-                    sensitivities=sensitivities
-                )
-
-                if self.config.debug:
-                    logging.info(f"Porcupine initialized with custom keyword paths: {keyword_paths}")
-            else:
+            if not keyword_paths:
                 wake_keyword = self.config.wake_phrase.lower()
 
                 if hasattr(pvporcupine, "KEYWORDS") and wake_keyword not in pvporcupine.KEYWORDS:
@@ -141,13 +128,13 @@ class WakeWordMode:
                     print(f"Error: {error_msg}")
                     raise RuntimeError(error_msg)
 
-                self.porcupine = pvporcupine.create(
-                    access_key=self.config.porcupine_access_key,
-                    keywords=[wake_keyword],
-                    sensitivities=[self.config.wake_word_sensitivity]
-                )
+            # Create main Porcupine instance
+            self.porcupine = self._create_porcupine_instance()
 
-                if self.config.debug:
+            if self.config.debug:
+                if keyword_paths:
+                    logging.info(f"Porcupine initialized with custom keyword paths: {keyword_paths}")
+                else:
                     logging.info(f"Porcupine initialized with built-in wake phrase: '{self.config.wake_phrase}'")
 
             if self.config.debug:
@@ -176,6 +163,38 @@ class WakeWordMode:
                 if self.config.debug:
                     logging.warning(f"Failed to create confirmation beep: {e}")
                 self.confirmation_beep_path = None
+
+    def _create_porcupine_instance(self):
+        """Create a new Porcupine instance with current config.
+
+        Returns:
+            Porcupine instance
+
+        Raises:
+            RuntimeError: If initialization fails
+        """
+        keyword_paths = getattr(self.config, "porcupine_keyword_paths", None)
+
+        if keyword_paths:
+            if not isinstance(keyword_paths, (list, tuple)):
+                keyword_paths = [keyword_paths]
+
+            base_sensitivity = self.config.wake_word_sensitivity
+            sensitivities = [base_sensitivity] * len(keyword_paths)
+
+            return pvporcupine.create(
+                access_key=self.config.porcupine_access_key,
+                keyword_paths=keyword_paths,
+                sensitivities=sensitivities
+            )
+        else:
+            wake_keyword = self.config.wake_phrase.lower()
+
+            return pvporcupine.create(
+                access_key=self.config.porcupine_access_key,
+                keywords=[wake_keyword],
+                sensitivities=[self.config.wake_word_sensitivity]
+            )
 
     def _state_idle(self):
         """IDLE state: Listen for wake word using Porcupine.
@@ -485,49 +504,53 @@ class WakeWordMode:
                 if self.config.debug:
                     logging.warning(f"Failed to delete TTS file '{file_path}': {e}")
 
-    def _listen_for_barge_in(self, barge_in_event):
+    def _listen_for_barge_in(self, barge_in_event, stop_flag):
         """Background thread to listen for wake word during TTS playback.
-        
+
+        Creates its own Porcupine instance to avoid thread-safety issues.
+
         Args:
             barge_in_event: threading.Event to signal when wake word detected
+            stop_flag: threading.Event to signal immediate thread termination
         """
-        if not self.porcupine:
-            return
-            
+        porcupine_instance = None
         pa = None
         audio_stream = None
-        
+
         try:
+            # Create dedicated Porcupine instance for this thread (thread-safety)
+            porcupine_instance = self._create_porcupine_instance()
+
             pa = pyaudio.PyAudio()
             audio_stream = pa.open(
-                rate=self.porcupine.sample_rate,
+                rate=porcupine_instance.sample_rate,
                 channels=1,
                 format=pyaudio.paInt16,
                 input=True,
-                frames_per_buffer=self.porcupine.frame_length
+                frames_per_buffer=porcupine_instance.frame_length
             )
-            
+
             if self.config.debug:
                 logging.info("Barge-in detection thread started")
-            
-            while self.running and self.state == State.RESPONDING and not barge_in_event.is_set():
+
+            while self.running and not barge_in_event.is_set() and not stop_flag.is_set():
                 try:
-                    pcm = audio_stream.read(self.porcupine.frame_length, exception_on_overflow=False)
-                    pcm = struct.unpack_from("h" * self.porcupine.frame_length, pcm)
-                    
-                    keyword_index = self.porcupine.process(pcm)
-                    
+                    pcm = audio_stream.read(porcupine_instance.frame_length, exception_on_overflow=False)
+                    pcm = struct.unpack_from("h" * porcupine_instance.frame_length, pcm)
+
+                    keyword_index = porcupine_instance.process(pcm)
+
                     if keyword_index >= 0:
                         if self.config.debug:
                             logging.info(f"Barge-in: Wake word detected during TTS")
                         barge_in_event.set()
                         break
-                        
+
                 except Exception as e:
                     if self.config.debug:
                         logging.warning(f"Error in barge-in detection: {e}")
                     break
-                    
+
         except Exception as e:
             if self.config.debug:
                 logging.error(f"Barge-in detection thread error: {e}")
@@ -545,12 +568,18 @@ class WakeWordMode:
                 except Exception as e:
                     if self.config.debug:
                         logging.warning(f"Failed to terminate barge-in PyAudio: {e}")
+            if porcupine_instance is not None:
+                try:
+                    porcupine_instance.delete()
+                except Exception as e:
+                    if self.config.debug:
+                        logging.warning(f"Failed to delete barge-in Porcupine instance: {e}")
 
     def _state_responding(self):
         """RESPONDING state: Play TTS response audio.
 
-        Uses existing audio.play_audio_files() method.
-        Supports barge-in if enabled: stops TTS when wake word detected.
+        Plays TTS files one by one using play_audio_file().
+        Supports barge-in if enabled: interrupts TTS mid-playback when wake word detected.
         Transitions back to IDLE or LISTENING (if barge-in).
         """
         if self.config.visual_state_indicator:
@@ -560,9 +589,10 @@ class WakeWordMode:
         barge_in_thread = None
         if self.config.barge_in and self.porcupine:
             self.barge_in_event = threading.Event()
+            self.barge_in_stop_flag = threading.Event()
             barge_in_thread = threading.Thread(
                 target=self._listen_for_barge_in,
-                args=(self.barge_in_event,),
+                args=(self.barge_in_event, self.barge_in_stop_flag),
                 daemon=True
             )
             barge_in_thread.start()
@@ -582,27 +612,30 @@ class WakeWordMode:
                         # Clean up remaining files
                         self._cleanup_remaining_tts_files(self.tts_files[idx:])
                         break
-                    
-                    # Play the file with barge-in monitoring
+
+                    # Play the file, passing stop_event for mid-playback interruption
                     try:
-                        self.audio.play_audio_file(file_path)
+                        self.audio.play_audio_file(
+                            file_path,
+                            stop_event=self.barge_in_event if self.config.barge_in else None
+                        )
                     except Exception as e:
                         if self.config.debug:
                             logging.error(f"Audio playback failed for file '{file_path}': {e}")
-                            # Preserve the failed file in debug mode for diagnostics
-                            # Clean up remaining unplayed files
+                            # In debug mode, preserve the failed file itself for diagnostics
+                            # by only cleaning up unplayed files after it (start at idx + 1).
                             self._cleanup_remaining_tts_files(self.tts_files[idx + 1:])
                         else:
                             print("Audio playback failed. Continuing with text only.")
-                            # Clean up all remaining files including the failed one
+                            # In non-debug mode, clean up the failed file and all remaining files
+                            # by starting cleanup at the failed file (start at idx).
                             self._cleanup_remaining_tts_files(self.tts_files[idx:])
                         break
-                    
-                    # Check for barge-in after playing file
+
+                    # Check for barge-in after playing file (might have interrupted mid-playback)
                     if self.config.barge_in and self.barge_in_event and self.barge_in_event.is_set():
                         if self.config.debug:
-                            logging.info("Barge-in detected after file playback")
-                        self.audio.stop_playback()
+                            logging.info("Barge-in detected, interrupted during playback")
                         # Clean up remaining unplayed files
                         self._cleanup_remaining_tts_files(self.tts_files[idx + 1:])
                         break
@@ -624,9 +657,13 @@ class WakeWordMode:
             if self.config.debug:
                 logging.info("No TTS files to play (bot_voice disabled or TTS generation failed)")
 
-        # Wait for barge-in thread to finish
+        # Signal barge-in thread to stop and wait for it to finish
         if barge_in_thread:
-            barge_in_thread.join(timeout=0.5)
+            if self.barge_in_stop_flag:
+                self.barge_in_stop_flag.set()
+            barge_in_thread.join(timeout=2.0)  # Increased timeout for reliable cleanup
+            if barge_in_thread.is_alive() and self.config.debug:
+                logging.warning("Barge-in thread did not finish within timeout")
 
         # Clean up temporary recorded audio file
         if self.recorded_audio_path and os.path.exists(self.recorded_audio_path):
@@ -647,19 +684,24 @@ class WakeWordMode:
         if self.config.barge_in and self.barge_in_event and self.barge_in_event.is_set():
             if self.config.debug:
                 logging.info("Transitioning to LISTENING after barge-in")
-            
-            # Play confirmation beep
+
+            # Play confirmation beep (with file existence check)
             if self.config.wake_confirmation_beep and self.confirmation_beep_path:
-                try:
-                    self.audio.play_audio_file(self.confirmation_beep_path)
-                except Exception as e:
-                    if self.config.debug:
-                        logging.warning(f"Failed to play confirmation beep after barge-in: {e}")
-            
+                if os.path.exists(self.confirmation_beep_path):
+                    try:
+                        self.audio.play_audio_file(self.confirmation_beep_path)
+                    except Exception as e:
+                        if self.config.debug:
+                            logging.warning(f"Failed to play confirmation beep after barge-in: {e}")
+                elif self.config.debug:
+                    logging.warning(f"Confirmation beep file not found: {self.confirmation_beep_path}")
+
             self.barge_in_event = None
+            self.barge_in_stop_flag = None
             self.state = State.LISTENING
         else:
             self.barge_in_event = None
+            self.barge_in_stop_flag = None
             self.state = State.IDLE
 
     def _cleanup(self):

@@ -771,6 +771,7 @@ class TestWakeWordModeResponding(unittest.TestCase):
         self.mock_config = Mock()
         self.mock_config.debug = False
         self.mock_config.visual_state_indicator = False
+        self.mock_config.barge_in = False
 
         self.mock_ai = Mock()
         self.mock_audio = Mock()
@@ -854,7 +855,8 @@ class TestWakeWordModeResponding(unittest.TestCase):
         # Mock cleanup error
         mock_remove.side_effect = Exception("Cleanup failed")
 
-        self.mock_audio.play_audio_files.return_value = (True, None, None)
+        # Mock play_audio_file to succeed (updated from play_audio_files)
+        self.mock_audio.play_audio_file.return_value = None
 
         mode = WakeWordMode(self.mock_config, self.mock_ai, self.mock_audio)
         mode.tts_files = ["/tmp/tts1.mp3"]
@@ -881,6 +883,7 @@ class TestBargeIn(unittest.TestCase):
 
         self.mock_ai = Mock()
         self.mock_audio = Mock()
+        self.mock_porcupine = Mock()  # Mock porcupine for consistency
         
     def tearDown(self):
         logging.disable(logging.NOTSET)
@@ -967,9 +970,9 @@ class TestBargeIn(unittest.TestCase):
     @patch('common.wake_word.os.path.exists')
     @patch('common.wake_word.os.remove')
     def test_barge_in_stops_playback_on_wake_word(self, mock_remove, mock_exists, mock_event_class, mock_thread_class):
-        """Test that barge-in stops audio playback when wake word detected during playback."""
+        """Test that barge-in passes stop_event to play_audio_file for mid-playback interruption."""
         mock_exists.return_value = False
-        
+
         # Simulate wake word detected after first file plays
         mock_event = Mock()
         call_count = [0]
@@ -979,24 +982,29 @@ class TestBargeIn(unittest.TestCase):
             return call_count[0] > 3
         mock_event.is_set.side_effect = is_set_side_effect
         mock_event_class.return_value = mock_event
-        
+
         mock_thread = Mock()
         mock_thread_class.return_value = mock_thread
-        
+
         mock_porcupine = Mock()
-        
+
         mode = WakeWordMode(self.mock_config, self.mock_ai, self.mock_audio)
         mode.porcupine = mock_porcupine
         mode.tts_files = ["/tmp/tts1.mp3", "/tmp/tts2.mp3"]
         mode.state = State.RESPONDING
-        
+
         # Mock play_audio_file to succeed
         self.mock_audio.play_audio_file.return_value = None
-        
+
         mode._state_responding()
-        
-        # Should call stop_playback when barge-in detected after file plays
-        self.mock_audio.stop_playback.assert_called()
+
+        # Verify play_audio_file was called with stop_event parameter
+        # (New implementation: interruption happens inside play_audio_file via stop_event)
+        self.mock_audio.play_audio_file.assert_called()
+        call_args = self.mock_audio.play_audio_file.call_args
+        # Check that stop_event was passed as a keyword argument
+        self.assertIn('stop_event', call_args.kwargs)
+
         # Should transition to LISTENING
         self.assertEqual(mode.state, State.LISTENING)
 

@@ -176,7 +176,7 @@ class TestStopPlayback(unittest.TestCase):
         audio.stop_playback()
         
         # Verify stop was called
-        self.assertTrue(len(stop_called) > 0)
+        self.assertGreater(len(stop_called), 0)
     
     def test_stop_playback_safe_when_mixer_not_initialized(self):
         """Test that stop_playback is safe to call when mixer not initialized."""
@@ -187,7 +187,9 @@ class TestStopPlayback(unittest.TestCase):
         # Properly uninitialize the mixer
         try:
             pygame.mixer.quit()
-        except:
+        except Exception:
+            # Mixer may already be uninitialized or unavailable; ignore errors here
+            # because this test only verifies that stop_playback is safe to call.
             pass
         
         # Should not raise exception
