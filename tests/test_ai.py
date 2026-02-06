@@ -114,14 +114,14 @@ class TestTranscribeAndTranslate(unittest.TestCase):
 
         mock_transcript = Mock()
         mock_transcript.text = "Hello world"
-        mock_client.audio.transcriptions.create.return_value = mock_transcript
+        mock_client.audio.translations.create.return_value = mock_transcript
 
         ai = AI(mock_config)
         result = ai.transcribe_and_translate()
 
         self.assertEqual(result, "Hello world")
         mock_file.assert_called_once_with('/tmp/recording.mp3', 'rb')
-        mock_client.audio.transcriptions.create.assert_called_once()
+        mock_client.audio.translations.create.assert_called_once()
 
     @patch('common.ai.OpenAI')
     @patch('common.ai.setup_error_logging')
@@ -284,7 +284,7 @@ class TestTranscribeAndTranslate(unittest.TestCase):
 
         mock_client = Mock()
         mock_openai_class.return_value = mock_client
-        mock_client.audio.transcriptions.create.side_effect = Exception("API Error")
+        mock_client.audio.translations.create.side_effect = Exception("API Error")
 
         ai = AI(mock_config)
 
@@ -292,7 +292,7 @@ class TestTranscribeAndTranslate(unittest.TestCase):
             ai.transcribe_and_translate()
 
         self.assertIn("API Error", str(context.exception))
-        self.assertEqual(mock_client.audio.transcriptions.create.call_count, 3)
+        self.assertEqual(mock_client.audio.translations.create.call_count, 3)
 
 
 class TestGenerateResponse(unittest.TestCase):
