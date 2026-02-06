@@ -830,6 +830,27 @@ class TestWakeWordModeResponding(unittest.TestCase):
 
     @patch('common.wake_word.os.remove')
     @patch('common.wake_word.os.path.exists')
+    def test_state_responding_handles_playback_error_in_debug_mode(self, mock_exists, mock_remove):
+        """Test that failed files are preserved in debug mode."""
+        self.mock_config.debug = True
+        mock_exists.return_value = True
+
+        # Mock failed audio playback
+        self.mock_audio.play_audio_file.side_effect = Exception("Playback error")
+
+        mode = WakeWordMode(self.mock_config, self.mock_ai, self.mock_audio)
+        mode.tts_files = ["/tmp/tts1.mp3"]
+        mode.recorded_audio_path = "/tmp/recording.wav"
+        mode.state = State.RESPONDING
+
+        mode._state_responding()
+
+        # In debug mode: failed file is preserved, only recording is cleaned up
+        mock_remove.assert_called_once_with("/tmp/recording.wav")
+        self.assertEqual(mode.state, State.IDLE)
+
+    @patch('common.wake_word.os.remove')
+    @patch('common.wake_word.os.path.exists')
     def test_state_responding_without_tts_files(self, mock_exists, mock_remove):
         mock_exists.return_value = True
 
@@ -911,9 +932,11 @@ class TestBargeIn(unittest.TestCase):
         mode.state = State.RESPONDING
         
         mode._state_responding()
-        
-        # Verify thread was created and started
+
+        # Verify thread was created with daemon=True and started
         mock_thread_class.assert_called_once()
+        call_kwargs = mock_thread_class.call_args.kwargs
+        self.assertEqual(call_kwargs.get('daemon'), True)
         mock_thread.start.assert_called_once()
         
     @patch('common.wake_word.threading.Thread')
@@ -974,14 +997,29 @@ class TestBargeIn(unittest.TestCase):
         mock_exists.return_value = False
 
         # Simulate wake word detected after first file plays
-        mock_event = Mock()
-        call_count = [0]
-        def is_set_side_effect():
-            call_count[0] += 1
-            # Set to True after 3 calls (after first file is played, before cleanup check)
-            return call_count[0] > 3
-        mock_event.is_set.side_effect = is_set_side_effect
-        mock_event_class.return_value = mock_event
+        # Create separate mocks for barge_in_event and stop_flag
+        mock_barge_in_event = Mock()
+        mock_stop_flag = Mock()
+
+        # Track which Event() call this is
+        event_call_count = [0]
+        def event_factory():
+            event_call_count[0] += 1
+            if event_call_count[0] == 1:
+                return mock_barge_in_event  # First Event() is barge_in_event
+            else:
+                return mock_stop_flag  # Second Event() is stop_flag
+
+        mock_event_class.side_effect = event_factory
+
+        # Make barge_in_event.is_set() return True after first playback
+        playback_count = [0]
+        def is_set_after_first_playback():
+            # Check if we've played at least one file
+            return playback_count[0] > 0
+
+        mock_barge_in_event.is_set.side_effect = is_set_after_first_playback
+        mock_stop_flag.is_set.return_value = False
 
         mock_thread = Mock()
         mock_thread_class.return_value = mock_thread
@@ -993,8 +1031,12 @@ class TestBargeIn(unittest.TestCase):
         mode.tts_files = ["/tmp/tts1.mp3", "/tmp/tts2.mp3"]
         mode.state = State.RESPONDING
 
-        # Mock play_audio_file to succeed
-        self.mock_audio.play_audio_file.return_value = None
+        # Mock play_audio_file to track playback and simulate barge-in
+        def play_audio_side_effect(file_path, stop_event=None):
+            playback_count[0] += 1
+            return None
+
+        self.mock_audio.play_audio_file.side_effect = play_audio_side_effect
 
         mode._state_responding()
 
@@ -1002,10 +1044,13 @@ class TestBargeIn(unittest.TestCase):
         # (New implementation: interruption happens inside play_audio_file via stop_event)
         self.mock_audio.play_audio_file.assert_called()
         call_args = self.mock_audio.play_audio_file.call_args
-        # Check that stop_event was passed as a keyword argument
+        # Check that a stop_event was passed (not None)
         self.assertIn('stop_event', call_args.kwargs)
+        self.assertIsNotNone(call_args.kwargs['stop_event'])
+        # Verify it's the barge_in_event object
+        self.assertIs(call_args.kwargs['stop_event'], mock_barge_in_event)
 
-        # Should transition to LISTENING
+        # Should transition to LISTENING (barge-in triggered)
         self.assertEqual(mode.state, State.LISTENING)
 
 

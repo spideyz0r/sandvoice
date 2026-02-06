@@ -51,7 +51,6 @@ class WakeWordMode:
         self.running = False
 
         self.porcupine = None
-        self.barge_in_porcupine = None  # Separate instance for barge-in thread
         self.confirmation_beep_path = None
         self.recorded_audio_path = None
         self.response_text = None
@@ -596,6 +595,11 @@ class WakeWordMode:
                 daemon=True
             )
             barge_in_thread.start()
+        elif self.config.barge_in and not self.porcupine:
+            logging.warning(
+                "Barge-in is enabled in configuration, but Porcupine is not initialized. "
+                "Barge-in will be disabled for this response."
+            )
 
         # Play TTS audio if available
         if self.tts_files and len(self.tts_files) > 0:
@@ -603,16 +607,8 @@ class WakeWordMode:
                 if self.config.debug:
                     logging.info(f"Playing {len(self.tts_files)} TTS files")
 
-                # Play files with barge-in check
+                # Play files with barge-in support via stop_event in play_audio_file()
                 for idx, file_path in enumerate(self.tts_files):
-                    # Check for barge-in before playing each file
-                    if self.config.barge_in and self.barge_in_event and self.barge_in_event.is_set():
-                        if self.config.debug:
-                            logging.info("Barge-in detected, stopping TTS playback")
-                        # Clean up remaining files
-                        self._cleanup_remaining_tts_files(self.tts_files[idx:])
-                        break
-
                     # Play the file, passing stop_event for mid-playback interruption
                     try:
                         self.audio.play_audio_file(
@@ -622,8 +618,9 @@ class WakeWordMode:
                     except Exception as e:
                         if self.config.debug:
                             logging.error(f"Audio playback failed for file '{file_path}': {e}")
-                            # In debug mode, preserve the failed file itself for diagnostics
-                            # by only cleaning up unplayed files after it (start at idx + 1).
+                            # In debug mode, preserve the failed file itself for diagnostics.
+                            # The failed file will remain in the temp directory for manual inspection.
+                            # Only clean up unplayed files after it (start at idx + 1).
                             self._cleanup_remaining_tts_files(self.tts_files[idx + 1:])
                         else:
                             print("Audio playback failed. Continuing with text only.")
@@ -636,7 +633,14 @@ class WakeWordMode:
                     if self.config.barge_in and self.barge_in_event and self.barge_in_event.is_set():
                         if self.config.debug:
                             logging.info("Barge-in detected, interrupted during playback")
-                        # Clean up remaining unplayed files
+                        # First, clean up the file we just played successfully
+                        try:
+                            if os.path.exists(file_path):
+                                os.remove(file_path)
+                        except OSError as e:
+                            if self.config.debug:
+                                logging.warning(f"Failed to delete TTS file after barge-in: {e}")
+                        # Then, clean up remaining unplayed files
                         self._cleanup_remaining_tts_files(self.tts_files[idx + 1:])
                         break
                     
@@ -659,9 +663,8 @@ class WakeWordMode:
 
         # Signal barge-in thread to stop and wait for it to finish
         if barge_in_thread:
-            if self.barge_in_stop_flag:
-                self.barge_in_stop_flag.set()
-            barge_in_thread.join(timeout=2.0)  # Increased timeout for reliable cleanup
+            self.barge_in_stop_flag.set()
+            barge_in_thread.join(timeout=1.0)  # Timeout chosen for responsive but reliable cleanup
             if barge_in_thread.is_alive() and self.config.debug:
                 logging.warning("Barge-in thread did not finish within timeout")
 
@@ -685,16 +688,11 @@ class WakeWordMode:
             if self.config.debug:
                 logging.info("Transitioning to LISTENING after barge-in")
 
-            # Play confirmation beep (with file existence check)
-            if self.config.wake_confirmation_beep and self.confirmation_beep_path:
-                if os.path.exists(self.confirmation_beep_path):
-                    try:
-                        self.audio.play_audio_file(self.confirmation_beep_path)
-                    except Exception as e:
-                        if self.config.debug:
-                            logging.warning(f"Failed to play confirmation beep after barge-in: {e}")
-                elif self.config.debug:
-                    logging.warning(f"Confirmation beep file not found: {self.confirmation_beep_path}")
+            # Skip confirmation beep after barge-in to avoid blocking responsiveness
+            if self.config.wake_confirmation_beep and self.config.debug:
+                logging.info(
+                    "Skipping confirmation beep after barge-in to keep wake word detection responsive"
+                )
 
             self.barge_in_event = None
             self.barge_in_stop_flag = None
