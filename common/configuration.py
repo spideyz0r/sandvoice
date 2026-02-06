@@ -93,7 +93,11 @@ class Config:
         self.location = self.get("location")
         self.unit = self.get("unit")
         self.language = self.get("language")
-        self.verbosity = str(self.get("verbosity") or "brief").strip().lower()
+
+        verbosity = self.get("verbosity")
+        if verbosity is None:
+            verbosity = "brief"
+        self.verbosity = str(verbosity).strip().lower()
         self.summary_words = self.get("summary_words")
         self.search_sources = self.get("search_sources")
         self.rss_news = self.get("rss_news")

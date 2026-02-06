@@ -145,6 +145,17 @@ class TestConfigurationValidation(unittest.TestCase):
 
         self.assertIn("verbosity must be 'brief', 'normal', or 'detailed'", str(context.exception))
 
+    def test_invalid_falsy_verbosity_values(self):
+        """Test that explicitly provided falsy verbosity values still fail validation"""
+        for v in ["", "   ", False]:
+            with self.subTest(verbosity=v):
+                self.write_config({"verbosity": v})
+
+                with self.assertRaises(ValueError) as context:
+                    Config()
+
+                self.assertIn("verbosity must be 'brief', 'normal', or 'detailed'", str(context.exception))
+
     def test_empty_location(self):
         """Test that empty location raises error"""
         self.write_config({"location": ""})
