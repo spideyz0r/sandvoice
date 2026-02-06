@@ -12,21 +12,38 @@ def setup_error_logging(config):
     Args:
         config: Configuration object with logging settings
     """
-    if not config.enable_error_logging:
-        return
+    # Set logging level based on debug mode
+    log_level = logging.INFO if config.debug else logging.ERROR
 
-    log_path = os.path.expanduser(config.error_log_path)
-    log_dir = os.path.dirname(log_path)
+    # Configure root logger
+    logger = logging.getLogger()
+    logger.setLevel(log_level)
 
-    # Create log directory if it doesn't exist
-    if log_dir and not os.path.exists(log_dir):
-        os.makedirs(log_dir)
+    # Remove any existing handlers to avoid duplicates
+    logger.handlers = []
 
-    logging.basicConfig(
-        filename=log_path,
-        level=logging.ERROR,
-        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-    )
+    # Always add console handler when debug is enabled
+    if config.debug:
+        console_handler = logging.StreamHandler()
+        console_handler.setLevel(log_level)
+        console_formatter = logging.Formatter('%(levelname)s: %(message)s')
+        console_handler.setFormatter(console_formatter)
+        logger.addHandler(console_handler)
+
+    # Add file handler if error logging is enabled
+    if config.enable_error_logging:
+        log_path = os.path.expanduser(config.error_log_path)
+        log_dir = os.path.dirname(log_path)
+
+        # Create log directory if it doesn't exist
+        if log_dir and not os.path.exists(log_dir):
+            os.makedirs(log_dir)
+
+        file_handler = logging.FileHandler(log_path)
+        file_handler.setLevel(logging.ERROR)
+        file_formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+        file_handler.setFormatter(file_formatter)
+        logger.addHandler(file_handler)
 
 
 def retry_with_backoff(max_attempts=3, initial_delay=1):
