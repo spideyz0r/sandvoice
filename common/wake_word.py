@@ -404,11 +404,53 @@ class WakeWordMode:
                     if self.config.debug:
                         logging.warning(f"Failed to terminate PyAudio: {e}")
 
+    def _start_barge_in_detection(self):
+        """Start barge-in detection thread.
+
+        Returns:
+            threading.Thread or None: The barge-in thread if started, None otherwise
+        """
+        if not self.config.barge_in or not self.porcupine:
+            if self.config.barge_in and not self.porcupine:
+                if self.config.debug:
+                    logging.warning(
+                        "Barge-in is enabled in configuration, but Porcupine is not initialized. "
+                        "Barge-in will be disabled."
+                    )
+            return None
+
+        self.barge_in_event = threading.Event()
+        self.barge_in_stop_flag = threading.Event()
+        barge_in_thread = threading.Thread(
+            target=self._listen_for_barge_in,
+            args=(self.barge_in_event, self.barge_in_stop_flag),
+            daemon=True
+        )
+        barge_in_thread.start()
+
+        if self.config.debug:
+            logging.info("Barge-in detection started")
+
+        return barge_in_thread
+
+    def _check_barge_in_interrupt(self):
+        """Check if barge-in was triggered.
+
+        Returns:
+            bool: True if barge-in detected, False otherwise
+        """
+        if self.config.barge_in and self.barge_in_event and self.barge_in_event.is_set():
+            if self.config.debug:
+                logging.info("Barge-in interrupt detected")
+            return True
+        return False
+
     def _state_processing(self):
         """PROCESSING state: Transcribe audio and generate response.
 
         Uses existing AI methods for transcription, routing, and response.
-        Transitions to RESPONDING.
+        Supports barge-in: can be interrupted at any step by wake word detection.
+        Transitions to RESPONDING or LISTENING (if interrupted).
         """
         if self.config.visual_state_indicator:
             print("🤔 Processing...")
@@ -417,12 +459,19 @@ class WakeWordMode:
         self.response_text = None
         self.tts_files = None
 
+        # Start barge-in detection thread (will run through PROCESSING and RESPONDING)
+        barge_in_thread = self._start_barge_in_detection()
+
         # Check if we have a recorded audio file
         if not self.recorded_audio_path or not os.path.exists(self.recorded_audio_path):
             if self.config.debug:
                 logging.warning("No recorded audio file found, returning to IDLE")
             # Clear any stale recorded audio path to avoid repeated processing attempts
             self.recorded_audio_path = None
+            # Stop barge-in thread before returning
+            if barge_in_thread:
+                self.barge_in_stop_flag.set()
+                barge_in_thread.join(timeout=1.0)
             self.state = State.IDLE
             return
 
@@ -432,6 +481,22 @@ class WakeWordMode:
                 logging.info(f"Transcribing audio from: {self.recorded_audio_path}")
 
             user_input = self.ai.transcribe_and_translate(audio_file_path=self.recorded_audio_path)
+
+            # Check for barge-in after transcription
+            if self._check_barge_in_interrupt():
+                if self.config.debug:
+                    logging.info("Barge-in during transcription, skipping to LISTENING")
+                # Clean up recorded audio
+                if os.path.exists(self.recorded_audio_path):
+                    os.remove(self.recorded_audio_path)
+                self.recorded_audio_path = None
+                # Stop barge-in thread before transitioning
+                if barge_in_thread:
+                    self.barge_in_stop_flag.set()
+                    barge_in_thread.join(timeout=1.0)
+                # Skip confirmation beep and go directly to listening
+                self.state = State.LISTENING
+                return
 
             if self.config.debug:
                 logging.info(f"Transcription: {user_input}")
@@ -448,6 +513,23 @@ class WakeWordMode:
                 response = self.ai.generate_response(user_input)
                 self.response_text = response.content if hasattr(response, 'content') else str(response)
 
+            # Check for barge-in after response generation
+            if self._check_barge_in_interrupt():
+                if self.config.debug:
+                    logging.info("Barge-in during response generation, skipping to LISTENING")
+                # Clean up recorded audio
+                if os.path.exists(self.recorded_audio_path):
+                    os.remove(self.recorded_audio_path)
+                self.recorded_audio_path = None
+                self.response_text = None
+                # Stop barge-in thread before transitioning
+                if barge_in_thread:
+                    self.barge_in_stop_flag.set()
+                    barge_in_thread.join(timeout=1.0)
+                # Skip confirmation beep and go directly to listening
+                self.state = State.LISTENING
+                return
+
             if self.config.debug:
                 logging.info(f"Response: {self.response_text}")
 
@@ -456,13 +538,34 @@ class WakeWordMode:
             # Generate TTS if bot_voice is enabled
             if self.config.bot_voice:
                 self.tts_files = self.ai.text_to_speech(self.response_text)
+
+                # Check for barge-in after TTS generation
+                if self._check_barge_in_interrupt():
+                    if self.config.debug:
+                        logging.info("Barge-in during TTS generation, skipping to LISTENING")
+                    # Clean up recorded audio and TTS files
+                    if os.path.exists(self.recorded_audio_path):
+                        os.remove(self.recorded_audio_path)
+                    self.recorded_audio_path = None
+                    if self.tts_files:
+                        self._cleanup_remaining_tts_files(self.tts_files)
+                    self.tts_files = None
+                    self.response_text = None
+                    # Stop barge-in thread before transitioning
+                    if barge_in_thread:
+                        self.barge_in_stop_flag.set()
+                        barge_in_thread.join(timeout=1.0)
+                    # Skip confirmation beep and go directly to listening
+                    self.state = State.LISTENING
+                    return
+
                 if self.config.debug:
                     if self.tts_files:
                         logging.info(f"Generated {len(self.tts_files)} TTS files")
                     else:
                         logging.warning("No TTS files generated")
 
-            # Transition to RESPONDING state
+            # Transition to RESPONDING state (barge-in thread continues running)
             self.state = State.RESPONDING
 
         except Exception as e:
@@ -480,6 +583,15 @@ class WakeWordMode:
                 except Exception as cleanup_error:
                     if self.config.debug:
                         logging.warning(f"Failed to clean up recording file after error: {cleanup_error}")
+
+            # Stop barge-in thread if it was started
+            if barge_in_thread:
+                try:
+                    self.barge_in_stop_flag.set()
+                    barge_in_thread.join(timeout=1.0)
+                except Exception as thread_error:
+                    if self.config.debug:
+                        logging.warning(f"Failed to stop barge-in thread: {thread_error}")
 
             # Reset state
             self.recorded_audio_path = None
@@ -579,27 +691,36 @@ class WakeWordMode:
 
         Plays TTS files one by one using play_audio_file().
         Supports barge-in if enabled: interrupts TTS mid-playback when wake word detected.
+        Barge-in thread may already be running from PROCESSING state.
         Transitions back to IDLE or LISTENING (if barge-in).
         """
         if self.config.visual_state_indicator:
             print("🔊 Responding...")
 
-        # Start barge-in detection thread if enabled
+        # Check if barge-in thread is already running from PROCESSING state
+        # If barge_in_event exists and hasn't been set, the thread is still active
         barge_in_thread = None
-        if self.config.barge_in and self.porcupine:
-            self.barge_in_event = threading.Event()
-            self.barge_in_stop_flag = threading.Event()
-            barge_in_thread = threading.Thread(
-                target=self._listen_for_barge_in,
-                args=(self.barge_in_event, self.barge_in_stop_flag),
-                daemon=True
-            )
-            barge_in_thread.start()
-        elif self.config.barge_in and not self.porcupine:
-            logging.warning(
-                "Barge-in is enabled in configuration, but Porcupine is not initialized. "
-                "Barge-in will be disabled for this response."
-            )
+        thread_already_running = (
+            hasattr(self, 'barge_in_event') and
+            self.barge_in_event is not None and
+            not self.barge_in_event.is_set()
+        )
+
+        # Start barge-in detection thread if not already running
+        if not thread_already_running:
+            if self.config.barge_in and self.porcupine:
+                barge_in_thread = self._start_barge_in_detection()
+            elif self.config.barge_in and not self.porcupine:
+                if self.config.debug:
+                    logging.warning(
+                        "Barge-in is enabled in configuration, but Porcupine is not initialized. "
+                        "Barge-in will be disabled for this response."
+                    )
+        else:
+            if self.config.debug:
+                logging.info("Barge-in thread already running from PROCESSING, reusing it")
+            # Thread is already running, we'll clean it up later
+            barge_in_thread = True  # Placeholder to indicate thread needs cleanup
 
         # Play TTS audio if available
         if self.tts_files and len(self.tts_files) > 0:
