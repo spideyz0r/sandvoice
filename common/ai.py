@@ -140,17 +140,24 @@ class AI:
             if not source_text.strip():
                 return ""
 
-            completion = self.openai_client.chat.completions.create(
-                model=translate_model,
-                messages=[
-                    {
-                        "role": "system",
-                        "content": "Translate the user's text to English. Return only the translated text.",
-                    },
-                    {"role": "user", "content": source_text},
-                ],
-            )
-            return (completion.choices[0].message.content or "").strip()
+            try:
+                completion = self.openai_client.chat.completions.create(
+                    model=translate_model,
+                    messages=[
+                        {
+                            "role": "system",
+                            "content": "Translate the user's text to English. Return only the translated text.",
+                        },
+                        {"role": "user", "content": source_text},
+                    ],
+                )
+                return (completion.choices[0].message.content or "").strip()
+            except Exception as e:
+                error_msg = handle_api_error(e, service_name="OpenAI Chat Completions")
+                if self.config.debug:
+                    logging.error(f"Translation error (chat completions): {e}")
+                print(error_msg)
+                raise
         except FileNotFoundError as e:
             error_msg = handle_file_error(e, operation="read", filename=os.path.basename(file_path))
             if self.config.debug:
