@@ -32,17 +32,20 @@ class WakeWordMode:
     Returns to IDLE after each cycle.
     """
 
-    def __init__(self, config, ai_instance, audio_instance):
+    def __init__(self, config, ai_instance, audio_instance, route_message = None):
         """Initialize wake word mode.
 
         Args:
             config: Configuration object with wake word settings
             ai_instance: AI instance for transcription and responses
             audio_instance: Audio instance for playback
+            route_message: Optional callback to route messages through SandVoice plugins.
+                Signature: route_message(user_input: str, route: dict) -> str
         """
         self.config = config
         self.ai = ai_instance
         self.audio = audio_instance
+        self.route_message = route_message
         self.state = State.IDLE
         self.running = False
 
@@ -415,9 +418,15 @@ class WakeWordMode:
 
             print(f"You: {user_input}")
 
-            # Generate response using AI
-            response = self.ai.generate_response(user_input)
-            self.response_text = response.content if hasattr(response, 'content') else str(response)
+            # Generate response (prefer plugin routing when available)
+            if self.route_message is not None:
+                route = self.ai.define_route(user_input)
+                if self.config.debug:
+                    logging.info(f"Route: {route}")
+                self.response_text = self.route_message(user_input, route)
+            else:
+                response = self.ai.generate_response(user_input)
+                self.response_text = response.content if hasattr(response, 'content') else str(response)
 
             if self.config.debug:
                 logging.info(f"Response: {self.response_text}")

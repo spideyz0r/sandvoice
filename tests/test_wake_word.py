@@ -676,6 +676,30 @@ class TestWakeWordModeProcessing(unittest.TestCase):
         self.assertEqual(mode.tts_files, ["/tmp/tts1.mp3", "/tmp/tts2.mp3"])
 
     @patch('common.wake_word.os.path.exists')
+    def test_state_processing_uses_routing_callback_when_provided(self, mock_exists):
+        mock_exists.return_value = True
+
+        self.mock_ai.transcribe_and_translate.return_value = "What's the weather?"
+        self.mock_ai.define_route.return_value = {"route": "weather", "reason": "weather"}
+        self.mock_ai.text_to_speech.return_value = ["/tmp/tts1.mp3"]
+
+        route_message = Mock(return_value="It's sunny today!")
+
+        mode = WakeWordMode(self.mock_config, self.mock_ai, self.mock_audio, route_message=route_message)
+        mode.recorded_audio_path = "/tmp/recording.wav"
+        mode.state = State.PROCESSING
+
+        mode._state_processing()
+
+        self.mock_ai.transcribe_and_translate.assert_called_once_with(audio_file_path="/tmp/recording.wav")
+        self.mock_ai.define_route.assert_called_once_with("What's the weather?")
+        route_message.assert_called_once()
+        self.mock_ai.generate_response.assert_not_called()
+        self.mock_ai.text_to_speech.assert_called_once_with("It's sunny today!")
+        self.assertEqual(mode.response_text, "It's sunny today!")
+        self.assertEqual(mode.state, State.RESPONDING)
+
+    @patch('common.wake_word.os.path.exists')
     def test_state_processing_without_bot_voice(self, mock_exists):
         mock_exists.return_value = True
         self.mock_config.bot_voice = False
