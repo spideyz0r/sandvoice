@@ -639,8 +639,14 @@ class WakeWordMode:
 
         try:
             # Create dedicated Porcupine instance for this thread (thread-safety)
+            if self.config.debug:
+                logging.info("Barge-in thread: Creating Porcupine instance...")
             porcupine_instance = self._create_porcupine_instance()
+            if self.config.debug:
+                logging.info("Barge-in thread: Porcupine created successfully")
 
+            if self.config.debug:
+                logging.info("Barge-in thread: Opening PyAudio stream...")
             pa = pyaudio.PyAudio()
             audio_stream = pa.open(
                 rate=porcupine_instance.sample_rate,
@@ -651,24 +657,30 @@ class WakeWordMode:
             )
 
             if self.config.debug:
-                logging.info("Barge-in detection thread started")
+                logging.info("Barge-in thread: Audio stream opened, listening for wake word...")
 
+            frame_count = 0
             while self.running and not barge_in_event.is_set() and not stop_flag.is_set():
                 try:
                     pcm = audio_stream.read(porcupine_instance.frame_length, exception_on_overflow=False)
                     pcm = struct.unpack_from("h" * porcupine_instance.frame_length, pcm)
 
                     keyword_index = porcupine_instance.process(pcm)
+                    frame_count += 1
+
+                    # Log every ~3 seconds to show thread is alive (at 16kHz with 512 frame length = ~31 frames/sec)
+                    if self.config.debug and frame_count % 100 == 0:
+                        logging.info(f"Barge-in thread: Still listening... (processed {frame_count} frames)")
 
                     if keyword_index >= 0:
                         if self.config.debug:
-                            logging.info(f"Barge-in: Wake word detected during TTS")
+                            logging.info(f"Barge-in: Wake word detected! Interrupting...")
                         barge_in_event.set()
                         break
 
                 except Exception as e:
                     if self.config.debug:
-                        logging.warning(f"Error in barge-in detection: {e}")
+                        logging.warning(f"Barge-in thread error reading audio: {e}")
                     break
 
         except Exception as e:
