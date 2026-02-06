@@ -78,6 +78,10 @@ plan/
 **Document**: [backlog/09-barge-in-stop-tts-on-wake-word.md](./backlog/09-barge-in-stop-tts-on-wake-word.md)
 **Description**: Allow users to interrupt SandVoice speech by saying the wake word, stopping TTS immediately and transitioning into command listening.
 
+### Priority 10: Speech-to-Text Task and Language
+**Document**: [backlog/10-speech-to-text-task-and-language.md](./backlog/10-speech-to-text-task-and-language.md)
+**Description**: Make Whisper behavior configurable (transcribe vs translate) and allow explicit language hints for better accuracy.
+
 ### Future Enhancements
 **Document**: [backlog/FUTURE.md](./backlog/FUTURE.md)
 **Description**: Long-term feature ideas including:

@@ -27,6 +27,18 @@ class Config:
             "gpt_route_model" : "gpt-3.5-turbo",
             "gpt_response_model" : "gpt-3.5-turbo",
             "speech_to_text_model" : "whisper-1",
+            # Speech-to-text behavior
+            # - translate: translate speech to English (Whisper translations endpoint)
+            # - transcribe: keep original language (Whisper transcriptions endpoint)
+            "speech_to_text_task": "translate",
+            # Optional ISO-639-1 language hint used for transcriptions and for the GPT transcribe-then-translate flow (e.g. "pt", "en").
+            "speech_to_text_language": "",
+            # Translation provider used when speech_to_text_task=translate
+            # - whisper: Whisper translations endpoint (single call, auto-detect source language)
+            # - gpt: transcribe (optionally with language hint) then translate via GPT
+            "speech_to_text_translate_provider": "whisper",
+            # Model used when speech_to_text_translate_provider=gpt
+            "speech_to_text_translate_model": "gpt-5-mini",
             "text_to_speech_model" : "tts-1",
             "bot_voice_model" : "nova",
             "cli_input": "disabled",
@@ -91,6 +103,12 @@ class Config:
         self.gpt_route_model = self.get("gpt_route_model")
         self.gpt_response_model = self.get("gpt_response_model")
         self.speech_to_text_model = self.get("speech_to_text_model")
+        self.speech_to_text_task = str(self.get("speech_to_text_task") or "translate").strip().lower()
+        self.speech_to_text_language = str(self.get("speech_to_text_language") or "").strip().lower()
+        self.speech_to_text_translate_provider = str(
+            self.get("speech_to_text_translate_provider") or "whisper"
+        ).strip().lower()
+        self.speech_to_text_translate_model = self.get("speech_to_text_translate_model")
         self.text_to_speech_model = self.get("text_to_speech_model")
         self.bot_voice_model = self.get("bot_voice_model")
         self.cli_input = self.get("cli_input").lower() == "enabled"
@@ -175,6 +193,18 @@ class Config:
 
         if not self.location or not isinstance(self.location, str):
             errors.append("location must be a non-empty string")
+
+        if self.speech_to_text_task not in ["translate", "transcribe"]:
+            errors.append("speech_to_text_task must be 'translate' or 'transcribe'")
+
+        if not isinstance(self.speech_to_text_language, str):
+            errors.append("speech_to_text_language must be a string")
+
+        if self.speech_to_text_translate_provider not in ["whisper", "gpt"]:
+            errors.append("speech_to_text_translate_provider must be 'whisper' or 'gpt'")
+
+        if not self.speech_to_text_translate_model or not isinstance(self.speech_to_text_translate_model, str):
+            errors.append("speech_to_text_translate_model must be a non-empty string")
 
         # Validate unit
         if self.unit not in ["metric", "imperial"]:
