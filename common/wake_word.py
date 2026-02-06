@@ -490,10 +490,13 @@ class WakeWordMode:
                 if os.path.exists(self.recorded_audio_path):
                     os.remove(self.recorded_audio_path)
                 self.recorded_audio_path = None
-                # Stop barge-in thread before transitioning
+                # Stop barge-in thread and clear event before transitioning
                 if barge_in_thread:
                     self.barge_in_stop_flag.set()
                     barge_in_thread.join(timeout=1.0)
+                # Clear barge-in event for next cycle
+                self.barge_in_event = None
+                self.barge_in_stop_flag = None
                 # Skip confirmation beep and go directly to listening
                 self.state = State.LISTENING
                 return
@@ -522,10 +525,13 @@ class WakeWordMode:
                     os.remove(self.recorded_audio_path)
                 self.recorded_audio_path = None
                 self.response_text = None
-                # Stop barge-in thread before transitioning
+                # Stop barge-in thread and clear event before transitioning
                 if barge_in_thread:
                     self.barge_in_stop_flag.set()
                     barge_in_thread.join(timeout=1.0)
+                # Clear barge-in event for next cycle
+                self.barge_in_event = None
+                self.barge_in_stop_flag = None
                 # Skip confirmation beep and go directly to listening
                 self.state = State.LISTENING
                 return
@@ -551,10 +557,13 @@ class WakeWordMode:
                         self._cleanup_remaining_tts_files(self.tts_files)
                     self.tts_files = None
                     self.response_text = None
-                    # Stop barge-in thread before transitioning
+                    # Stop barge-in thread and clear event before transitioning
                     if barge_in_thread:
                         self.barge_in_stop_flag.set()
                         barge_in_thread.join(timeout=1.0)
+                    # Clear barge-in event for next cycle
+                    self.barge_in_event = None
+                    self.barge_in_stop_flag = None
                     # Skip confirmation beep and go directly to listening
                     self.state = State.LISTENING
                     return
@@ -698,18 +707,18 @@ class WakeWordMode:
             print("🔊 Responding...")
 
         # Check if barge-in thread is already running from PROCESSING state
-        # If barge_in_event exists and hasn't been set, the thread is still active
-        barge_in_thread = None
+        # If barge_in_event exists and stop_flag exists, the thread is still active
         thread_already_running = (
             hasattr(self, 'barge_in_event') and
             self.barge_in_event is not None and
-            not self.barge_in_event.is_set()
+            hasattr(self, 'barge_in_stop_flag') and
+            self.barge_in_stop_flag is not None
         )
 
         # Start barge-in detection thread if not already running
         if not thread_already_running:
             if self.config.barge_in and self.porcupine:
-                barge_in_thread = self._start_barge_in_detection()
+                self._start_barge_in_detection()
             elif self.config.barge_in and not self.porcupine:
                 if self.config.debug:
                     logging.warning(
@@ -719,8 +728,6 @@ class WakeWordMode:
         else:
             if self.config.debug:
                 logging.info("Barge-in thread already running from PROCESSING, reusing it")
-            # Thread is already running, we'll clean it up later
-            barge_in_thread = True  # Placeholder to indicate thread needs cleanup
 
         # Play TTS audio if available
         if self.tts_files and len(self.tts_files) > 0:
@@ -783,11 +790,10 @@ class WakeWordMode:
                 logging.info("No TTS files to play (bot_voice disabled or TTS generation failed)")
 
         # Signal barge-in thread to stop and wait for it to finish
-        if barge_in_thread:
+        if hasattr(self, 'barge_in_stop_flag') and self.barge_in_stop_flag is not None:
             self.barge_in_stop_flag.set()
-            barge_in_thread.join(timeout=1.0)  # Timeout chosen for responsive but reliable cleanup
-            if barge_in_thread.is_alive() and self.config.debug:
-                logging.warning("Barge-in thread did not finish within timeout")
+            if self.config.debug:
+                logging.info("Signaled barge-in thread to stop")
 
         # Clean up temporary recorded audio file
         if self.recorded_audio_path and os.path.exists(self.recorded_audio_path):
