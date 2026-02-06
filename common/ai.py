@@ -111,53 +111,12 @@ class AI:
         file_path = audio_file_path if audio_file_path else (self.config.tmp_recording + ".mp3")
 
         try:
-            task = getattr(self.config, 'speech_to_text_task', 'translate')
-            language_hint = getattr(self.config, 'speech_to_text_language', '')
-            translate_provider = getattr(self.config, 'speech_to_text_translate_provider', 'whisper')
-            translate_model = getattr(self.config, 'speech_to_text_translate_model', 'gpt-5-mini')
-
             with open(file_path, "rb") as file:
-                if task == 'transcribe':
-                    kwargs = {"model": model, "file": file}
-                    if language_hint:
-                        kwargs["language"] = language_hint
-                    transcript = self.openai_client.audio.transcriptions.create(**kwargs)
-                    return transcript.text
-
-                if translate_provider == 'whisper':
-                    transcript = self.openai_client.audio.translations.create(
-                        model = model,
-                        file = file
-                    )
-                    return transcript.text
-
-                kwargs = {"model": model, "file": file}
-                if language_hint:
-                    kwargs["language"] = language_hint
-                transcript = self.openai_client.audio.transcriptions.create(**kwargs)
-
-            source_text = transcript.text or ""
-            if not source_text.strip():
-                return ""
-
-            try:
-                completion = self.openai_client.chat.completions.create(
-                    model=translate_model,
-                    messages=[
-                        {
-                            "role": "system",
-                            "content": "Translate the user's text to English. Return only the translated text.",
-                        },
-                        {"role": "user", "content": source_text},
-                    ],
+                transcript = self.openai_client.audio.transcriptions.create(
+                    model = model,
+                    file = file
                 )
-                return (completion.choices[0].message.content or "").strip()
-            except Exception as e:
-                error_msg = handle_api_error(e, service_name="OpenAI Chat Completions")
-                if self.config.debug:
-                    logging.error(f"Translation error (chat completions): {e}")
-                print(error_msg)
-                raise
+            return transcript.text
         except FileNotFoundError as e:
             error_msg = handle_file_error(e, operation="read", filename=os.path.basename(file_path))
             if self.config.debug:
