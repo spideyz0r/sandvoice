@@ -26,7 +26,10 @@ def setup_error_logging(config):
     if config.debug:
         console_handler = logging.StreamHandler()
         console_handler.setLevel(log_level)
-        console_formatter = logging.Formatter('%(levelname)s: %(message)s')
+        console_formatter = logging.Formatter(
+            '%(asctime)s.%(msecs)03d %(levelname)s: %(message)s',
+            datefmt='%H:%M:%S'
+        )
         console_handler.setFormatter(console_formatter)
         logger.addHandler(console_handler)
 

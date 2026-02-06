@@ -472,13 +472,13 @@ class WakeWordMode:
         thread = threading.Thread(target=run_in_background, daemon=True)
         thread.start()
 
-        # Poll every 100ms for completion or barge-in
+        # Poll every 50ms for completion or barge-in (faster response)
         while thread.is_alive():
             if self._check_barge_in_interrupt():
                 if self.config.debug:
                     logging.info(f"Barge-in during {operation_name} - responding immediately!")
                 return False, None
-            time.sleep(0.1)
+            time.sleep(0.05)
 
         # Operation completed - check for errors
         if error_holder[0] is not None:
@@ -495,10 +495,10 @@ class WakeWordMode:
         if self.config.debug:
             logging.info("Handling immediate barge-in response")
 
-        # Stop the barge-in detection thread
+        # Signal barge-in thread to stop (don't wait - it's a daemon thread)
         if barge_in_thread and self.barge_in_stop_flag:
             self.barge_in_stop_flag.set()
-            barge_in_thread.join(timeout=1.0)
+            # Don't join - let daemon thread clean up on its own for faster response
 
         # Clean up events
         self.barge_in_event = None
@@ -731,10 +731,6 @@ class WakeWordMode:
 
                     keyword_index = porcupine_instance.process(pcm)
                     frame_count += 1
-
-                    # Log every ~3 seconds to show thread is alive (at 16kHz with 512 frame length = ~31 frames/sec)
-                    if self.config.debug and frame_count % 100 == 0:
-                        logging.info(f"Barge-in thread: Still listening... (processed {frame_count} frames)")
 
                     if keyword_index >= 0:
                         if self.config.debug:
