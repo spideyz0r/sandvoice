@@ -95,6 +95,7 @@ timezone: EST
 location: Toronto, ON, CA
 unit: metric
 language: English
+verbosity: brief
 debug: disabled
 summary_words: 100
 search_sources: 4
@@ -157,6 +158,7 @@ All configuration keys are loaded from `common/configuration.py` defaults and ca
 - `location`: user location string (used in system prompt and routing defaults)
 - `unit`: `metric` or `imperial` (used by weather routing/plugin)
 - `language`: language string for assistant replies (used in system prompt)
+- `verbosity`: `brief`, `normal`, or `detailed` (controls default response length)
 - `debug`: `enabled`/`disabled` (prints extra information and logs more details)
 - `summary_words`: target word count for summaries (used by some plugins)
 - `search_sources`: number of sources to use for search-like plugins (plugin-dependent)

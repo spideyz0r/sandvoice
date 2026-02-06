@@ -123,6 +123,28 @@ class TestConfigurationValidation(unittest.TestCase):
 
         self.assertIn("language must be a non-empty string", str(context.exception))
 
+    def test_default_verbosity_is_brief(self):
+        """Test that verbosity defaults to brief"""
+        config = Config()
+        self.assertEqual(config.verbosity, "brief")
+
+    def test_valid_verbosity_values(self):
+        """Test that supported verbosity values are accepted"""
+        for v in ["brief", "normal", "detailed", "BRIEF", " Normal "]:
+            with self.subTest(verbosity=v):
+                self.write_config({"verbosity": v})
+                config = Config()
+                self.assertIn(config.verbosity, ["brief", "normal", "detailed"])
+
+    def test_invalid_verbosity_value(self):
+        """Test that invalid verbosity raises error"""
+        self.write_config({"verbosity": "verbose"})
+
+        with self.assertRaises(ValueError) as context:
+            Config()
+
+        self.assertIn("verbosity must be 'brief', 'normal', or 'detailed'", str(context.exception))
+
     def test_empty_location(self):
         """Test that empty location raises error"""
         self.write_config({"location": ""})
