@@ -121,6 +121,74 @@ class TestTranscribeAndTranslate(unittest.TestCase):
 
     @patch('common.ai.OpenAI')
     @patch('common.ai.setup_error_logging')
+    @patch('builtins.open', new_callable=mock_open, read_data=b'fake audio data')
+    def test_transcribe_task_transcribe_with_language_hint(self, mock_file, mock_setup, mock_openai_class):
+        """Test transcribe task keeps original language"""
+        mock_config = Mock()
+        mock_config.api_timeout = 10
+        mock_config.api_retry_attempts = 3
+        mock_config.speech_to_text_model = 'whisper-1'
+        mock_config.speech_to_text_task = 'transcribe'
+        mock_config.speech_to_text_language = 'pt'
+        mock_config.tmp_recording = '/tmp/recording'
+        mock_config.debug = False
+
+        mock_client = Mock()
+        mock_openai_class.return_value = mock_client
+
+        mock_transcript = Mock()
+        mock_transcript.text = "O que e uma lombriga?"
+        mock_client.audio.transcriptions.create.return_value = mock_transcript
+
+        ai = AI(mock_config)
+        result = ai.transcribe_and_translate()
+
+        self.assertEqual(result, "O que e uma lombriga?")
+        mock_file.assert_called_once_with('/tmp/recording.mp3', 'rb')
+        mock_client.audio.transcriptions.create.assert_called_once()
+        _args, kwargs = mock_client.audio.transcriptions.create.call_args
+        self.assertEqual(kwargs.get('language'), 'pt')
+
+    @patch('common.ai.OpenAI')
+    @patch('common.ai.setup_error_logging')
+    @patch('builtins.open', new_callable=mock_open, read_data=b'fake audio data')
+    def test_translate_provider_gpt_transcribe_then_translate(self, mock_file, mock_setup, mock_openai_class):
+        """Test translate via GPT uses transcribe then chat translate"""
+        mock_config = Mock()
+        mock_config.api_timeout = 10
+        mock_config.api_retry_attempts = 3
+        mock_config.speech_to_text_model = 'whisper-1'
+        mock_config.speech_to_text_task = 'translate'
+        mock_config.speech_to_text_language = 'pt'
+        mock_config.speech_to_text_translate_provider = 'gpt'
+        mock_config.speech_to_text_translate_model = 'gpt-5-mini'
+        mock_config.tmp_recording = '/tmp/recording'
+        mock_config.debug = False
+
+        mock_client = Mock()
+        mock_openai_class.return_value = mock_client
+
+        mock_transcript = Mock()
+        mock_transcript.text = "O que e uma lombriga?"
+        mock_client.audio.transcriptions.create.return_value = mock_transcript
+
+        mock_message = Mock()
+        mock_message.content = "What is a worm?"
+        mock_completion = Mock()
+        mock_completion.choices = [Mock(message=mock_message)]
+        mock_client.chat.completions.create.return_value = mock_completion
+
+        ai = AI(mock_config)
+        result = ai.transcribe_and_translate()
+
+        self.assertEqual(result, "What is a worm?")
+        mock_file.assert_called_once_with('/tmp/recording.mp3', 'rb')
+        mock_client.audio.transcriptions.create.assert_called_once()
+        mock_client.chat.completions.create.assert_called_once()
+        mock_client.audio.translations.create.assert_not_called()
+
+    @patch('common.ai.OpenAI')
+    @patch('common.ai.setup_error_logging')
     def test_transcribe_file_not_found(self, mock_setup, mock_openai_class):
         """Test transcription with missing file"""
         mock_config = Mock()

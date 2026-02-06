@@ -108,6 +108,10 @@ gpt_route_model: gpt-3.5-turbo
 gpt_response_model: gpt-3.5-turbo
 
 speech_to_text_model: whisper-1
+speech_to_text_task: translate
+speech_to_text_language: ""
+speech_to_text_translate_provider: whisper
+speech_to_text_translate_model: gpt-5-mini
 text_to_speech_model: tts-1
 bot_voice_model: nova
 
@@ -164,7 +168,11 @@ All configuration keys are loaded from `common/configuration.py` defaults and ca
 - `gpt_summary_model`: model used for summarization (`AI.text_summary()`)
 - `gpt_route_model`: model used for routing (`AI.define_route()`)
 - `gpt_response_model`: model used for normal responses (`AI.generate_response()`)
-- `speech_to_text_model`: model used for speech-to-text/translation (Whisper)
+- `speech_to_text_model`: model used for speech-to-text
+- `speech_to_text_task`: `translate` or `transcribe` (translate outputs English; transcribe keeps the spoken language)
+- `speech_to_text_language`: optional ISO-639-1 hint for transcription (e.g. `pt`, `en`); empty means auto-detect
+- `speech_to_text_translate_provider`: when task is `translate`, choose `whisper` or `gpt` (gpt does transcribe then translate)
+- `speech_to_text_translate_model`: model used when translate provider is `gpt`
 - `text_to_speech_model`: model used for TTS generation
 - `bot_voice_model`: voice name for TTS (e.g. `nova`)
 

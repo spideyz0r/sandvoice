@@ -112,11 +112,46 @@ class AI:
 
         try:
             with open(file_path, "rb") as file:
+                task = getattr(self.config, 'speech_to_text_task', 'translate')
+                language_hint = getattr(self.config, 'speech_to_text_language', '')
+                translate_provider = getattr(self.config, 'speech_to_text_translate_provider', 'whisper')
+                translate_model = getattr(self.config, 'speech_to_text_translate_model', 'gpt-5-mini')
+
+                if task == 'transcribe':
+                    kwargs = {"model": model, "file": file}
+                    if language_hint:
+                        kwargs["language"] = language_hint
+                    transcript = self.openai_client.audio.transcriptions.create(**kwargs)
+                    return transcript.text
+
+                # translate
+                if translate_provider == 'gpt':
+                    kwargs = {"model": model, "file": file}
+                    if language_hint:
+                        kwargs["language"] = language_hint
+                    transcript = self.openai_client.audio.transcriptions.create(**kwargs)
+
+                    source_text = transcript.text or ""
+                    if not source_text.strip():
+                        return ""
+
+                    completion = self.openai_client.chat.completions.create(
+                        model=translate_model,
+                        messages=[
+                            {
+                                "role": "system",
+                                "content": "Translate the user's text to English. Return only the translated text.",
+                            },
+                            {"role": "user", "content": source_text},
+                        ],
+                    )
+                    return (completion.choices[0].message.content or "").strip()
+
                 transcript = self.openai_client.audio.translations.create(
                     model = model,
                     file = file
                 )
-            return transcript.text
+                return transcript.text
         except FileNotFoundError as e:
             error_msg = handle_file_error(e, operation="read", filename=os.path.basename(file_path))
             if self.config.debug:
