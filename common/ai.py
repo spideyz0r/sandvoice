@@ -183,18 +183,38 @@ class AI:
                 self.conversation_history.append(user_message)
 
             now = datetime.datetime.now()
+
+            verbosity = getattr(self.config, "verbosity", "brief")
+            if verbosity == "detailed":
+                verbosity_instruction = (
+                    "Verbosity: detailed. Provide thorough, structured answers by default. "
+                    "Include steps/examples when helpful. If the user asks for a short answer, comply."
+                )
+            elif verbosity == "normal":
+                verbosity_instruction = (
+                    "Verbosity: normal. Be concise but complete. "
+                    "Expand when the user explicitly asks for more detail."
+                )
+            else:
+                verbosity_instruction = (
+                    "Verbosity: brief. Keep answers short by default (1-3 sentences). "
+                    "Avoid long lists and excessive detail unless the user explicitly asks to expand, "
+                    "asks for details, or says they want a longer answer."
+                )
+
             system_role = f"""
             Your name is {self.config.botname}.
-            Your are an assisten written in Python by Breno Brand.
-            You Answer must be in {self.config.language}.
+            You are an assistant written in Python by Breno Brand.
+            You must answer in {self.config.language}.
             The person that is talking to you is in the {self.config.timezone} time zone.
             The person that is talking to you is located in {self.config.location}.
             Current date and time to be considered when answering the message: {now}.
             Never answer as a chat, for example reading your name in a conversation.
             DO NOT reply to messages with the format "{self.config.botname}": <message here>.
             Reply in a natural and human way.
+            {verbosity_instruction}
             """
-            if extra_info != None:
+            if extra_info is not None:
                 system_role = system_role + "Consider the following to answer your question: " + extra_info
             if self.config.debug:
                 print (f"System role: {system_role}")

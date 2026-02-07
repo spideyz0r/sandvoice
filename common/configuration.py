@@ -16,6 +16,11 @@ class Config:
             "location": "Toronto, ON, CA",
             "unit": "metric",
             "language": "English",
+            # Assistant response verbosity.
+            # - brief: concise answers by default; expand on explicit user request
+            # - normal: balanced detail
+            # - detailed: more thorough, structured answers
+            "verbosity": "brief",
             "debug": "disabled",
             "summary_words": "100",
             "search_sources": "4",
@@ -88,6 +93,11 @@ class Config:
         self.location = self.get("location")
         self.unit = self.get("unit")
         self.language = self.get("language")
+
+        verbosity = self.get("verbosity")
+        if verbosity is None:
+            verbosity = "brief"
+        self.verbosity = str(verbosity).strip().lower()
         self.summary_words = self.get("summary_words")
         self.search_sources = self.get("search_sources")
         self.rss_news = self.get("rss_news")
@@ -190,6 +200,9 @@ class Config:
 
         if not self.language or not isinstance(self.language, str):
             errors.append("language must be a non-empty string")
+
+        if self.verbosity not in ["brief", "normal", "detailed"]:
+            errors.append("verbosity must be 'brief', 'normal', or 'detailed'")
 
         if not self.location or not isinstance(self.location, str):
             errors.append("location must be a non-empty string")
