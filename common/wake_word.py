@@ -455,6 +455,13 @@ class WakeWordMode:
         If barge-in is detected, returns immediately without waiting for operation.
         The operation continues in background but result is discarded.
 
+        Note: On barge-in, the background thread (daemon) continues running until
+        completion. This is a deliberate tradeoff for responsiveness - cancelling
+        API calls mid-flight would require significant client changes. The daemon
+        thread will complete naturally and be cleaned up by the runtime. In practice,
+        users rarely barge-in repeatedly in quick succession, so thread buildup is
+        minimal.
+
         Args:
             operation: Callable to run
             operation_name: Name for debug logging
@@ -561,10 +568,13 @@ class WakeWordMode:
                 logging.warning("No recorded audio file found, returning to IDLE")
             # Clear any stale recorded audio path to avoid repeated processing attempts
             self.recorded_audio_path = None
-            # Stop barge-in thread before returning
+            # Stop barge-in thread and clear references before returning
             if barge_in_thread:
                 self.barge_in_stop_flag.set()
                 barge_in_thread.join(timeout=1.0)
+            self.barge_in_thread = None
+            self.barge_in_event = None
+            self.barge_in_stop_flag = None
             self.state = State.IDLE
             return
 

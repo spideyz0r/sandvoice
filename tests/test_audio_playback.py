@@ -43,6 +43,9 @@ def _install_fake_deps_for_common_audio():
         def init(self):
             self._init = (44100, -16, 2)
 
+        def quit(self):
+            self._init = None
+
     class _FakeTime:
         class Clock:
             def tick(self, _fps):
@@ -185,16 +188,14 @@ class TestStopPlayback(unittest.TestCase):
         """Test that stop_playback is safe to call when mixer not initialized."""
         audio = self.Audio.__new__(self.Audio)
         audio.config = Mock(debug=False)
-        
+
         import pygame
-        # Properly uninitialize the mixer
-        try:
-            pygame.mixer.quit()
-        except Exception:
-            # Mixer may already be uninitialized or unavailable; ignore errors here
-            # because this test only verifies that stop_playback is safe to call.
-            pass
-        
+        # Uninitialize the mixer using the fake mixer's quit method
+        pygame.mixer.quit()
+
+        # Verify mixer is uninitialized
+        self.assertIsNone(pygame.mixer.get_init())
+
         # Should not raise exception
         audio.stop_playback()
     
@@ -226,17 +227,27 @@ class TestPlayAudioFileWithStopEvent(unittest.TestCase):
 
         import pygame
         import threading
+        import inspect
         pygame.mixer.init()
+
+        # Verify the method signature accepts stop_event parameter
+        sig = inspect.signature(audio.play_audio_file)
+        self.assertIn('stop_event', sig.parameters,
+                      "play_audio_file should accept stop_event parameter")
 
         # Create event that is never set
         stop_event = threading.Event()
 
-        # Verify the method accepts the parameter (will fail on dummy file, that's ok)
+        # Verify the method can be called with the parameter
+        # Only catch playback-related exceptions, not TypeError from wrong signature
         try:
             with tempfile.NamedTemporaryFile(suffix='.mp3', delete=False) as f:
                 temp_file = f.name
 
             audio.play_audio_file(temp_file, stop_event=stop_event)
             os.unlink(temp_file)
-        except Exception:
+        except TypeError:
+            # TypeError means the signature is wrong - fail the test
+            self.fail("play_audio_file does not accept stop_event parameter")
+        except (RuntimeError, FileNotFoundError, OSError):
             pass  # Expected - dummy file won't play properly
