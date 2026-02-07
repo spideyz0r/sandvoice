@@ -439,6 +439,7 @@ class WakeWordMode:
         Returns:
             bool: True if barge-in detected, False otherwise
         """
+        # Note: barge_in_event may be None if Porcupine failed to initialize
         if self.config.barge_in and self.barge_in_event and self.barge_in_event.is_set():
             if self.config.debug:
                 logging.info("Barge-in interrupt detected")
@@ -830,6 +831,7 @@ class WakeWordMode:
                         break
 
                     # Check for barge-in after playing file (might have interrupted mid-playback)
+                    # Note: barge_in_event may be None if Porcupine failed to initialize
                     if self.config.barge_in and self.barge_in_event and self.barge_in_event.is_set():
                         if self.config.debug:
                             logging.info("Barge-in detected, interrupted during playback")
@@ -883,6 +885,7 @@ class WakeWordMode:
         self.tts_files = None
 
         # Transition to LISTENING if barge-in occurred, otherwise back to IDLE
+        # Note: barge_in_event may be None if Porcupine failed to initialize
         if self.config.barge_in and self.barge_in_event and self.barge_in_event.is_set():
             if self.config.debug:
                 logging.info("Transitioning to LISTENING after barge-in")
