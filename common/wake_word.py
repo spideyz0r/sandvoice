@@ -496,10 +496,16 @@ class WakeWordMode:
         if self.config.debug:
             logging.info("Handling immediate barge-in response")
 
-        # Signal barge-in thread to stop (don't wait - it's a daemon thread)
+        # Signal barge-in thread to stop and give it a brief chance to clean up
         if barge_in_thread and self.barge_in_stop_flag:
             self.barge_in_stop_flag.set()
-            # Don't join - let daemon thread clean up on its own for faster response
+            if barge_in_thread.is_alive():
+                try:
+                    # Short timeout to allow PyAudio stream to close before LISTENING reopens it
+                    barge_in_thread.join(timeout=0.3)
+                except RuntimeError:
+                    # Thread may already be stopped or not started; ignore and continue
+                    pass
 
         # Clean up events
         self.barge_in_event = None

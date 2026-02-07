@@ -157,26 +157,29 @@ class TestStopPlayback(unittest.TestCase):
         """Test that stop_playback calls pygame.mixer.music.stop()."""
         audio = self.Audio.__new__(self.Audio)
         audio.config = Mock(debug=False)
-        
+
         import pygame
         # Initialize mixer
         pygame.mixer.init()
-        
+
         # Track if stop was called
         original_stop = pygame.mixer.music.stop
         stop_called = []
-        
+
         def track_stop():
             stop_called.append(True)
             return original_stop()
-        
-        pygame.mixer.music.stop = track_stop
-        
-        # Call stop_playback
-        audio.stop_playback()
-        
-        # Verify stop was called
-        self.assertGreater(len(stop_called), 0)
+
+        try:
+            pygame.mixer.music.stop = track_stop
+
+            # Call stop_playback
+            audio.stop_playback()
+
+            # Verify stop was called
+            self.assertGreater(len(stop_called), 0)
+        finally:
+            pygame.mixer.music.stop = original_stop
     
     def test_stop_playback_safe_when_mixer_not_initialized(self):
         """Test that stop_playback is safe to call when mixer not initialized."""

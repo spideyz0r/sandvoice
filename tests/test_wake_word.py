@@ -916,21 +916,25 @@ class TestBargeIn(unittest.TestCase):
     def test_barge_in_starts_detection_thread(self, mock_remove, mock_exists, mock_event_class, mock_thread_class):
         """Test that barge-in detection thread is started when enabled."""
         mock_exists.return_value = False
-        mock_event = Mock()
-        mock_event.is_set.return_value = False
-        mock_event_class.return_value = mock_event
-        
+
+        # Use distinct mocks for barge_in_event and barge_in_stop_flag
+        mock_barge_in_event = Mock()
+        mock_barge_in_event.is_set.return_value = False
+        mock_barge_in_stop_flag = Mock()
+        mock_barge_in_stop_flag.is_set.return_value = False
+        mock_event_class.side_effect = [mock_barge_in_event, mock_barge_in_stop_flag]
+
         mock_thread = Mock()
         mock_thread_class.return_value = mock_thread
-        
+
         # Create porcupine mock for barge-in thread
         mock_porcupine = Mock()
-        
+
         mode = WakeWordMode(self.mock_config, self.mock_ai, self.mock_audio)
         mode.porcupine = mock_porcupine
         mode.tts_files = []
         mode.state = State.RESPONDING
-        
+
         mode._state_responding()
 
         # Verify thread was created with daemon=True and started
@@ -946,24 +950,26 @@ class TestBargeIn(unittest.TestCase):
     def test_barge_in_transitions_to_listening_on_wake_word(self, mock_remove, mock_exists, mock_event_class, mock_thread_class):
         """Test that barge-in transitions to LISTENING when wake word detected."""
         mock_exists.return_value = False
-        
-        # Simulate wake word detected (event is set)
-        mock_event = Mock()
-        mock_event.is_set.return_value = True
-        mock_event_class.return_value = mock_event
-        
+
+        # Use distinct mocks for barge_in_event and barge_in_stop_flag
+        mock_barge_in_event = Mock()
+        mock_barge_in_event.is_set.return_value = True  # Wake word detected
+        mock_barge_in_stop_flag = Mock()
+        mock_barge_in_stop_flag.is_set.return_value = False
+        mock_event_class.side_effect = [mock_barge_in_event, mock_barge_in_stop_flag]
+
         mock_thread = Mock()
         mock_thread_class.return_value = mock_thread
-        
+
         mock_porcupine = Mock()
-        
+
         mode = WakeWordMode(self.mock_config, self.mock_ai, self.mock_audio)
         mode.porcupine = mock_porcupine
         mode.tts_files = []
         mode.state = State.RESPONDING
-        
+
         mode._state_responding()
-        
+
         # Should transition to LISTENING, not IDLE
         self.assertEqual(mode.state, State.LISTENING)
     
