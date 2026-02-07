@@ -12,18 +12,24 @@ def setup_error_logging(config):
     Args:
         config: Configuration object with logging settings
     """
+    # Use getattr with defaults for compatibility with minimal config mocks
+    debug = getattr(config, 'debug', False)
+    enable_error_logging = getattr(config, 'enable_error_logging', False)
+
     # Set logging level based on debug mode
-    log_level = logging.INFO if config.debug else logging.ERROR
+    log_level = logging.INFO if debug else logging.ERROR
 
     # Configure root logger
     logger = logging.getLogger()
     logger.setLevel(log_level)
 
-    # Remove any existing handlers to avoid duplicates
-    logger.handlers = []
+    # Only modify handlers if debug or error logging is enabled
+    if debug or enable_error_logging:
+        # Remove any existing handlers to avoid duplicates
+        logger.handlers = []
 
     # Always add console handler when debug is enabled
-    if config.debug:
+    if debug:
         console_handler = logging.StreamHandler()
         console_handler.setLevel(log_level)
         console_formatter = logging.Formatter(
@@ -34,7 +40,7 @@ def setup_error_logging(config):
         logger.addHandler(console_handler)
 
     # Add file handler if error logging is enabled
-    if config.enable_error_logging:
+    if enable_error_logging:
         log_path = os.path.expanduser(config.error_log_path)
         log_dir = os.path.dirname(log_path)
 

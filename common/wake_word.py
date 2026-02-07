@@ -57,6 +57,7 @@ class WakeWordMode:
         self.tts_files = None
         self.barge_in_event = None  # Event to signal barge-in during TTS
         self.barge_in_stop_flag = None  # Flag to stop barge-in thread immediately
+        self.barge_in_thread = None  # Thread for barge-in detection
 
         if self.config.debug:
             logging.info("Initializing wake word mode")
@@ -421,17 +422,17 @@ class WakeWordMode:
 
         self.barge_in_event = threading.Event()
         self.barge_in_stop_flag = threading.Event()
-        barge_in_thread = threading.Thread(
+        self.barge_in_thread = threading.Thread(
             target=self._listen_for_barge_in,
             args=(self.barge_in_event, self.barge_in_stop_flag),
             daemon=True
         )
-        barge_in_thread.start()
+        self.barge_in_thread.start()
 
         if self.config.debug:
             logging.info("Barge-in detection started")
 
-        return barge_in_thread
+        return self.barge_in_thread
 
     def _check_barge_in_interrupt(self):
         """Check if barge-in was triggered.
@@ -507,7 +508,8 @@ class WakeWordMode:
                     # Thread may already be stopped or not started; ignore and continue
                     pass
 
-        # Clean up events
+        # Clean up thread and events
+        self.barge_in_thread = None
         self.barge_in_event = None
         self.barge_in_stop_flag = None
 
@@ -515,8 +517,9 @@ class WakeWordMode:
         if self.recorded_audio_path and os.path.exists(self.recorded_audio_path):
             try:
                 os.remove(self.recorded_audio_path)
-            except:
-                pass
+            except OSError as e:
+                if self.config.debug:
+                    logging.debug(f"Failed to remove recorded audio file '{self.recorded_audio_path}': {e}")
         self.recorded_audio_path = None
         self.response_text = None
         self.tts_files = None
@@ -564,18 +567,23 @@ class WakeWordMode:
             return
 
         try:
-            # Transcribe the audio (with immediate barge-in response)
+            # Capture path locally to avoid race with barge-in clearing self.recorded_audio_path
+            audio_path = self.recorded_audio_path
+
+            # Transcribe the audio (with immediate barge-in response if enabled)
             if self.config.debug:
-                logging.info(f"Transcribing audio from: {self.recorded_audio_path}")
+                logging.info(f"Transcribing audio from: {audio_path}")
 
-            completed, user_input = self._run_with_barge_in_polling(
-                lambda: self.ai.transcribe_and_translate(audio_file_path=self.recorded_audio_path),
-                "transcription"
-            )
-
-            if not completed:
-                self._handle_immediate_barge_in(barge_in_thread)
-                return
+            if self.config.barge_in and barge_in_thread:
+                completed, user_input = self._run_with_barge_in_polling(
+                    lambda: self.ai.transcribe_and_translate(audio_file_path=audio_path),
+                    "transcription"
+                )
+                if not completed:
+                    self._handle_immediate_barge_in(barge_in_thread)
+                    return
+            else:
+                user_input = self.ai.transcribe_and_translate(audio_file_path=audio_path)
 
             if self.config.debug:
                 logging.info(f"Transcription: {user_input}")
@@ -585,39 +593,45 @@ class WakeWordMode:
             # Generate response (prefer plugin routing when available)
             # Both paths support barge-in polling for immediate interruption
             if self.route_message is not None:
-                # Route through plugin system with barge-in support
-                completed, route = self._run_with_barge_in_polling(
-                    lambda: self.ai.define_route(user_input),
-                    "route definition"
-                )
-
-                if not completed:
-                    self._handle_immediate_barge_in(barge_in_thread)
-                    return
+                # Route through plugin system (with barge-in support if enabled)
+                if self.config.barge_in and barge_in_thread:
+                    completed, route = self._run_with_barge_in_polling(
+                        lambda: self.ai.define_route(user_input),
+                        "route definition"
+                    )
+                    if not completed:
+                        self._handle_immediate_barge_in(barge_in_thread)
+                        return
+                else:
+                    route = self.ai.define_route(user_input)
 
                 if self.config.debug:
                     logging.info(f"Route: {route}")
 
-                completed, response_text = self._run_with_barge_in_polling(
-                    lambda: self.route_message(user_input, route),
-                    "plugin response"
-                )
-
-                if not completed:
-                    self._handle_immediate_barge_in(barge_in_thread)
-                    return
+                if self.config.barge_in and barge_in_thread:
+                    completed, response_text = self._run_with_barge_in_polling(
+                        lambda: self.route_message(user_input, route),
+                        "plugin response"
+                    )
+                    if not completed:
+                        self._handle_immediate_barge_in(barge_in_thread)
+                        return
+                else:
+                    response_text = self.route_message(user_input, route)
 
                 self.response_text = response_text
             else:
-                # Direct AI response with barge-in support
-                completed, response = self._run_with_barge_in_polling(
-                    lambda: self.ai.generate_response(user_input),
-                    "response generation"
-                )
-
-                if not completed:
-                    self._handle_immediate_barge_in(barge_in_thread)
-                    return
+                # Direct AI response (with barge-in support if enabled)
+                if self.config.barge_in and barge_in_thread:
+                    completed, response = self._run_with_barge_in_polling(
+                        lambda: self.ai.generate_response(user_input),
+                        "response generation"
+                    )
+                    if not completed:
+                        self._handle_immediate_barge_in(barge_in_thread)
+                        return
+                else:
+                    response = self.ai.generate_response(user_input)
 
                 self.response_text = response.content if hasattr(response, 'content') else str(response)
 
@@ -626,16 +640,20 @@ class WakeWordMode:
 
             print(f"{self.config.botname}: {self.response_text}\n")
 
-            # Generate TTS if bot_voice is enabled (with immediate barge-in response)
+            # Generate TTS if bot_voice is enabled (with immediate barge-in response if enabled)
             if self.config.bot_voice:
-                completed, tts_files = self._run_with_barge_in_polling(
-                    lambda: self.ai.text_to_speech(self.response_text),
-                    "TTS generation"
-                )
-
-                if not completed:
-                    self._handle_immediate_barge_in(barge_in_thread)
-                    return
+                # Capture response text locally to avoid race with barge-in clearing self.response_text
+                response_text_for_tts = self.response_text
+                if self.config.barge_in and barge_in_thread:
+                    completed, tts_files = self._run_with_barge_in_polling(
+                        lambda: self.ai.text_to_speech(response_text_for_tts),
+                        "TTS generation"
+                    )
+                    if not completed:
+                        self._handle_immediate_barge_in(barge_in_thread)
+                        return
+                else:
+                    tts_files = self.ai.text_to_speech(response_text_for_tts)
 
                 self.tts_files = tts_files
 
@@ -674,6 +692,9 @@ class WakeWordMode:
                         logging.warning(f"Failed to stop barge-in thread: {thread_error}")
 
             # Reset state
+            self.barge_in_thread = None
+            self.barge_in_event = None
+            self.barge_in_stop_flag = None
             self.recorded_audio_path = None
             self.response_text = None
             self.tts_files = None
@@ -786,12 +807,9 @@ class WakeWordMode:
             print("🔊 Responding...")
 
         # Check if barge-in thread is already running from PROCESSING state
-        # If barge_in_event exists and stop_flag exists, the thread is still active
         thread_already_running = (
-            hasattr(self, 'barge_in_event') and
-            self.barge_in_event is not None and
-            hasattr(self, 'barge_in_stop_flag') and
-            self.barge_in_stop_flag is not None
+            self.barge_in_thread is not None and
+            self.barge_in_thread.is_alive()
         )
 
         # Start barge-in detection thread if not already running
@@ -870,10 +888,16 @@ class WakeWordMode:
                 logging.info("No TTS files to play (bot_voice disabled or TTS generation failed)")
 
         # Signal barge-in thread to stop and wait for it to finish
-        if hasattr(self, 'barge_in_stop_flag') and self.barge_in_stop_flag is not None:
+        if self.barge_in_stop_flag is not None:
             self.barge_in_stop_flag.set()
             if self.config.debug:
                 logging.info("Signaled barge-in thread to stop")
+            # Wait for thread to finish to ensure PyAudio stream is closed before LISTENING reopens it
+            if self.barge_in_thread is not None and self.barge_in_thread.is_alive():
+                try:
+                    self.barge_in_thread.join(timeout=0.3)
+                except RuntimeError:
+                    pass  # Thread may already be stopped
 
         # Clean up temporary recorded audio file
         if self.recorded_audio_path and os.path.exists(self.recorded_audio_path):
@@ -902,10 +926,12 @@ class WakeWordMode:
                     "Skipping confirmation beep after barge-in to keep wake word detection responsive"
                 )
 
+            self.barge_in_thread = None
             self.barge_in_event = None
             self.barge_in_stop_flag = None
             self.state = State.LISTENING
         else:
+            self.barge_in_thread = None
             self.barge_in_event = None
             self.barge_in_stop_flag = None
             self.state = State.IDLE

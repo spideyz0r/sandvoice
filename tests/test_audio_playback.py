@@ -233,8 +233,6 @@ class TestPlayAudioFileWithStopEvent(unittest.TestCase):
 
         # Verify the method accepts the parameter (will fail on dummy file, that's ok)
         try:
-            import tempfile
-            import os
             with tempfile.NamedTemporaryFile(suffix='.mp3', delete=False) as f:
                 temp_file = f.name
 
