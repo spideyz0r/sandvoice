@@ -25,8 +25,10 @@ def setup_error_logging(config):
 
     # Only modify handlers if debug or error logging is enabled
     if debug or enable_error_logging:
-        # Remove any existing handlers to avoid duplicates
-        logger.handlers = []
+        # Close and remove any existing handlers to avoid duplicates and resource leaks
+        for handler in logger.handlers[:]:
+            handler.close()
+            logger.removeHandler(handler)
 
     # Always add console handler when debug is enabled
     if debug:

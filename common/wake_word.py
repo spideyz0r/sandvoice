@@ -411,8 +411,9 @@ class WakeWordMode:
         Returns:
             threading.Thread or None: The barge-in thread if started, None otherwise
         """
-        if not self.config.barge_in or not self.porcupine:
-            if self.config.barge_in and not self.porcupine:
+        barge_in_enabled = getattr(self.config, "barge_in", False)
+        if not barge_in_enabled or not self.porcupine:
+            if barge_in_enabled and not self.porcupine:
                 if self.config.debug:
                     logging.warning(
                         "Barge-in is enabled in configuration, but Porcupine is not initialized. "
@@ -441,14 +442,15 @@ class WakeWordMode:
             bool: True if barge-in detected, False otherwise
         """
         # Note: barge_in_event may be None if Porcupine failed to initialize
-        if self.config.barge_in and self.barge_in_event and self.barge_in_event.is_set():
+        barge_in_enabled = getattr(self.config, "barge_in", False)
+        if barge_in_enabled and self.barge_in_event and self.barge_in_event.is_set():
             if self.config.debug:
                 logging.info("Barge-in interrupt detected")
             return True
         return False
 
     def _run_with_barge_in_polling(self, operation, operation_name="operation"):
-        """Run an operation in background thread, polling for barge-in every 100ms.
+        """Run an operation in background thread, polling for barge-in every 50ms.
 
         If barge-in is detected, returns immediately without waiting for operation.
         The operation continues in background but result is discarded.
@@ -574,7 +576,7 @@ class WakeWordMode:
             if self.config.debug:
                 logging.info(f"Transcribing audio from: {audio_path}")
 
-            if self.config.barge_in and barge_in_thread:
+            if barge_in_thread:
                 completed, user_input = self._run_with_barge_in_polling(
                     lambda: self.ai.transcribe_and_translate(audio_file_path=audio_path),
                     "transcription"
@@ -594,7 +596,7 @@ class WakeWordMode:
             # Both paths support barge-in polling for immediate interruption
             if self.route_message is not None:
                 # Route through plugin system (with barge-in support if enabled)
-                if self.config.barge_in and barge_in_thread:
+                if barge_in_thread:
                     completed, route = self._run_with_barge_in_polling(
                         lambda: self.ai.define_route(user_input),
                         "route definition"
@@ -608,7 +610,7 @@ class WakeWordMode:
                 if self.config.debug:
                     logging.info(f"Route: {route}")
 
-                if self.config.barge_in and barge_in_thread:
+                if barge_in_thread:
                     completed, response_text = self._run_with_barge_in_polling(
                         lambda: self.route_message(user_input, route),
                         "plugin response"
@@ -622,7 +624,7 @@ class WakeWordMode:
                 self.response_text = response_text
             else:
                 # Direct AI response (with barge-in support if enabled)
-                if self.config.barge_in and barge_in_thread:
+                if barge_in_thread:
                     completed, response = self._run_with_barge_in_polling(
                         lambda: self.ai.generate_response(user_input),
                         "response generation"
@@ -644,7 +646,7 @@ class WakeWordMode:
             if self.config.bot_voice:
                 # Capture response text locally to avoid race with barge-in clearing self.response_text
                 response_text_for_tts = self.response_text
-                if self.config.barge_in and barge_in_thread:
+                if barge_in_thread:
                     completed, tts_files = self._run_with_barge_in_polling(
                         lambda: self.ai.text_to_speech(response_text_for_tts),
                         "TTS generation"
@@ -813,10 +815,11 @@ class WakeWordMode:
         )
 
         # Start barge-in detection thread if not already running
+        barge_in_enabled = getattr(self.config, "barge_in", False)
         if not thread_already_running:
-            if self.config.barge_in and self.porcupine:
+            if barge_in_enabled and self.porcupine:
                 self._start_barge_in_detection()
-            elif self.config.barge_in and not self.porcupine:
+            elif barge_in_enabled and not self.porcupine:
                 if self.config.debug:
                     logging.warning(
                         "Barge-in is enabled in configuration, but Porcupine is not initialized. "
@@ -838,7 +841,7 @@ class WakeWordMode:
                     try:
                         self.audio.play_audio_file(
                             file_path,
-                            stop_event=self.barge_in_event if self.config.barge_in else None
+                            stop_event=self.barge_in_event if barge_in_enabled else None
                         )
                     except Exception as e:
                         if self.config.debug:
@@ -856,7 +859,7 @@ class WakeWordMode:
 
                     # Check for barge-in after playing file (might have interrupted mid-playback)
                     # Note: barge_in_event may be None if Porcupine failed to initialize
-                    if self.config.barge_in and self.barge_in_event and self.barge_in_event.is_set():
+                    if barge_in_enabled and self.barge_in_event and self.barge_in_event.is_set():
                         if self.config.debug:
                             logging.info("Barge-in detected, interrupted during playback")
                         # First, clean up the file we just played successfully
@@ -916,7 +919,7 @@ class WakeWordMode:
 
         # Transition to LISTENING if barge-in occurred, otherwise back to IDLE
         # Note: barge_in_event may be None if Porcupine failed to initialize
-        if self.config.barge_in and self.barge_in_event and self.barge_in_event.is_set():
+        if barge_in_enabled and self.barge_in_event and self.barge_in_event.is_set():
             if self.config.debug:
                 logging.info("Transitioning to LISTENING after barge-in")
 

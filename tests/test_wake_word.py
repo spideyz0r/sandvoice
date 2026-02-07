@@ -1083,7 +1083,7 @@ class TestBargeIn(unittest.TestCase):
         # Verify beep was played
         self.mock_audio.play_audio_file.assert_called_once_with("/tmp/beep.mp3")
 
-        # Verify barge-in thread was signaled to stop (no join - daemon thread cleans up on its own)
+        # Verify barge-in thread was signaled to stop; thread lifecycle is handled by the implementation
         mock_stop_flag.set.assert_called_once()
 
         # Verify cleanup

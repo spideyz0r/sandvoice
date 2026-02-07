@@ -71,7 +71,7 @@ class Config:
             "wake_confirmation_beep_duration": 0.1,
             "visual_state_indicator": "enabled",
             # Barge-in feature (interrupt TTS with wake word)
-            "barge_in": "enabled"
+            "barge_in": "disabled"
         }
         self.config = self.load_defaults()
         self.load_config()
