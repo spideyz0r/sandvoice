@@ -442,7 +442,9 @@ class WakeWordMode:
         Returns:
             bool: True if barge-in detected, False otherwise
         """
-        # Note: barge_in_event may be None if Porcupine failed to initialize
+        # Note: barge_in_event may be None if Porcupine failed to initialize or if
+        # this method is called before _start_barge_in_detection(). The None check
+        # provides defensive programming against race conditions or unexpected states.
         barge_in_enabled = getattr(self.config, "barge_in", False)
         if barge_in_enabled and self.barge_in_event and self.barge_in_event.is_set():
             if self.config.debug:
@@ -885,6 +887,7 @@ class WakeWordMode:
                 if barge_in_enabled and self.porcupine:
                     self._start_barge_in_detection()
                 elif barge_in_enabled and not self.porcupine:
+                    # Log at debug level to be consistent with other conditional warnings
                     if self.config.debug:
                         logging.warning(
                             "Barge-in is enabled in configuration, but Porcupine is not initialized. "
