@@ -947,11 +947,14 @@ class WakeWordMode:
             if self.config.debug:
                 logging.info("Transitioning to LISTENING after barge-in")
 
-            # Skip confirmation beep after barge-in to avoid blocking responsiveness
-            if self.config.wake_confirmation_beep and self.config.debug:
-                logging.info(
-                    "Skipping confirmation beep after barge-in to keep wake word detection responsive"
-                )
+            # Play confirmation beep (consistent with _handle_immediate_barge_in)
+            if self.config.wake_confirmation_beep and self.confirmation_beep_path:
+                if os.path.exists(self.confirmation_beep_path):
+                    try:
+                        self.audio.play_audio_file(self.confirmation_beep_path)
+                    except Exception as e:
+                        if self.config.debug:
+                            logging.warning(f"Failed to play beep: {e}")
 
             self.barge_in_thread = None
             self.barge_in_event = None
@@ -964,9 +967,21 @@ class WakeWordMode:
             self.state = State.IDLE
 
     def _cleanup(self):
-        """Clean up Porcupine, VAD, and audio resources."""
+        """Clean up Porcupine, VAD, barge-in thread, and audio resources."""
         if self.config.debug:
             logging.info("Cleaning up wake word mode")
+
+        # Clean up barge-in thread if running
+        if self.barge_in_stop_flag is not None:
+            self.barge_in_stop_flag.set()
+        if self.barge_in_thread is not None and self.barge_in_thread.is_alive():
+            try:
+                self.barge_in_thread.join(timeout=0.5)
+            except RuntimeError:
+                pass  # Thread may already be stopped
+        self.barge_in_thread = None
+        self.barge_in_event = None
+        self.barge_in_stop_flag = None
 
         if self.porcupine is not None:
             try:

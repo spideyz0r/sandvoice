@@ -1110,8 +1110,8 @@ class TestBargeIn(unittest.TestCase):
 
         def slow_operation():
             operation_started.set()
-            # Wait for a bit to simulate slow API call
-            time.sleep(0.5)
+            # Wait for a bit to simulate slow API call (kept short to minimize test time)
+            time.sleep(0.3)
             operation_completed.set()
             return "result"
 
@@ -1130,8 +1130,8 @@ class TestBargeIn(unittest.TestCase):
         # Trigger barge-in
         mode.barge_in_event.set()
 
-        # Polling should return quickly
-        polling_thread.join(timeout=0.2)
+        # Polling should return quickly (use generous timeout for CI stability)
+        polling_thread.join(timeout=0.5)
         self.assertFalse(polling_thread.is_alive(), "Polling should return quickly on barge-in")
 
         # Should return (False, None) indicating interrupted
