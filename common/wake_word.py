@@ -462,6 +462,11 @@ class WakeWordMode:
         users rarely barge-in repeatedly in quick succession, so thread buildup is
         minimal.
 
+        Limitation: Operations with side effects (e.g., AI conversation history
+        updates, plugin actions) will still complete even after barge-in. This is
+        acceptable for the current use case where barge-in is primarily about
+        responsiveness, not transaction rollback.
+
         Args:
             operation: Callable to run
             operation_name: Name for debug logging
@@ -763,14 +768,12 @@ class WakeWordMode:
             if self.config.debug:
                 logging.info("Barge-in thread: Audio stream opened, listening for wake word...")
 
-            frame_count = 0
             while self.running and not barge_in_event.is_set() and not stop_flag.is_set():
                 try:
                     pcm = audio_stream.read(porcupine_instance.frame_length, exception_on_overflow=False)
                     pcm = struct.unpack_from("h" * porcupine_instance.frame_length, pcm)
 
                     keyword_index = porcupine_instance.process(pcm)
-                    frame_count += 1
 
                     if keyword_index >= 0:
                         if self.config.debug:

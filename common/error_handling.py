@@ -9,6 +9,9 @@ def setup_error_logging(config):
     """
     Set up error logging based on configuration.
 
+    Configures logging handlers for SandVoice debug output and error logging.
+    Only adds new handlers if they don't already exist (idempotent).
+
     Args:
         config: Configuration object with logging settings
     """
@@ -19,19 +22,20 @@ def setup_error_logging(config):
     # Set logging level based on debug mode
     log_level = logging.INFO if debug else logging.ERROR
 
-    # Configure root logger
+    # Configure root logger level
     logger = logging.getLogger()
     logger.setLevel(log_level)
 
-    # Only modify handlers if debug or error logging is enabled
-    if debug or enable_error_logging:
-        # Close and remove any existing handlers to avoid duplicates and resource leaks
-        for handler in logger.handlers[:]:
-            handler.close()
-            logger.removeHandler(handler)
+    # Check if we already have SandVoice handlers to avoid duplicates
+    has_sandvoice_console = any(
+        getattr(h, '_sandvoice_console', False) for h in logger.handlers
+    )
+    has_sandvoice_file = any(
+        getattr(h, '_sandvoice_file', False) for h in logger.handlers
+    )
 
-    # Always add console handler when debug is enabled
-    if debug:
+    # Add console handler when debug is enabled (if not already present)
+    if debug and not has_sandvoice_console:
         console_handler = logging.StreamHandler()
         console_handler.setLevel(log_level)
         console_formatter = logging.Formatter(
@@ -39,10 +43,11 @@ def setup_error_logging(config):
             datefmt='%H:%M:%S'
         )
         console_handler.setFormatter(console_formatter)
+        console_handler._sandvoice_console = True  # Mark as ours
         logger.addHandler(console_handler)
 
-    # Add file handler if error logging is enabled
-    if enable_error_logging:
+    # Add file handler if error logging is enabled (if not already present)
+    if enable_error_logging and not has_sandvoice_file:
         log_path = os.path.expanduser(config.error_log_path)
         log_dir = os.path.dirname(log_path)
 
@@ -54,6 +59,7 @@ def setup_error_logging(config):
         file_handler.setLevel(logging.ERROR)
         file_formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
         file_handler.setFormatter(file_formatter)
+        file_handler._sandvoice_file = True  # Mark as ours
         logger.addHandler(file_handler)
 
 
