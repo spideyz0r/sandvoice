@@ -740,36 +740,44 @@ class WakeWordMode:
                 if self.config.debug:
                     logging.warning(f"Failed to delete TTS file '{file_path}': {e}")
 
-    def _cleanup_orphaned_tts_files(self):
-        """Clean up any orphaned TTS response files in the temp directory.
+    def _cleanup_specific_tts_files(self, file_list):
+        """Clean up specific TTS files from a pre-captured list.
 
-        Called after barge-in to clean up files that may have been created
-        by the background TTS thread after we returned early.
+        Args:
+            file_list: List of file paths to delete (captured before delay)
         """
-        try:
-            pattern = os.path.join(self.config.tmp_files_path, "tts-response-*.mp3")
-            orphaned_files = glob.glob(pattern)
-            for file_path in orphaned_files:
-                try:
+        for file_path in file_list:
+            try:
+                if os.path.exists(file_path):
                     os.remove(file_path)
                     if self.config.debug:
                         logging.info(f"Cleaned up orphaned TTS file: {file_path}")
-                except OSError as e:
-                    if self.config.debug:
-                        logging.warning(f"Failed to delete orphaned TTS file: {e}")
-        except Exception as e:
-            if self.config.debug:
-                logging.warning(f"Error cleaning up orphaned TTS files: {e}")
+            except OSError as e:
+                if self.config.debug:
+                    logging.warning(f"Failed to delete orphaned TTS file: {e}")
 
     def _schedule_orphaned_tts_cleanup(self):
         """Schedule cleanup of orphaned TTS files after a short delay.
 
-        This allows the background TTS thread to complete and write its files
-        before we clean them up.
+        Snapshots existing TTS files before the delay, then deletes only those
+        files after the delay. This prevents accidentally deleting TTS files
+        from a new interaction that started after barge-in.
         """
+        # Snapshot current TTS files before delay
+        try:
+            pattern = os.path.join(self.config.tmp_files_path, "tts-response-*.mp3")
+            files_to_cleanup = glob.glob(pattern)
+        except Exception as e:
+            if self.config.debug:
+                logging.warning(f"Error finding orphaned TTS files: {e}")
+            return
+
+        if not files_to_cleanup:
+            return
+
         def delayed_cleanup():
             time.sleep(2.0)  # Wait for background thread to complete
-            self._cleanup_orphaned_tts_files()
+            self._cleanup_specific_tts_files(files_to_cleanup)
 
         cleanup_thread = threading.Thread(target=delayed_cleanup, daemon=True)
         cleanup_thread.start()

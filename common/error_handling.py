@@ -54,7 +54,7 @@ def setup_error_logging(config):
     if enable_error_logging and not has_sandvoice_file:
         error_log_path = getattr(config, 'error_log_path', '')
         if not error_log_path:
-            logging.warning("enable_error_logging is True but error_log_path is not set")
+            logging.error("enable_error_logging is True but error_log_path is not set")
             return
         log_path = os.path.expanduser(error_log_path)
         log_dir = os.path.dirname(log_path)
