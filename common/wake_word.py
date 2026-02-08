@@ -484,6 +484,9 @@ class WakeWordMode:
                 result_holder[0] = operation()
             except Exception as e:
                 error_holder[0] = e
+                # Log exception so it's not silently swallowed on barge-in
+                if getattr(self.config, "debug", False):
+                    logging.warning(f"Background {operation_name} failed: {e}")
 
         thread = threading.Thread(target=run_in_background, daemon=True)
         thread.start()
