@@ -1,3 +1,4 @@
+import glob
 import logging
 import os
 import struct
@@ -549,6 +550,9 @@ class WakeWordMode:
         self.response_text = None
         self.tts_files = None
 
+        # Schedule cleanup of any orphaned TTS files from interrupted background thread
+        self._schedule_orphaned_tts_cleanup()
+
         # Play confirmation beep
         if self.config.wake_confirmation_beep and self.confirmation_beep_path:
             if os.path.exists(self.confirmation_beep_path):
@@ -735,6 +739,40 @@ class WakeWordMode:
             except OSError as e:
                 if self.config.debug:
                     logging.warning(f"Failed to delete TTS file '{file_path}': {e}")
+
+    def _cleanup_orphaned_tts_files(self):
+        """Clean up any orphaned TTS response files in the temp directory.
+
+        Called after barge-in to clean up files that may have been created
+        by the background TTS thread after we returned early.
+        """
+        try:
+            pattern = os.path.join(self.config.tmp_files_path, "tts-response-*.mp3")
+            orphaned_files = glob.glob(pattern)
+            for file_path in orphaned_files:
+                try:
+                    os.remove(file_path)
+                    if self.config.debug:
+                        logging.info(f"Cleaned up orphaned TTS file: {file_path}")
+                except OSError as e:
+                    if self.config.debug:
+                        logging.warning(f"Failed to delete orphaned TTS file: {e}")
+        except Exception as e:
+            if self.config.debug:
+                logging.warning(f"Error cleaning up orphaned TTS files: {e}")
+
+    def _schedule_orphaned_tts_cleanup(self):
+        """Schedule cleanup of orphaned TTS files after a short delay.
+
+        This allows the background TTS thread to complete and write its files
+        before we clean them up.
+        """
+        def delayed_cleanup():
+            time.sleep(2.0)  # Wait for background thread to complete
+            self._cleanup_orphaned_tts_files()
+
+        cleanup_thread = threading.Thread(target=delayed_cleanup, daemon=True)
+        cleanup_thread.start()
 
     def _listen_for_barge_in(self, barge_in_event, stop_flag):
         """Background thread to listen for wake word during TTS playback.
