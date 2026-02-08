@@ -476,6 +476,14 @@ class WakeWordMode:
                 - (True, result) if operation completed normally
                 - (False, None) if interrupted by barge-in
         """
+        # If barge-in is already active, skip starting the operation
+        if self._check_barge_in_interrupt():
+            if getattr(self.config, "debug", False):
+                logging.info(
+                    f"Barge-in already active before starting {operation_name} - skipping"
+                )
+            return False, None
+
         result_holder = [None]
         error_holder = [None]
 

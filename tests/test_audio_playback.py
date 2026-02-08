@@ -240,14 +240,17 @@ class TestPlayAudioFileWithStopEvent(unittest.TestCase):
 
         # Verify the method can be called with the parameter
         # Only catch playback-related exceptions, not TypeError from wrong signature
+        temp_file = None
         try:
             with tempfile.NamedTemporaryFile(suffix='.mp3', delete=False) as f:
                 temp_file = f.name
 
             audio.play_audio_file(temp_file, stop_event=stop_event)
-            os.unlink(temp_file)
         except TypeError:
             # TypeError means the signature is wrong - fail the test
             self.fail("play_audio_file does not accept stop_event parameter")
         except (RuntimeError, FileNotFoundError, OSError):
             pass  # Expected - dummy file won't play properly
+        finally:
+            if temp_file and os.path.exists(temp_file):
+                os.unlink(temp_file)
