@@ -575,24 +575,16 @@ class WakeWordMode:
         self.response_text = None
         self.tts_files = None
 
-        # Start barge-in detection thread (will run through PROCESSING and RESPONDING)
-        barge_in_thread = self._start_barge_in_detection()
-
-        # Check if we have a recorded audio file
+        # Check if we have a recorded audio file before starting barge-in detection
         if not self.recorded_audio_path or not os.path.exists(self.recorded_audio_path):
             if self.config.debug:
                 logging.warning("No recorded audio file found, returning to IDLE")
-            # Clear any stale recorded audio path to avoid repeated processing attempts
             self.recorded_audio_path = None
-            # Stop barge-in thread and clear references before returning
-            if barge_in_thread:
-                self.barge_in_stop_flag.set()
-                barge_in_thread.join(timeout=1.0)
-            self.barge_in_thread = None
-            self.barge_in_event = None
-            self.barge_in_stop_flag = None
             self.state = State.IDLE
             return
+
+        # Start barge-in detection thread (will run through PROCESSING and RESPONDING)
+        barge_in_thread = self._start_barge_in_detection()
 
         try:
             # Capture path locally to avoid race with barge-in clearing self.recorded_audio_path
@@ -832,29 +824,29 @@ class WakeWordMode:
         if self.config.visual_state_indicator:
             print("🔊 Responding...")
 
-        # Check if barge-in thread is already running from PROCESSING state
-        thread_already_running = (
-            self.barge_in_thread is not None and
-            self.barge_in_thread.is_alive()
-        )
-
-        # Start barge-in detection thread if not already running
         barge_in_enabled = getattr(self.config, "barge_in", False)
-        if not thread_already_running:
-            if barge_in_enabled and self.porcupine:
-                self._start_barge_in_detection()
-            elif barge_in_enabled and not self.porcupine:
-                if self.config.debug:
-                    logging.warning(
-                        "Barge-in is enabled in configuration, but Porcupine is not initialized. "
-                        "Barge-in will be disabled for this response."
-                    )
-        else:
-            if self.config.debug:
-                logging.info("Barge-in thread already running from PROCESSING, reusing it")
 
         # Play TTS audio if available
         if self.tts_files and len(self.tts_files) > 0:
+            # Check if barge-in thread is already running from PROCESSING state
+            thread_already_running = (
+                self.barge_in_thread is not None and
+                self.barge_in_thread.is_alive()
+            )
+
+            # Start barge-in detection thread if not already running
+            if not thread_already_running:
+                if barge_in_enabled and self.porcupine:
+                    self._start_barge_in_detection()
+                elif barge_in_enabled and not self.porcupine:
+                    if self.config.debug:
+                        logging.warning(
+                            "Barge-in is enabled in configuration, but Porcupine is not initialized. "
+                            "Barge-in will be disabled for this response."
+                        )
+            else:
+                if self.config.debug:
+                    logging.info("Barge-in thread already running from PROCESSING, reusing it")
             try:
                 if self.config.debug:
                     logging.info(f"Playing {len(self.tts_files)} TTS files")

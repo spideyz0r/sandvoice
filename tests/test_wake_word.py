@@ -934,7 +934,7 @@ class TestBargeIn(unittest.TestCase):
 
         mode = WakeWordMode(self.mock_config, self.mock_ai, self.mock_audio)
         mode.porcupine = mock_porcupine
-        mode.tts_files = []
+        mode.tts_files = ["/tmp/test.mp3"]  # Need TTS files for barge-in to start
         mode.state = State.RESPONDING
 
         mode._state_responding()
@@ -967,7 +967,7 @@ class TestBargeIn(unittest.TestCase):
 
         mode = WakeWordMode(self.mock_config, self.mock_ai, self.mock_audio)
         mode.porcupine = mock_porcupine
-        mode.tts_files = []
+        mode.tts_files = ["/tmp/test.mp3"]  # Need TTS files for barge-in to work
         mode.state = State.RESPONDING
 
         mode._state_responding()
