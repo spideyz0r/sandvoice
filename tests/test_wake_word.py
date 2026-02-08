@@ -1,3 +1,5 @@
+import threading
+import time
 import unittest
 import logging
 from unittest.mock import Mock, patch
@@ -1094,6 +1096,52 @@ class TestBargeIn(unittest.TestCase):
 
         # Should transition to LISTENING (immediate response)
         self.assertEqual(mode.state, State.LISTENING)
+
+    def test_run_with_barge_in_polling_returns_early_on_interrupt(self):
+        """Test that _run_with_barge_in_polling returns early when barge-in detected."""
+        mode = WakeWordMode.__new__(WakeWordMode)
+        mode.config = self.mock_config
+        mode.config.barge_in = True
+        mode.barge_in_event = threading.Event()
+
+        # Track operation execution
+        operation_started = threading.Event()
+        operation_completed = threading.Event()
+
+        def slow_operation():
+            operation_started.set()
+            # Wait for a bit to simulate slow API call
+            time.sleep(0.5)
+            operation_completed.set()
+            return "result"
+
+        # Start polling in a thread so we can trigger barge-in
+        result_holder = [None]
+
+        def run_polling():
+            result_holder[0] = mode._run_with_barge_in_polling(slow_operation, "test")
+
+        polling_thread = threading.Thread(target=run_polling)
+        polling_thread.start()
+
+        # Wait for operation to start
+        operation_started.wait(timeout=1.0)
+
+        # Trigger barge-in
+        mode.barge_in_event.set()
+
+        # Polling should return quickly
+        polling_thread.join(timeout=0.2)
+        self.assertFalse(polling_thread.is_alive(), "Polling should return quickly on barge-in")
+
+        # Should return (False, None) indicating interrupted
+        completed, result = result_holder[0]
+        self.assertFalse(completed)
+        self.assertIsNone(result)
+
+        # Operation may still be running (daemon thread) - that's expected
+        # Wait for it to complete to clean up
+        operation_completed.wait(timeout=1.0)
 
 
 if __name__ == '__main__':

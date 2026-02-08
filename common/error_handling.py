@@ -19,10 +19,14 @@ def setup_error_logging(config):
     debug = getattr(config, 'debug', False)
     enable_error_logging = getattr(config, 'enable_error_logging', False)
 
+    # Only proceed if we need to add handlers
+    if not debug and not enable_error_logging:
+        return
+
     # Set logging level based on debug mode
     log_level = logging.INFO if debug else logging.ERROR
 
-    # Configure root logger level
+    # Configure root logger level only when adding SandVoice handlers
     logger = logging.getLogger()
     logger.setLevel(log_level)
 
