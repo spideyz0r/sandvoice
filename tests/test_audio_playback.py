@@ -15,14 +15,22 @@ def _install_fake_deps_for_common_audio():
     fake_pynput = types.SimpleNamespace(keyboard=fake_keyboard)
 
     class _FakeMusic:
+        def __init__(self):
+            self._stopped = False
+
         def load(self, _path):
             return None
 
         def play(self):
+            self._stopped = False
             return None
 
         def get_busy(self):
             return False
+
+        def stop(self):
+            self._stopped = True
+            return None
 
     class _FakeMixer:
         def __init__(self):
@@ -34,6 +42,9 @@ def _install_fake_deps_for_common_audio():
 
         def init(self):
             self._init = (44100, -16, 2)
+
+        def quit(self):
+            self._init = None
 
     class _FakeTime:
         class Clock:
@@ -135,3 +146,108 @@ class TestMixerInitialization(unittest.TestCase):
 
         self.Audio.play_audio_file(audio, '/tmp/fake.mp3')
         self.assertIsNotNone(pygame.mixer.get_init())
+
+
+class TestStopPlayback(unittest.TestCase):
+    """Test stop_playback method for barge-in functionality."""
+    
+    def setUp(self):
+        _install_fake_deps_for_common_audio()
+        from common.audio import Audio
+        self.Audio = Audio
+
+    def test_stop_playback_calls_mixer_stop(self):
+        """Test that stop_playback calls pygame.mixer.music.stop()."""
+        audio = self.Audio.__new__(self.Audio)
+        audio.config = Mock(debug=False)
+
+        import pygame
+        # Initialize mixer
+        pygame.mixer.init()
+
+        # Track if stop was called
+        original_stop = pygame.mixer.music.stop
+        stop_called = []
+
+        def track_stop():
+            stop_called.append(True)
+            return original_stop()
+
+        try:
+            pygame.mixer.music.stop = track_stop
+
+            # Call stop_playback
+            audio.stop_playback()
+
+            # Verify stop was called
+            self.assertGreater(len(stop_called), 0)
+        finally:
+            pygame.mixer.music.stop = original_stop
+    
+    def test_stop_playback_safe_when_mixer_not_initialized(self):
+        """Test that stop_playback is safe to call when mixer not initialized."""
+        audio = self.Audio.__new__(self.Audio)
+        audio.config = Mock(debug=False)
+
+        import pygame
+        # Uninitialize the mixer using the fake mixer's quit method
+        pygame.mixer.quit()
+
+        # Verify mixer is uninitialized
+        self.assertIsNone(pygame.mixer.get_init())
+
+        # Should not raise exception
+        audio.stop_playback()
+    
+    def test_stop_playback_logs_in_debug_mode(self):
+        """Test that stop_playback logs when debug is enabled."""
+        audio = self.Audio.__new__(self.Audio)
+        audio.config = Mock(debug=True)
+        
+        import pygame
+        pygame.mixer.init()
+        
+        with patch('common.audio.logging.info') as mock_log:
+            audio.stop_playback()
+            mock_log.assert_called_with("Audio playback stopped")
+
+
+class TestPlayAudioFileWithStopEvent(unittest.TestCase):
+    """Test play_audio_file with stop_event parameter for barge-in interruption."""
+
+    def setUp(self):
+        _install_fake_deps_for_common_audio()
+        from common.audio import Audio
+        self.Audio = Audio
+
+    def test_play_audio_file_accepts_stop_event_parameter(self):
+        """Test that play_audio_file accepts stop_event parameter without error."""
+        audio = self.Audio.__new__(self.Audio)
+        audio.config = Mock(debug=False)
+
+        import pygame
+        import threading
+        import inspect
+        pygame.mixer.init()
+
+        # Verify the method signature accepts stop_event parameter
+        sig = inspect.signature(audio.play_audio_file)
+        self.assertIn('stop_event', sig.parameters,
+                      "play_audio_file should accept stop_event parameter")
+
+        # Create event that is never set
+        stop_event = threading.Event()
+
+        # Verify the method can be called with the parameter
+        # Only catch playback-related exceptions, not TypeError from wrong signature
+        try:
+            with tempfile.NamedTemporaryFile(suffix='.mp3', delete=False) as f:
+                temp_file = f.name
+
+            audio.play_audio_file(temp_file, stop_event=stop_event)
+            os.unlink(temp_file)
+        except TypeError:
+            # TypeError means the signature is wrong - fail the test
+            self.fail("play_audio_file does not accept stop_event parameter")
+        except (RuntimeError, FileNotFoundError, OSError):
+            pass  # Expected - dummy file won't play properly

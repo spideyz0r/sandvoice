@@ -69,7 +69,9 @@ class Config:
             "wake_confirmation_beep": "enabled",
             "wake_confirmation_beep_freq": 800,
             "wake_confirmation_beep_duration": 0.1,
-            "visual_state_indicator": "enabled"
+            "visual_state_indicator": "enabled",
+            # Barge-in feature (interrupt TTS with wake word)
+            "barge_in": "disabled"
         }
         self.config = self.load_defaults()
         self.load_config()
@@ -145,6 +147,8 @@ class Config:
         self.wake_confirmation_beep_freq = self.get("wake_confirmation_beep_freq")
         self.wake_confirmation_beep_duration = self.get("wake_confirmation_beep_duration")
         self.visual_state_indicator = self.get("visual_state_indicator").lower() == "enabled"
+        # Barge-in feature
+        self.barge_in = self.get("barge_in").lower() == "enabled"
 
         # Auto-detect channels if not explicitly configured
         if self.channels is None:

@@ -152,7 +152,28 @@ class Audio:
     def play_audio(self):
         return self.play_audio_file(self.config.tmp_recording + ".mp3")
 
-    def play_audio_file(self, file_path):
+    def stop_playback(self):
+        """Stop audio playback immediately.
+        
+        This method stops pygame mixer music playback, which is used for TTS.
+        Safe to call even if no audio is playing.
+        """
+        try:
+            if pygame.mixer.get_init():
+                pygame.mixer.music.stop()
+                if self.config.debug:
+                    logging.info("Audio playback stopped")
+        except Exception as e:
+            if self.config.debug:
+                logging.warning(f"Error stopping audio playback: {e}")
+
+    def play_audio_file(self, file_path, stop_event=None):
+        """Play an audio file, with optional early termination via stop_event.
+
+        Args:
+            file_path: Path to the audio file to play
+            stop_event: Optional threading.Event - if set, playback stops early
+        """
         try:
             if not pygame.mixer.get_init():
                 try:
@@ -171,6 +192,12 @@ class Audio:
             pygame.mixer.music.play()
 
             while pygame.mixer.music.get_busy():
+                # Check for early termination signal
+                if stop_event and stop_event.is_set():
+                    pygame.mixer.music.stop()
+                    if self.config.debug:
+                        logging.info("Playback interrupted by stop_event")
+                    break
                 pygame.time.Clock().tick(10)
         except FileNotFoundError as e:
             error_msg = handle_file_error(e, operation="read", filename=os.path.basename(file_path))
