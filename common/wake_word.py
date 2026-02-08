@@ -887,7 +887,7 @@ class WakeWordMode:
                 if barge_in_enabled and self.porcupine:
                     self._start_barge_in_detection()
                 elif barge_in_enabled and not self.porcupine:
-                    # Log at debug level to be consistent with other conditional warnings
+                    # Only log in debug mode to be consistent with other conditional warnings
                     if self.config.debug:
                         logging.warning(
                             "Barge-in is enabled in configuration, but Porcupine is not initialized. "

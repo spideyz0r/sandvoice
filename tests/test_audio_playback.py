@@ -250,7 +250,9 @@ class TestPlayAudioFileWithStopEvent(unittest.TestCase):
             # TypeError means the signature is wrong - fail the test
             self.fail("play_audio_file does not accept stop_event parameter")
         except (RuntimeError, FileNotFoundError, OSError):
-            pass  # Expected - dummy file won't play properly
+            # Expected: dummy temp file won't play properly on most platforms/CI.
+            # We're testing the method signature accepts stop_event, not actual playback.
+            pass
         finally:
             if temp_file and os.path.exists(temp_file):
                 os.unlink(temp_file)
@@ -297,7 +299,9 @@ class TestPlayAudioFileWithStopEvent(unittest.TestCase):
 
                 audio.play_audio_file(temp_file, stop_event=stop_event)
             except (RuntimeError, FileNotFoundError, OSError):
-                pass  # Expected - dummy file won't play properly
+                # Expected: dummy temp file won't play properly on most platforms/CI.
+                # We're testing the stop_event interruption behavior, not actual audio.
+                pass
             finally:
                 if temp_file and os.path.exists(temp_file):
                     os.unlink(temp_file)
@@ -341,6 +345,8 @@ class TestPlayAudioFileWithStopEvent(unittest.TestCase):
                     try:
                         audio.play_audio_file(temp_file, stop_event=stop_event)
                     except (RuntimeError, FileNotFoundError, OSError):
+                        # Expected: dummy temp file won't play properly on most platforms/CI.
+                        # We're testing the logging behavior, not actual audio playback.
                         pass
 
                     # Verify the interruption was logged
@@ -385,6 +391,8 @@ class TestPlayAudioFileWithStopEvent(unittest.TestCase):
 
                 audio.play_audio_file(temp_file, stop_event=stop_event)
             except (RuntimeError, FileNotFoundError, OSError):
+                # Expected: dummy temp file won't play properly on most platforms/CI.
+                # We're testing that playback completes normally when stop_event is unset.
                 pass
             finally:
                 if temp_file and os.path.exists(temp_file):
