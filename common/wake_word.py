@@ -616,6 +616,13 @@ class WakeWordMode:
 
             print(f"You: {user_input}")
 
+            # Check for barge-in before starting response generation
+            if barge_in_thread and self._check_barge_in_interrupt():
+                if self.config.debug:
+                    logging.info("Barge-in detected after transcription, before response generation")
+                self._handle_immediate_barge_in(barge_in_thread)
+                return
+
             # Generate response (prefer plugin routing when available)
             # Both paths support barge-in polling for immediate interruption
             if self.route_message is not None:
@@ -666,6 +673,13 @@ class WakeWordMode:
 
             print(f"{self.config.botname}: {self.response_text}\n")
 
+            # Check for barge-in before starting TTS generation
+            if barge_in_thread and self._check_barge_in_interrupt():
+                if self.config.debug:
+                    logging.info("Barge-in detected after response, before TTS generation")
+                self._handle_immediate_barge_in(barge_in_thread)
+                return
+
             # Generate TTS if bot_voice is enabled (with immediate barge-in response if enabled)
             if self.config.bot_voice:
                 # Clean up any orphaned TTS files from interrupted previous requests
@@ -692,6 +706,18 @@ class WakeWordMode:
                         logging.info(f"Generated {len(self.tts_files)} TTS files")
                     else:
                         logging.warning("No TTS files generated")
+
+            # Final barge-in check before transitioning to RESPONDING
+            # This catches barge-in detected between last polling check and now
+            if barge_in_thread and self._check_barge_in_interrupt():
+                if self.config.debug:
+                    logging.info("Barge-in detected after processing completed, before RESPONDING")
+                # Clean up TTS files we just generated since we're not going to play them
+                if self.tts_files:
+                    self._cleanup_remaining_tts_files(self.tts_files)
+                    self.tts_files = None
+                self._handle_immediate_barge_in(barge_in_thread)
+                return
 
             # Transition to RESPONDING state (barge-in thread continues running)
             self.state = State.RESPONDING
