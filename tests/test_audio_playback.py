@@ -203,13 +203,16 @@ class TestStopPlayback(unittest.TestCase):
         """Test that stop_playback logs when debug is enabled."""
         audio = self.Audio.__new__(self.Audio)
         audio.config = Mock(debug=True)
-        
+
         import pygame
         pygame.mixer.init()
-        
+
         with patch('common.audio.logging.info') as mock_log:
             audio.stop_playback()
-            mock_log.assert_called_with("Audio playback stopped")
+            # Check that stop_playback was logged (format includes thread and was_busy info)
+            log_calls = [str(call) for call in mock_log.call_args_list]
+            stop_logged = any('stop_playback' in call for call in log_calls)
+            self.assertTrue(stop_logged, "stop_playback should be logged in debug mode")
 
 
 class TestPlayAudioFileWithStopEvent(unittest.TestCase):
