@@ -16,6 +16,19 @@ class Audio:
         self.audio = None
         self.initialize_audio()
 
+    def log_mixer_state(self, context=""):
+        """Log the current state of pygame.mixer.music for debugging."""
+        if not self.config.debug:
+            return
+        try:
+            import threading
+            mixer_init = pygame.mixer.get_init()
+            music_busy = pygame.mixer.music.get_busy() if mixer_init else None
+            logging.info(f">>> MIXER STATE [{context}]: thread={threading.current_thread().name}, "
+                        f"mixer_init={mixer_init is not None}, music_busy={music_busy}")
+        except Exception as e:
+            logging.warning(f">>> MIXER STATE [{context}]: Error getting state: {e}")
+
     def init_recording(self):
         listener = keyboard.Listener(on_press=self.on_press)
         listener.start()
@@ -152,17 +165,30 @@ class Audio:
     def play_audio(self):
         return self.play_audio_file(self.config.tmp_recording + ".mp3")
 
-    def stop_playback(self):
+    def stop_playback(self, full_reset=False):
         """Stop audio playback immediately.
-        
+
         This method stops pygame mixer music playback, which is used for TTS.
         Safe to call even if no audio is playing.
+
+        Args:
+            full_reset: If True, completely quit and reinitialize the mixer
+                       to ensure no cached audio can play.
         """
         try:
+            import threading
+            current_thread = threading.current_thread().name
+            self.log_mixer_state("stop_playback BEFORE")
             if pygame.mixer.get_init():
+                was_busy = pygame.mixer.music.get_busy()
                 pygame.mixer.music.stop()
                 if self.config.debug:
-                    logging.info("Audio playback stopped")
+                    logging.info(f">>> stop_playback called: thread={current_thread}, was_busy={was_busy}")
+                if full_reset:
+                    pygame.mixer.quit()
+                    if self.config.debug:
+                        logging.info(f">>> pygame.mixer.quit() called for full reset")
+            self.log_mixer_state("stop_playback AFTER")
         except Exception as e:
             if self.config.debug:
                 logging.warning(f"Error stopping audio playback: {e}")
@@ -175,6 +201,11 @@ class Audio:
             stop_event: Optional threading.Event - if set, playback stops early
         """
         try:
+            import threading
+            current_thread = threading.current_thread().name
+
+            self.log_mixer_state(f"play_audio_file ENTER - {os.path.basename(file_path) if file_path else 'None'}")
+
             if not pygame.mixer.get_init():
                 try:
                     pygame.mixer.init()
@@ -190,22 +221,27 @@ class Audio:
                     raise RuntimeError(error_msg)
             # Stop any currently playing audio before loading new file
             if pygame.mixer.music.get_busy():
-                pygame.mixer.music.stop()
                 if self.config.debug:
-                    logging.info("Stopped previous audio before loading new file")
+                    logging.info(f">>> STOPPING PREVIOUS AUDIO: thread={current_thread}")
+                pygame.mixer.music.stop()
             if self.config.debug:
-                logging.info(f">>> AUDIO PLAYBACK STARTING: {file_path}")
+                logging.info(f">>> AUDIO PLAYBACK STARTING: thread={current_thread}, file={file_path}")
             pygame.mixer.music.load(file_path)
             pygame.mixer.music.play()
+            if self.config.debug:
+                logging.info(f">>> AUDIO PLAYBACK play() CALLED: thread={current_thread}")
 
             while pygame.mixer.music.get_busy():
                 # Check for early termination signal
                 if stop_event and stop_event.is_set():
                     pygame.mixer.music.stop()
                     if self.config.debug:
-                        logging.info("Playback interrupted by stop_event")
+                        logging.info(f">>> Playback interrupted by stop_event: thread={current_thread}")
                     break
                 pygame.time.Clock().tick(10)
+
+            if self.config.debug:
+                logging.info(f">>> play_audio_file EXIT: thread={current_thread}, file={file_path}")
         except FileNotFoundError as e:
             error_msg = handle_file_error(e, operation="read", filename=os.path.basename(file_path))
             if self.config.debug:

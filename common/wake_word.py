@@ -269,6 +269,10 @@ class WakeWordMode:
         if self.config.visual_state_indicator:
             print("🎤 Listening...")
 
+        # Debug: Check if any audio is unexpectedly playing when we enter LISTENING
+        if self.config.debug:
+            self.audio.log_mixer_state("LISTENING state entered")
+
         if not self.config.vad_enabled:
             if self.config.debug:
                 logging.warning("VAD is disabled in config. Skipping recording.")
@@ -503,12 +507,22 @@ class WakeWordMode:
         thread.start()
 
         # Poll every 50ms for completion or barge-in (faster response)
+        poll_count = 0
         while thread.is_alive():
             if self._check_barge_in_interrupt():
                 if self.config.debug:
                     logging.info(f"Barge-in during {operation_name} - responding immediately!")
                 return False, None
             time.sleep(0.05)
+            poll_count += 1
+            # Every 2 seconds (40 polls), check if audio is unexpectedly playing
+            if self.config.debug and poll_count % 40 == 0:
+                try:
+                    import pygame
+                    if pygame.mixer.get_init() and pygame.mixer.music.get_busy():
+                        logging.warning(f">>> UNEXPECTED: Audio is playing during {operation_name} polling!")
+                except Exception:
+                    pass
 
         # Operation completed - check for errors
         if error_holder[0] is not None:
@@ -524,9 +538,13 @@ class WakeWordMode:
         """
         if self.config.debug:
             logging.info(f"=== BARGE-IN TRIGGERED === Current state: {self.state.name}")
+            self.audio.log_mixer_state("barge-in BEFORE stop")
 
-        # Immediately stop any audio that might be playing
-        self.audio.stop_playback()
+        # Immediately stop any audio and do full reset to prevent any cached audio from playing
+        self.audio.stop_playback(full_reset=True)
+
+        if self.config.debug:
+            self.audio.log_mixer_state("barge-in AFTER stop")
 
         # Immediately clean up ALL orphaned TTS files (don't wait for scheduled cleanup)
         self._cleanup_all_orphaned_tts_files()
@@ -582,6 +600,10 @@ class WakeWordMode:
         """
         if self.config.visual_state_indicator:
             print("🤔 Processing...")
+
+        # Debug: Check if any audio is unexpectedly playing when we enter PROCESSING
+        if self.config.debug:
+            self.audio.log_mixer_state("PROCESSING state entered")
 
         # Reset response data
         self.response_text = None
@@ -709,7 +731,8 @@ class WakeWordMode:
 
                 if self.config.debug:
                     if self.tts_files:
-                        logging.info(f"Generated {len(self.tts_files)} TTS files")
+                        tts_file_info = [os.path.basename(f) for f in self.tts_files]
+                        logging.info(f"Generated {len(self.tts_files)} TTS files: {tts_file_info}")
                     else:
                         logging.warning("No TTS files generated")
 
@@ -728,6 +751,7 @@ class WakeWordMode:
             # Transition to RESPONDING state (barge-in thread continues running)
             if self.config.debug:
                 logging.info(f"=== TRANSITIONING TO RESPONDING === TTS files: {len(self.tts_files) if self.tts_files else 0}")
+                self.audio.log_mixer_state("BEFORE RESPONDING transition")
             self.state = State.RESPONDING
 
         except Exception as e:
@@ -806,7 +830,8 @@ class WakeWordMode:
             pattern = os.path.join(self.config.tmp_files_path, "tts-response-*.mp3")
             orphaned_files = glob.glob(pattern)
             if orphaned_files and self.config.debug:
-                logging.info(f"Cleaning up {len(orphaned_files)} orphaned TTS files before new TTS generation")
+                orphaned_info = [os.path.basename(f) for f in orphaned_files]
+                logging.info(f"Cleaning up {len(orphaned_files)} orphaned TTS files: {orphaned_info}")
             self._cleanup_specific_tts_files(orphaned_files)
         except Exception as e:
             if self.config.debug:
@@ -923,8 +948,18 @@ class WakeWordMode:
         Barge-in thread may already be running from PROCESSING state.
         Transitions back to IDLE or LISTENING (if barge-in).
         """
+        import threading
         if self.config.debug:
-            logging.info(f"=== ENTERING RESPONDING === TTS files: {self.tts_files}")
+            tts_file_info = [os.path.basename(f) for f in self.tts_files] if self.tts_files else None
+            # Log what files actually exist in temp directory
+            try:
+                pattern = os.path.join(self.config.tmp_files_path, "tts-response-*.mp3")
+                all_tts_on_disk = [os.path.basename(f) for f in glob.glob(pattern)]
+                logging.info(f"=== ENTERING RESPONDING === thread={threading.current_thread().name}")
+                logging.info(f"  self.tts_files = {tts_file_info}")
+                logging.info(f"  files_on_disk = {all_tts_on_disk}")
+            except Exception as e:
+                logging.info(f"=== ENTERING RESPONDING === thread={threading.current_thread().name}, TTS files: {tts_file_info}")
 
         if self.config.visual_state_indicator:
             print("🔊 Responding...")
