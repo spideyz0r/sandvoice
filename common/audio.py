@@ -188,6 +188,11 @@ class Audio:
                     if self.config.debug:
                         logging.error(error_msg)
                     raise RuntimeError(error_msg)
+            # Stop any currently playing audio before loading new file
+            if pygame.mixer.music.get_busy():
+                pygame.mixer.music.stop()
+                if self.config.debug:
+                    logging.info("Stopped previous audio before loading new file")
             pygame.mixer.music.load(file_path)
             pygame.mixer.music.play()
 

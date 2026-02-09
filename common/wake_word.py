@@ -525,6 +525,9 @@ class WakeWordMode:
         if self.config.debug:
             logging.info(f"=== BARGE-IN TRIGGERED === Current state: {self.state.name}")
 
+        # Immediately stop any audio that might be playing
+        self.audio.stop_playback()
+
         # Signal barge-in thread to stop and give it a brief chance to clean up
         if barge_in_thread and self.barge_in_stop_flag:
             self.barge_in_stop_flag.set()
