@@ -668,6 +668,10 @@ class WakeWordMode:
 
             # Generate TTS if bot_voice is enabled (with immediate barge-in response if enabled)
             if self.config.bot_voice:
+                # Clean up any orphaned TTS files from interrupted previous requests
+                # This prevents leftover files from affecting the new response
+                self._cleanup_all_orphaned_tts_files()
+
                 # Capture response text locally to avoid race with barge-in clearing self.response_text
                 response_text_for_tts = self.response_text
                 if barge_in_thread:
@@ -757,6 +761,22 @@ class WakeWordMode:
             except OSError as e:
                 if self.config.debug:
                     logging.warning(f"Failed to delete orphaned TTS file: {e}")
+
+    def _cleanup_all_orphaned_tts_files(self):
+        """Immediately clean up all orphaned TTS files.
+
+        This is called before generating new TTS to ensure no leftover files
+        from interrupted requests could cause issues.
+        """
+        try:
+            pattern = os.path.join(self.config.tmp_files_path, "tts-response-*.mp3")
+            orphaned_files = glob.glob(pattern)
+            if orphaned_files and self.config.debug:
+                logging.info(f"Cleaning up {len(orphaned_files)} orphaned TTS files before new TTS generation")
+            self._cleanup_specific_tts_files(orphaned_files)
+        except Exception as e:
+            if self.config.debug:
+                logging.warning(f"Error cleaning up orphaned TTS files: {e}")
 
     def _schedule_orphaned_tts_cleanup(self):
         """Schedule cleanup of orphaned TTS files after a short delay.
