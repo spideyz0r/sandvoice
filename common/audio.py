@@ -193,6 +193,8 @@ class Audio:
                 pygame.mixer.music.stop()
                 if self.config.debug:
                     logging.info("Stopped previous audio before loading new file")
+            if self.config.debug:
+                logging.info(f">>> AUDIO PLAYBACK STARTING: {file_path}")
             pygame.mixer.music.load(file_path)
             pygame.mixer.music.play()
 

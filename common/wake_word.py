@@ -528,6 +528,9 @@ class WakeWordMode:
         # Immediately stop any audio that might be playing
         self.audio.stop_playback()
 
+        # Immediately clean up ALL orphaned TTS files (don't wait for scheduled cleanup)
+        self._cleanup_all_orphaned_tts_files()
+
         # Signal barge-in thread to stop and give it a brief chance to clean up
         if barge_in_thread and self.barge_in_stop_flag:
             self.barge_in_stop_flag.set()
