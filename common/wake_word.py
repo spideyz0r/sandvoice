@@ -523,7 +523,7 @@ class WakeWordMode:
             barge_in_thread: The barge-in detection thread to stop
         """
         if self.config.debug:
-            logging.info("Handling immediate barge-in response")
+            logging.info(f"=== BARGE-IN TRIGGERED === Current state: {self.state.name}")
 
         # Signal barge-in thread to stop and give it a brief chance to clean up
         if barge_in_thread and self.barge_in_stop_flag:
@@ -720,6 +720,8 @@ class WakeWordMode:
                 return
 
             # Transition to RESPONDING state (barge-in thread continues running)
+            if self.config.debug:
+                logging.info(f"=== TRANSITIONING TO RESPONDING === TTS files: {len(self.tts_files) if self.tts_files else 0}")
             self.state = State.RESPONDING
 
         except Exception as e:
@@ -915,6 +917,9 @@ class WakeWordMode:
         Barge-in thread may already be running from PROCESSING state.
         Transitions back to IDLE or LISTENING (if barge-in).
         """
+        if self.config.debug:
+            logging.info(f"=== ENTERING RESPONDING === TTS files: {self.tts_files}")
+
         if self.config.visual_state_indicator:
             print("🔊 Responding...")
 
