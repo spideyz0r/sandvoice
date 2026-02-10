@@ -323,6 +323,10 @@ class AI:
 
     @retry_with_backoff(max_attempts=3, initial_delay=1)
     def text_to_speech(self, text, model = None, voice = None):
+        if self.config.debug:
+            import threading
+            logging.info(f">>> TTS GENERATION CALLED from thread {threading.current_thread().name}: text={text[:50] if text else 'empty'}...")
+            logging.info(f">>> TTS GENERATION full text length: {len(text) if text else 0} chars")
         if not model:
             model = self.config.text_to_speech_model
         if not voice:
@@ -350,6 +354,9 @@ class AI:
                     )
                     output_files.append(speech_file_path)
                     response.stream_to_file(speech_file_path)
+                    if self.config.debug:
+                        import threading
+                        logging.info(f">>> TTS FILE CREATED: thread={threading.current_thread().name}, file={os.path.basename(speech_file_path)}")
             except Exception:
                 for f in output_files:
                     try:

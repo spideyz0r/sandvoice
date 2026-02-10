@@ -1,3 +1,4 @@
+setuptools<81
 beautifulsoup4
 coverage
 feedparser
@@ -13,5 +14,4 @@ pygame
 pynput
 PyYAML
 Requests
-setuptools
 webrtcvad==2.0.10

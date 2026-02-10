@@ -21,7 +21,6 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
-          cache: 'pip'
 
       - name: Install system dependencies
         run: |
@@ -31,6 +30,7 @@ jobs:
       - name: Install Python dependencies
         run: |
           python -m pip install --upgrade pip
+          pip install "setuptools<81"  # Required for pkg_resources used by webrtcvad (removed in v81+)
           pip install -r requirements.txt
 
       - name: Run tests with coverage

@@ -15,14 +15,22 @@ def _install_fake_deps_for_common_audio():
     fake_pynput = types.SimpleNamespace(keyboard=fake_keyboard)
 
     class _FakeMusic:
+        def __init__(self):
+            self._stopped = False
+
         def load(self, _path):
             return None
 
         def play(self):
+            self._stopped = False
             return None
 
         def get_busy(self):
             return False
+
+        def stop(self):
+            self._stopped = True
+            return None
 
     class _FakeMixer:
         def __init__(self):
@@ -34,6 +42,9 @@ def _install_fake_deps_for_common_audio():
 
         def init(self):
             self._init = (44100, -16, 2)
+
+        def quit(self):
+            self._init = None
 
     class _FakeTime:
         class Clock:
@@ -135,3 +146,262 @@ class TestMixerInitialization(unittest.TestCase):
 
         self.Audio.play_audio_file(audio, '/tmp/fake.mp3')
         self.assertIsNotNone(pygame.mixer.get_init())
+
+
+class TestStopPlayback(unittest.TestCase):
+    """Test stop_playback method for barge-in functionality."""
+    
+    def setUp(self):
+        _install_fake_deps_for_common_audio()
+        from common.audio import Audio
+        self.Audio = Audio
+
+    def test_stop_playback_calls_mixer_stop(self):
+        """Test that stop_playback calls pygame.mixer.music.stop()."""
+        audio = self.Audio.__new__(self.Audio)
+        audio.config = Mock(debug=False)
+
+        import pygame
+        # Initialize mixer
+        pygame.mixer.init()
+
+        # Track if stop was called
+        original_stop = pygame.mixer.music.stop
+        stop_called = []
+
+        def track_stop():
+            stop_called.append(True)
+            return original_stop()
+
+        try:
+            pygame.mixer.music.stop = track_stop
+
+            # Call stop_playback
+            audio.stop_playback()
+
+            # Verify stop was called
+            self.assertGreater(len(stop_called), 0)
+        finally:
+            pygame.mixer.music.stop = original_stop
+    
+    def test_stop_playback_safe_when_mixer_not_initialized(self):
+        """Test that stop_playback is safe to call when mixer not initialized."""
+        audio = self.Audio.__new__(self.Audio)
+        audio.config = Mock(debug=False)
+
+        import pygame
+        # Uninitialize the mixer using the fake mixer's quit method
+        pygame.mixer.quit()
+
+        # Verify mixer is uninitialized
+        self.assertIsNone(pygame.mixer.get_init())
+
+        # Should not raise exception
+        audio.stop_playback()
+    
+    def test_stop_playback_logs_in_debug_mode(self):
+        """Test that stop_playback logs when debug is enabled."""
+        audio = self.Audio.__new__(self.Audio)
+        audio.config = Mock(debug=True)
+
+        import pygame
+        pygame.mixer.init()
+
+        with patch('common.audio.logging.info') as mock_log:
+            audio.stop_playback()
+            # Check that stop_playback was logged (format includes thread and was_busy info)
+            log_calls = [str(call) for call in mock_log.call_args_list]
+            stop_logged = any('stop_playback' in call for call in log_calls)
+            self.assertTrue(stop_logged, "stop_playback should be logged in debug mode")
+
+
+class TestPlayAudioFileWithStopEvent(unittest.TestCase):
+    """Test play_audio_file with stop_event parameter for barge-in interruption."""
+
+    def setUp(self):
+        _install_fake_deps_for_common_audio()
+        from common.audio import Audio
+        self.Audio = Audio
+
+    def test_play_audio_file_accepts_stop_event_parameter(self):
+        """Test that play_audio_file accepts stop_event parameter without error."""
+        audio = self.Audio.__new__(self.Audio)
+        audio.config = Mock(debug=False)
+
+        import pygame
+        import threading
+        import inspect
+        pygame.mixer.init()
+
+        # Verify the method signature accepts stop_event parameter
+        sig = inspect.signature(audio.play_audio_file)
+        self.assertIn('stop_event', sig.parameters,
+                      "play_audio_file should accept stop_event parameter")
+
+        # Create event that is never set
+        stop_event = threading.Event()
+
+        # Verify the method can be called with the parameter
+        # Only catch playback-related exceptions, not TypeError from wrong signature
+        temp_file = None
+        try:
+            with tempfile.NamedTemporaryFile(suffix='.mp3', delete=False) as f:
+                temp_file = f.name
+
+            audio.play_audio_file(temp_file, stop_event=stop_event)
+        except TypeError:
+            # TypeError means the signature is wrong - fail the test
+            self.fail("play_audio_file does not accept stop_event parameter")
+        except (RuntimeError, FileNotFoundError, OSError):
+            # Expected: dummy temp file won't play properly on most platforms/CI.
+            # We're testing the method signature accepts stop_event, not actual playback.
+            pass
+        finally:
+            if temp_file and os.path.exists(temp_file):
+                os.unlink(temp_file)
+
+    def test_stop_event_interrupts_playback(self):
+        """Test that playback is interrupted when stop_event is set."""
+        audio = self.Audio.__new__(self.Audio)
+        audio.config = Mock(debug=False)
+
+        import pygame
+        import threading
+        pygame.mixer.init()
+
+        # Track calls to pygame.mixer.music.stop
+        stop_called = []
+        original_stop = pygame.mixer.music.stop
+
+        def track_stop():
+            stop_called.append(True)
+            return original_stop()
+
+        pygame.mixer.music.stop = track_stop
+
+        # Make get_busy return True initially to simulate active playback
+        busy_count = [0]
+        original_get_busy = pygame.mixer.music.get_busy
+
+        def controlled_get_busy():
+            busy_count[0] += 1
+            # Return True for first few calls, then False
+            return busy_count[0] < 5
+
+        pygame.mixer.music.get_busy = controlled_get_busy
+
+        try:
+            # Create a pre-set event to trigger immediate stop
+            stop_event = threading.Event()
+            stop_event.set()  # Pre-set to trigger stop on first check
+
+            temp_file = None
+            try:
+                with tempfile.NamedTemporaryFile(suffix='.mp3', delete=False) as f:
+                    temp_file = f.name
+
+                audio.play_audio_file(temp_file, stop_event=stop_event)
+            except (RuntimeError, FileNotFoundError, OSError):
+                # Expected: dummy temp file won't play properly on most platforms/CI.
+                # We're testing the stop_event interruption behavior, not actual audio.
+                pass
+            finally:
+                if temp_file and os.path.exists(temp_file):
+                    os.unlink(temp_file)
+
+            # Verify stop was called due to the stop_event
+            self.assertGreater(len(stop_called), 0,
+                               "pygame.mixer.music.stop should be called when stop_event is set")
+        finally:
+            pygame.mixer.music.stop = original_stop
+            pygame.mixer.music.get_busy = original_get_busy
+
+    def test_stop_event_logs_interruption_in_debug_mode(self):
+        """Test that playback interruption is logged in debug mode."""
+        audio = self.Audio.__new__(self.Audio)
+        audio.config = Mock(debug=True)
+
+        import pygame
+        import threading
+        pygame.mixer.init()
+
+        # Make get_busy return True initially
+        busy_count = [0]
+        original_get_busy = pygame.mixer.music.get_busy
+
+        def controlled_get_busy():
+            busy_count[0] += 1
+            return busy_count[0] < 5
+
+        pygame.mixer.music.get_busy = controlled_get_busy
+
+        try:
+            stop_event = threading.Event()
+            stop_event.set()
+
+            temp_file = None
+            try:
+                with tempfile.NamedTemporaryFile(suffix='.mp3', delete=False) as f:
+                    temp_file = f.name
+
+                with patch('common.audio.logging.info') as mock_log:
+                    try:
+                        audio.play_audio_file(temp_file, stop_event=stop_event)
+                    except (RuntimeError, FileNotFoundError, OSError):
+                        # Expected: dummy temp file won't play properly on most platforms/CI.
+                        # We're testing the logging behavior, not actual audio playback.
+                        pass
+
+                    # Verify the interruption was logged
+                    log_messages = [str(call) for call in mock_log.call_args_list]
+                    interrupted_logged = any('interrupted' in msg.lower() for msg in log_messages)
+                    self.assertTrue(interrupted_logged,
+                                    "Should log that playback was interrupted by stop_event")
+            finally:
+                if temp_file and os.path.exists(temp_file):
+                    os.unlink(temp_file)
+        finally:
+            pygame.mixer.music.get_busy = original_get_busy
+
+    def test_playback_continues_when_stop_event_not_set(self):
+        """Test that playback completes normally when stop_event is never set."""
+        audio = self.Audio.__new__(self.Audio)
+        audio.config = Mock(debug=False)
+
+        import pygame
+        import threading
+        pygame.mixer.init()
+
+        # Track stop calls
+        stop_called = []
+        original_stop = pygame.mixer.music.stop
+
+        def track_stop():
+            stop_called.append(True)
+            return original_stop()
+
+        pygame.mixer.music.stop = track_stop
+
+        try:
+            # Create event but never set it
+            stop_event = threading.Event()
+            # Don't call stop_event.set()
+
+            temp_file = None
+            try:
+                with tempfile.NamedTemporaryFile(suffix='.mp3', delete=False) as f:
+                    temp_file = f.name
+
+                audio.play_audio_file(temp_file, stop_event=stop_event)
+            except (RuntimeError, FileNotFoundError, OSError):
+                # Expected: dummy temp file won't play properly on most platforms/CI.
+                # We're testing that playback completes normally when stop_event is unset.
+                pass
+            finally:
+                if temp_file and os.path.exists(temp_file):
+                    os.unlink(temp_file)
+
+            # With get_busy returning False immediately, playback completes without stop
+            # being called for interruption purposes
+        finally:
+            pygame.mixer.music.stop = original_stop
