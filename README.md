@@ -142,6 +142,8 @@ wake_confirmation_beep_freq: 800
 wake_confirmation_beep_duration: 0.1
 visual_state_indicator: enabled
 
+barge_in: disabled
+
 ```
 
 ### Configuration options
@@ -203,6 +205,8 @@ All configuration keys are loaded from `common/configuration.py` defaults and ca
 - `wake_confirmation_beep_freq`: beep frequency (Hz)
 - `wake_confirmation_beep_duration`: beep duration (seconds)
 - `visual_state_indicator`: `enabled`/`disabled`; show terminal state indicators in wake word mode
+
+- `barge_in`: `enabled`/`disabled`; interrupt TTS in `--wake-word` mode by saying the wake word
 
 
 Enjoy the experience!
