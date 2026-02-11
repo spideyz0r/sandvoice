@@ -43,6 +43,10 @@ plan/
 **Document**: [completed/07-hacker-news-api-only.md](./completed/07-hacker-news-api-only.md)
 **Description**: Hacker News plugin uses only free Firebase API fields (no external HTML fetch/parsing), preserving the podcast-style output while improving reliability and cost.
 
+### Priority 9: Barge-In (Stop TTS on Wake Word)
+**Document**: [completed/09-barge-in-stop-tts-on-wake-word.md](./completed/09-barge-in-stop-tts-on-wake-word.md)
+**Description**: Allow users to interrupt SandVoice speech by saying the wake word, stopping TTS immediately and transitioning into command listening.
+
 ---
 
 ## In Progress 🚧
@@ -73,10 +77,6 @@ plan/
 ### Priority 8: Streaming Responses (And Optional Streaming TTS)
 **Document**: [backlog/08-streaming-responses-and-tts.md](./backlog/08-streaming-responses-and-tts.md)
 **Description**: Stream LLM responses to stdout for lower perceived latency; optional follow-up to pipeline streaming text into chunked TTS for earlier voice playback.
-
-### Priority 9: Barge-In (Stop TTS on Wake Word)
-**Document**: [backlog/09-barge-in-stop-tts-on-wake-word.md](./backlog/09-barge-in-stop-tts-on-wake-word.md)
-**Description**: Allow users to interrupt SandVoice speech by saying the wake word, stopping TTS immediately and transitioning into command listening.
 
 ### Priority 10: Speech-to-Text Task and Language
 **Document**: [backlog/10-speech-to-text-task-and-language.md](./backlog/10-speech-to-text-task-and-language.md)
