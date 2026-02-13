@@ -1,18 +1,25 @@
 # Plan 15: ML-Based Speech Classification
 
+**Status**: 📋 Backlog
+**Priority**: 15
+**Platforms**: macOS, Raspberry Pi
+
+---
+
 ## Problem Statement
-Energy-based detection (Plan 11) helps with constant noise but struggles with:
+Energy-based detection (Plan 14) helps with constant noise but struggles with:
 - Podcasts/audiobooks (speech in background)
 - TV shows with dialogue
 - Multiple speakers in room
 
-Need ML-based classification to distinguish "user speaking to assistant" from "background speech."
+Need ML-based speech detection that is more robust than simple energy thresholds; distinguishing "user speaking to assistant" vs "background speech" will be achieved by combining this with additional signals (e.g., wake-word windowing or proximity/direction features).
 
 ## Goals
-1. Integrate lightweight speech classification model
-2. Distinguish user speech from background audio (music, TV, podcasts)
+1. Integrate lightweight speech classification / VAD model
+2. Robustly detect speech vs non-speech even with background audio (music, TV, podcasts)
 3. Maintain low latency (<50ms per frame)
 4. Work on Raspberry Pi with acceptable performance
+5. Combine VAD with at least one additional signal (wake-word gating, proximity heuristics) to approximate "user speaking to assistant"
 
 ## Technical Options
 
@@ -61,8 +68,10 @@ import torch
 
 class SpeechClassifier:
     def __init__(self, threshold=0.5):
+        # Pin to specific version for reproducibility and offline support
+        # Consider vendoring model artifact for Pi/offline use with integrity verification
         self.model, self.utils = torch.hub.load(
-            'snakers4/silero-vad',
+            'snakers4/silero-vad:v5.1',  # Pin to immutable revision
             'silero_vad',
             force_reload=False
         )
@@ -121,11 +130,15 @@ speech_classifier_use_proximity: true
 class SpeechClassifier:
     _instance = None
 
+    def __init__(self, threshold=0.5):
+        # ... (as shown in Phase 1)
+        self.threshold = threshold
+
     @classmethod
-    def get_instance(cls, config):
+    def get_instance(cls, threshold=0.5):
         """Lazy singleton to avoid loading model until needed."""
         if cls._instance is None:
-            cls._instance = cls(config)
+            cls._instance = cls(threshold=threshold)
         return cls._instance
 ```
 

@@ -1,5 +1,11 @@
 # Plan 13: VAD Robustness - Timeout and Tuning
 
+**Status**: 📋 Backlog
+**Priority**: 13
+**Platforms**: macOS, Raspberry Pi
+
+---
+
 ## Problem Statement
 When background audio is present (music, podcasts, TV), the VAD keeps listening indefinitely because it detects continuous sound as "speech activity." Users have to manually interrupt or the system hangs.
 

@@ -1,5 +1,11 @@
 # Plan 14: Energy-Based Speech Detection
 
+**Status**: 📋 Backlog
+**Priority**: 14
+**Platforms**: macOS, Raspberry Pi
+
+---
+
 ## Problem Statement
 WebRTC VAD detects any sound as potential speech, including constant background noise like music or podcasts. We need to distinguish actual speech (variable energy, speech patterns) from ambient noise (relatively constant energy).
 
@@ -33,11 +39,24 @@ import numpy as np
 
 def calculate_rms_energy(audio_frames: bytes, sample_width: int = 2) -> float:
     """Calculate RMS energy of audio frames in dB."""
-    samples = np.frombuffer(audio_frames, dtype=np.int16)
+    # Select appropriate dtype and full-scale value based on sample width (bytes)
+    if sample_width == 1:
+        dtype = np.int8
+    elif sample_width == 2:
+        dtype = np.int16
+    elif sample_width == 4:
+        dtype = np.int32
+    else:
+        raise ValueError(f"Unsupported sample_width: {sample_width}")
+
+    samples = np.frombuffer(audio_frames, dtype=dtype)
     rms = np.sqrt(np.mean(samples.astype(np.float32) ** 2))
     if rms == 0:
         return -96.0  # Floor
-    return 20 * np.log10(rms / 32768.0)
+
+    # Full-scale value for signed PCM with the given sample width
+    full_scale = float(1 << (8 * sample_width - 1))
+    return 20 * np.log10(rms / full_scale)
 
 def is_above_threshold(energy_db: float, baseline_db: float, threshold_db: float) -> bool:
     """Check if energy exceeds baseline by threshold."""
@@ -47,6 +66,9 @@ def is_above_threshold(energy_db: float, baseline_db: float, threshold_db: float
 ### Phase 2: Ambient Calibration in IDLE
 ```python
 # In wake_word.py, during _state_idle()
+from common.audio_utils import calculate_rms_energy
+import statistics
+
 class WakeWordMode:
     def __init__(self, ...):
         self.ambient_baseline_db = -40.0  # Default
@@ -58,7 +80,7 @@ class WakeWordMode:
         self.calibration_samples.append(energy)
         if len(self.calibration_samples) > 50:  # ~1.5 seconds
             self.calibration_samples.pop(0)
-        self.ambient_baseline_db = np.mean(self.calibration_samples)
+        self.ambient_baseline_db = statistics.fmean(self.calibration_samples)
 ```
 
 ### Phase 3: Enhanced VAD in LISTENING
