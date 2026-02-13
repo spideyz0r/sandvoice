@@ -1,7 +1,7 @@
 # Plan 15: ML-Based Speech Classification
 
 ## Problem Statement
-Energy-based detection (Plan 11) helps with constant noise but struggles with:
+Energy-based detection (Plan 14) helps with constant noise but struggles with:
 - Podcasts/audiobooks (speech in background)
 - TV shows with dialogue
 - Multiple speakers in room
