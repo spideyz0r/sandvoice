@@ -90,6 +90,38 @@ plan/
 **Document**: [backlog/12-route-definitions-default-route-alignment.md](./backlog/12-route-definitions-default-route-alignment.md)
 **Description**: Fix `default-rote` typo and align default route naming across `routes.yaml` and routing fallbacks.
 
+### Priority 13: VAD Robustness - Timeout and Tuning
+**Document**: [backlog/13-vad-robustness-timeout-tuning.md](./backlog/13-vad-robustness-timeout-tuning.md)
+**Description**: Make VAD more robust in noisy environments via timeout enforcement, better feedback, and tuning/presets.
+
+### Priority 14: Energy-Based Speech Detection
+**Document**: [backlog/14-energy-based-speech-detection.md](./backlog/14-energy-based-speech-detection.md)
+**Description**: Add ambient noise calibration and energy thresholding to reduce false positives from constant background audio.
+
+### Priority 15: Speech Classification (ML)
+**Document**: [backlog/15-speech-classification-ml.md](./backlog/15-speech-classification-ml.md)
+**Description**: Explore lightweight ML-based speech classification (e.g., Silero VAD) to distinguish user speech from background dialogue.
+
+### Priority 16: Voice Ack Earcon
+**Document**: [backlog/16-voice-ack-earcon.md](./backlog/16-voice-ack-earcon.md)
+**Description**: Play a short ack beep once per request to confirm the assistant heard the user and started processing.
+
+### Priority 17: Voice Lead Sentence
+**Document**: [backlog/17-voice-lead-sentence-early-ack.md](./backlog/17-voice-lead-sentence-early-ack.md)
+**Description**: Speak a one-sentence acknowledgement when processing takes long, then speak the final answer when ready.
+
+### Priority 18: TTS Micro-Pauses and Pacing
+**Document**: [backlog/18-tts-micro-pauses-and-pacing.md](./backlog/18-tts-micro-pauses-and-pacing.md)
+**Description**: Add configurable pauses between TTS chunks to make speech feel less rushed.
+
+### Priority 19: Voice Pre-Warm
+**Document**: [backlog/19-voice-prewarm-tts-and-model.md](./backlog/19-voice-prewarm-tts-and-model.md)
+**Description**: Optional startup pre-warm for TTS/LLM to reduce first-interaction latency.
+
+### Priority 20: Background Cache for Frequent Voice Queries
+**Document**: [backlog/20-background-cache-frequent-voice-queries.md](./backlog/20-background-cache-frequent-voice-queries.md)
+**Description**: Opt-in background refresh of weather/crypto/common info to enable instant spoken answers with freshness hints.
+
 ### Future Enhancements
 **Document**: [backlog/FUTURE.md](./backlog/FUTURE.md)
 **Description**: Long-term feature ideas including:
