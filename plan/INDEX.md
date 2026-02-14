@@ -114,10 +114,6 @@ plan/
 **Document**: [backlog/18-tts-micro-pauses-and-pacing.md](./backlog/18-tts-micro-pauses-and-pacing.md)
 **Description**: Add configurable pauses between TTS chunks to make speech feel less rushed.
 
-### Priority 19: Voice Pre-Warm
-**Document**: [backlog/19-voice-prewarm-tts-and-model.md](./backlog/19-voice-prewarm-tts-and-model.md)
-**Description**: Optional startup pre-warm for TTS/LLM to reduce first-interaction latency.
-
 ### Priority 20: Background Cache for Frequent Voice Queries
 **Document**: [backlog/20-background-cache-frequent-voice-queries.md](./backlog/20-background-cache-frequent-voice-queries.md)
 **Description**: Opt-in background refresh of weather/crypto/common info to enable instant spoken answers with freshness hints.
