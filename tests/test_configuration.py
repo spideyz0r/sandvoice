@@ -180,6 +180,24 @@ class TestConfigurationValidation(unittest.TestCase):
 
         self.assertIn("voice_ack_earcon_freq must be a positive integer", str(context.exception))
 
+    def test_voice_ack_earcon_freq_accepts_integer_like_values(self):
+        """Test that integer-like YAML values are accepted and normalized."""
+        self.write_config({
+            "voice_ack_earcon": "enabled",
+            "voice_ack_earcon_freq": 600.0,
+            "voice_ack_earcon_duration": 0.06,
+        })
+        config = Config()
+        self.assertEqual(config.voice_ack_earcon_freq, 600)
+
+        self.write_config({
+            "voice_ack_earcon": "enabled",
+            "voice_ack_earcon_freq": "600",
+            "voice_ack_earcon_duration": 0.06,
+        })
+        config = Config()
+        self.assertEqual(config.voice_ack_earcon_freq, 600)
+
     def test_invalid_falsy_verbosity_values(self):
         """Test that explicitly provided falsy verbosity values still fail validation"""
         for v in ["", "   ", False]:

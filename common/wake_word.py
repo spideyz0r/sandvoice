@@ -14,6 +14,17 @@ import webrtcvad
 from common.beep_generator import create_confirmation_beep, create_ack_earcon
 
 
+def _is_enabled_flag(value):
+    """Interpret common enabled/disabled flag representations."""
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        return value.strip().lower() == "enabled"
+    if isinstance(value, int):
+        return value != 0
+    return bool(value)
+
+
 class State(Enum):
     """Wake word mode states."""
     IDLE = "idle"
@@ -166,7 +177,7 @@ class WakeWordMode:
                     logging.warning(f"Failed to create confirmation beep: {e}")
                 self.confirmation_beep_path = None
 
-        if getattr(self.config, "voice_ack_earcon", False) is True:
+        if _is_enabled_flag(getattr(self.config, "voice_ack_earcon", False)):
             try:
                 self.ack_earcon_path = create_ack_earcon(
                     freq=getattr(self.config, "voice_ack_earcon_freq", 600),
@@ -415,18 +426,28 @@ class WakeWordMode:
                 os.makedirs(self.config.tmp_files_path, exist_ok=True)
 
                 # Write WAV file
-                with wave.open(self.recorded_audio_path, 'wb') as wf:
-                    wf.setnchannels(1)  # Mono
-                    wf.setsampwidth(sample_width)
-                    wf.setframerate(vad_sample_rate)
-                    wf.writeframes(b''.join(frames))
+                try:
+                    with wave.open(self.recorded_audio_path, 'wb') as wf:
+                        wf.setnchannels(1)  # Mono
+                        wf.setsampwidth(sample_width)
+                        wf.setframerate(vad_sample_rate)
+                        wf.writeframes(b''.join(frames))
+                except Exception:
+                    try:
+                        if self.recorded_audio_path and os.path.exists(self.recorded_audio_path):
+                            os.remove(self.recorded_audio_path)
+                    finally:
+                        self.recorded_audio_path = None
+                    raise
 
                 if self.config.debug:
                     logging.info(f"Recorded audio saved: {self.recorded_audio_path}")
                     logging.info(f"Recording duration: {elapsed:.2f}s, {len(frames)} frames")
 
                 # Voice UX: play a short ack earcon before PROCESSING begins
-                if getattr(self.config, "bot_voice", False) and getattr(self.config, "voice_ack_earcon", False) is True:
+                if _is_enabled_flag(getattr(self.config, "bot_voice", False)) and _is_enabled_flag(
+                    getattr(self.config, "voice_ack_earcon", False)
+                ):
                     if self.ack_earcon_path and os.path.exists(self.ack_earcon_path):
                         try:
                             audio_playing = False
