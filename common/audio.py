@@ -193,6 +193,15 @@ class Audio:
             if self.config.debug:
                 logging.warning(f"Error stopping audio playback: {e}")
 
+    def is_playing(self):
+        """Return True if pygame mixer music is currently playing."""
+        try:
+            if pygame.mixer.get_init():
+                return bool(pygame.mixer.music.get_busy())
+        except Exception:
+            return False
+        return False
+
     def play_audio_file(self, file_path, stop_event=None):
         """Play an audio file, with optional early termination via stop_event.
 

@@ -11,7 +11,7 @@ import pvporcupine
 import pyaudio
 import webrtcvad
 
-from common.beep_generator import create_confirmation_beep
+from common.beep_generator import create_confirmation_beep, create_ack_earcon
 
 
 class State(Enum):
@@ -53,6 +53,7 @@ class WakeWordMode:
 
         self.porcupine = None
         self.confirmation_beep_path = None
+        self.ack_earcon_path = None
         self.recorded_audio_path = None
         self.response_text = None
         self.tts_files = None
@@ -164,6 +165,20 @@ class WakeWordMode:
                 if self.config.debug:
                     logging.warning(f"Failed to create confirmation beep: {e}")
                 self.confirmation_beep_path = None
+
+        if getattr(self.config, "voice_ack_earcon", False):
+            try:
+                self.ack_earcon_path = create_ack_earcon(
+                    freq=getattr(self.config, "voice_ack_earcon_freq", 600),
+                    duration=getattr(self.config, "voice_ack_earcon_duration", 0.06),
+                    tmp_path=self.config.tmp_files_path,
+                )
+                if self.config.debug:
+                    logging.info(f"Ack earcon created at: {self.ack_earcon_path}")
+            except Exception as e:
+                if self.config.debug:
+                    logging.warning(f"Failed to create ack earcon: {e}")
+                self.ack_earcon_path = None
 
     def _create_porcupine_instance(self):
         """Create a new Porcupine instance with current config.
@@ -382,6 +397,21 @@ class WakeWordMode:
                 if self.config.debug:
                     logging.info(f"Recorded audio saved: {self.recorded_audio_path}")
                     logging.info(f"Recording duration: {elapsed:.2f}s, {len(frames)} frames")
+
+                # Voice UX: play a short ack earcon before PROCESSING begins
+                if getattr(self.config, "bot_voice", False) and getattr(self.config, "voice_ack_earcon", False):
+                    if self.ack_earcon_path and os.path.exists(self.ack_earcon_path):
+                        try:
+                            audio_playing = False
+                            is_playing_fn = getattr(self.audio, "is_playing", None)
+                            if callable(is_playing_fn):
+                                audio_playing = bool(is_playing_fn())
+
+                            if not audio_playing:
+                                self.audio.play_audio_file(self.ack_earcon_path)
+                        except Exception as e:
+                            if self.config.debug:
+                                logging.warning(f"Failed to play ack earcon: {e}")
 
                 self.state = State.PROCESSING
             else:

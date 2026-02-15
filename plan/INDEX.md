@@ -47,6 +47,10 @@ plan/
 **Document**: [completed/09-barge-in-stop-tts-on-wake-word.md](./completed/09-barge-in-stop-tts-on-wake-word.md)
 **Description**: Allow users to interrupt SandVoice speech by saying the wake word, stopping TTS immediately and transitioning into command listening.
 
+### Priority 16: Voice Ack Earcon
+**Document**: [completed/16-voice-ack-earcon.md](./completed/16-voice-ack-earcon.md)
+**Description**: Play a short ack earcon once per request (after recording, before processing) to reduce perceived latency in voice mode.
+
 ---
 
 ## In Progress 🚧
@@ -101,10 +105,6 @@ plan/
 ### Priority 15: Speech Classification (ML)
 **Document**: [backlog/15-speech-classification-ml.md](./backlog/15-speech-classification-ml.md)
 **Description**: Explore lightweight ML-based speech classification (e.g., Silero VAD) to distinguish user speech from background dialogue.
-
-### Priority 16: Voice Ack Earcon
-**Document**: [backlog/16-voice-ack-earcon.md](./backlog/16-voice-ack-earcon.md)
-**Description**: Play a short ack beep once per request to confirm the assistant heard the user and started processing.
 
 ### Priority 17: Voice Lead Sentence
 **Document**: [backlog/17-voice-lead-sentence-early-ack.md](./backlog/17-voice-lead-sentence-early-ack.md)

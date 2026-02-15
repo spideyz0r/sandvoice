@@ -1,6 +1,6 @@
 # Voice UX: Ack Earcon (Fast Feedback)
 
-**Status**: 📋 Backlog
+**Status**: ✅ Completed
 **Priority**: 16
 **Platforms**: macOS M1, Raspberry Pi 3B
 
@@ -77,11 +77,11 @@ Defaults:
 
 ## Acceptance Criteria
 
-- [ ] When enabled, an ack earcon plays once per user command before processing begins
-- [ ] Earcon is distinct from the wake confirmation beep
-- [ ] Earcon never overlaps with TTS (stop/skip if TTS is playing)
-- [ ] Works in wake word mode on macOS and Raspberry Pi
-- [ ] Can be disabled via config
+- [x] When enabled, an ack earcon plays once per user command before processing begins
+- [x] Earcon is distinct from the wake confirmation beep (different config + separate cached file)
+- [x] Earcon never overlaps with TTS (skip if audio is already playing)
+- [x] Works in wake word mode on macOS and Raspberry Pi
+- [x] Can be disabled via config
 
 ---
 
