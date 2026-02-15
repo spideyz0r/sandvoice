@@ -145,6 +145,28 @@ class TestConfigurationValidation(unittest.TestCase):
 
         self.assertIn("verbosity must be 'brief', 'normal', or 'detailed'", str(context.exception))
 
+    def test_voice_ack_earcon_validation_only_when_enabled(self):
+        """Test that ack earcon freq/duration are only validated when enabled"""
+        # Disabled: invalid values should not fail validation
+        self.write_config({
+            "voice_ack_earcon": "disabled",
+            "voice_ack_earcon_freq": 0,
+            "voice_ack_earcon_duration": 0,
+        })
+        Config()
+
+        # Enabled: invalid values should fail validation
+        self.write_config({
+            "voice_ack_earcon": "enabled",
+            "voice_ack_earcon_freq": 0,
+            "voice_ack_earcon_duration": 0,
+        })
+
+        with self.assertRaises(ValueError) as context:
+            Config()
+
+        self.assertIn("voice_ack_earcon_freq must be a positive number", str(context.exception))
+
     def test_invalid_falsy_verbosity_values(self):
         """Test that explicitly provided falsy verbosity values still fail validation"""
         for v in ["", "   ", False]:

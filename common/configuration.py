@@ -271,11 +271,12 @@ class Config:
         if not isinstance(self.wake_confirmation_beep_duration, (int, float)) or self.wake_confirmation_beep_duration <= 0:
             errors.append("wake_confirmation_beep_duration must be a positive number")
 
-        if not isinstance(self.voice_ack_earcon_freq, (int, float)) or self.voice_ack_earcon_freq <= 0:
-            errors.append("voice_ack_earcon_freq must be a positive number")
+        if self.voice_ack_earcon:
+            if not isinstance(self.voice_ack_earcon_freq, (int, float)) or self.voice_ack_earcon_freq <= 0:
+                errors.append("voice_ack_earcon_freq must be a positive number")
 
-        if not isinstance(self.voice_ack_earcon_duration, (int, float)) or self.voice_ack_earcon_duration <= 0:
-            errors.append("voice_ack_earcon_duration must be a positive number")
+            if not isinstance(self.voice_ack_earcon_duration, (int, float)) or self.voice_ack_earcon_duration <= 0:
+                errors.append("voice_ack_earcon_duration must be a positive number")
 
         # Report all errors
         if errors:

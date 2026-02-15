@@ -56,7 +56,7 @@ def create_confirmation_beep(freq=800, duration=0.1, tmp_path=None, bitrate=128)
 
     os.makedirs(tmp_path, exist_ok=True)
 
-    duration_ms = int(duration * 1000)
+    duration_ms = int(round(duration * 1000))
     beep_filename = f"confirmation_beep_{int(freq)}Hz_{duration_ms}ms_{int(bitrate)}kbps.mp3"
     beep_path = os.path.join(tmp_path, beep_filename)
 
