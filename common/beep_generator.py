@@ -115,7 +115,7 @@ def create_ack_earcon(freq=600, duration=0.06, tmp_path=None, bitrate=128):
 
     os.makedirs(tmp_path, exist_ok=True)
 
-    duration_ms = int(duration * 1000)
+    duration_ms = int(round(duration * 1000))
     earcon_filename = f"ack_earcon_{int(freq)}Hz_{duration_ms}ms_{int(bitrate)}kbps.mp3"
     earcon_path = os.path.join(tmp_path, earcon_filename)
 

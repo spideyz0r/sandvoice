@@ -165,7 +165,20 @@ class TestConfigurationValidation(unittest.TestCase):
         with self.assertRaises(ValueError) as context:
             Config()
 
-        self.assertIn("voice_ack_earcon_freq must be a positive number", str(context.exception))
+        self.assertIn("voice_ack_earcon_freq must be a positive integer", str(context.exception))
+
+    def test_voice_ack_earcon_freq_must_be_int_when_enabled(self):
+        """Test that voice_ack_earcon_freq must be an int when enabled"""
+        self.write_config({
+            "voice_ack_earcon": "enabled",
+            "voice_ack_earcon_freq": 600.5,
+            "voice_ack_earcon_duration": 0.06,
+        })
+
+        with self.assertRaises(ValueError) as context:
+            Config()
+
+        self.assertIn("voice_ack_earcon_freq must be a positive integer", str(context.exception))
 
     def test_invalid_falsy_verbosity_values(self):
         """Test that explicitly provided falsy verbosity values still fail validation"""

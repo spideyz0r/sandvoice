@@ -213,7 +213,7 @@ All configuration keys are loaded from `common/configuration.py` defaults and ca
 - `barge_in`: `enabled`/`disabled`; interrupt TTS in `--wake-word` mode by saying the wake word
 
 - `voice_ack_earcon`: `enabled`/`disabled`; play a short ack earcon after recording and before processing
-- `voice_ack_earcon_freq`: earcon frequency (Hz)
+- `voice_ack_earcon_freq`: earcon frequency (Hz, integer)
 - `voice_ack_earcon_duration`: earcon duration (seconds)
 
 
