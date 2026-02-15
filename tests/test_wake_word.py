@@ -423,6 +423,50 @@ class TestWakeWordModeStateListening(unittest.TestCase):
         self.mock_audio.play_audio_file.assert_called_once_with("/tmp/test/ack.mp3")
         self.assertEqual(mode.state, State.PROCESSING)
 
+    @patch('common.wake_word.os.path.exists')
+    @patch('common.wake_word.time.time')
+    @patch('common.wake_word.os.makedirs')
+    @patch('common.wake_word.wave.open')
+    @patch('common.wake_word.webrtcvad.Vad')
+    @patch('common.wake_word.pyaudio.PyAudio')
+    def test_state_listening_skips_ack_earcon_when_audio_playing(self, mock_pyaudio_class, mock_vad_class,
+                                                                mock_wave_open, mock_makedirs, mock_time, mock_exists):
+        self.mock_config.bot_voice = True
+        self.mock_config.voice_ack_earcon = True
+
+        def exists_side_effect(path):
+            return path == "/tmp/test/ack.mp3"
+        mock_exists.side_effect = exists_side_effect
+
+        mock_time.side_effect = [0.0, 0.0, 31.0, 31.0, 31.0]
+
+        mock_vad = Mock()
+        mock_vad.is_speech.return_value = True
+        mock_vad_class.return_value = mock_vad
+
+        mock_stream = Mock()
+        mock_stream.read.return_value = b'\x00' * 960
+
+        mock_pa = Mock()
+        mock_pa.open.return_value = mock_stream
+        mock_pa.get_sample_size.return_value = 2
+        mock_pyaudio_class.return_value = mock_pa
+
+        mock_wf = Mock()
+        mock_wave_open.return_value.__enter__.return_value = mock_wf
+
+        self.mock_audio.is_playing.return_value = True
+
+        mode = WakeWordMode(self.mock_config, self.mock_ai, self.mock_audio)
+        mode.ack_earcon_path = "/tmp/test/ack.mp3"
+        mode.running = True
+        mode.state = State.LISTENING
+
+        mode._state_listening()
+
+        self.mock_audio.play_audio_file.assert_not_called()
+        self.assertEqual(mode.state, State.PROCESSING)
+
     @patch('common.wake_word.time.time')
     @patch('common.wake_word.os.makedirs')
     @patch('common.wake_word.wave.open')

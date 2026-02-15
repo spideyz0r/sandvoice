@@ -379,6 +379,33 @@ class WakeWordMode:
                 # Calculate final recording duration
                 elapsed = time.time() - recording_start
 
+                # Capture audio format info before we terminate PyAudio
+                sample_width = None
+                try:
+                    sample_width = pa.get_sample_size(pyaudio.paInt16)
+                except Exception as e:
+                    if self.config.debug:
+                        logging.warning(f"Failed to get sample width: {e}")
+                    sample_width = 2  # 16-bit PCM
+
+                # Close input stream before playing any earcons (improves compatibility on some devices)
+                if audio_stream is not None:
+                    try:
+                        audio_stream.stop_stream()
+                        audio_stream.close()
+                    except Exception as e:
+                        if self.config.debug:
+                            logging.warning(f"Failed to close audio stream: {e}")
+                    audio_stream = None
+
+                if pa is not None:
+                    try:
+                        pa.terminate()
+                    except Exception as e:
+                        if self.config.debug:
+                            logging.warning(f"Failed to terminate PyAudio: {e}")
+                    pa = None
+
                 self.recorded_audio_path = os.path.join(
                     self.config.tmp_files_path,
                     f"wake_word_recording_{int(time.time())}.wav"
@@ -390,7 +417,7 @@ class WakeWordMode:
                 # Write WAV file
                 with wave.open(self.recorded_audio_path, 'wb') as wf:
                     wf.setnchannels(1)  # Mono
-                    wf.setsampwidth(pa.get_sample_size(pyaudio.paInt16))
+                    wf.setsampwidth(sample_width)
                     wf.setframerate(vad_sample_rate)
                     wf.writeframes(b''.join(frames))
 
