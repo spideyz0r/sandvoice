@@ -106,7 +106,8 @@ class TestWakeWordModeInitialize(unittest.TestCase):
 
     @patch('common.wake_word.pvporcupine.create')
     @patch('common.wake_word.create_ack_earcon')
-    def test_initialize_creates_ack_earcon_when_enabled(self, mock_ack, mock_porcupine_create):
+    @patch('common.wake_word.create_confirmation_beep')
+    def test_initialize_creates_ack_earcon_when_enabled(self, mock_beep, mock_ack, mock_porcupine_create):
         self.mock_config.bot_voice = True
         self.mock_config.voice_ack_earcon = True
         self.mock_config.voice_ack_earcon_freq = 600
@@ -116,6 +117,7 @@ class TestWakeWordModeInitialize(unittest.TestCase):
         mock_porcupine.sample_rate = 16000
         mock_porcupine.frame_length = 512
         mock_porcupine_create.return_value = mock_porcupine
+        mock_beep.return_value = "/tmp/test/beep.mp3"
         mock_ack.return_value = "/tmp/test/ack.mp3"
 
         mode = WakeWordMode(self.mock_config, self.mock_ai, self.mock_audio)
