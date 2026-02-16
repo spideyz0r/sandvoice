@@ -8,11 +8,18 @@ from unittest.mock import Mock, patch
 
 def _install_fake_deps_for_common_audio():
     # Minimal stub modules so `common.audio` can be imported without native deps.
-    fake_pyaudio = types.SimpleNamespace(paInt16=8, PyAudio=object)
-    fake_lameenc = types.SimpleNamespace(Encoder=object)
+    fake_pyaudio = types.ModuleType('pyaudio')
+    fake_pyaudio.paInt16 = 8
+    fake_pyaudio.PyAudio = object
 
-    fake_keyboard = types.SimpleNamespace(Listener=object)
-    fake_pynput = types.SimpleNamespace(keyboard=fake_keyboard)
+    fake_lameenc = types.ModuleType('lameenc')
+    fake_lameenc.Encoder = object
+
+    fake_keyboard = types.ModuleType('pynput.keyboard')
+    fake_keyboard.Listener = object
+
+    fake_pynput = types.ModuleType('pynput')
+    fake_pynput.keyboard = fake_keyboard
 
     class _FakeMusic:
         def __init__(self):
@@ -51,13 +58,19 @@ def _install_fake_deps_for_common_audio():
             def tick(self, _fps):
                 return None
 
-    fake_pygame = types.SimpleNamespace(mixer=_FakeMixer(), time=_FakeTime())
+    fake_pygame = types.ModuleType('pygame')
+    fake_pygame.mixer = _FakeMixer()
+    fake_pygame.time = _FakeTime()
 
-    sys.modules.setdefault('pyaudio', fake_pyaudio)
-    sys.modules.setdefault('lameenc', fake_lameenc)
-    sys.modules.setdefault('pynput', fake_pynput)
-    sys.modules.setdefault('pynput.keyboard', fake_keyboard)
-    sys.modules.setdefault('pygame', fake_pygame)
+    # Force stubs even when real deps are installed.
+    sys.modules['pyaudio'] = fake_pyaudio
+    sys.modules['lameenc'] = fake_lameenc
+    sys.modules['pynput'] = fake_pynput
+    sys.modules['pynput.keyboard'] = fake_keyboard
+    sys.modules['pygame'] = fake_pygame
+
+    # Ensure subsequent imports see the stubs.
+    sys.modules.pop('common.audio', None)
 
 
 class TestAudioPlaybackHelpers(unittest.TestCase):

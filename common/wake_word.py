@@ -19,7 +19,12 @@ def _is_enabled_flag(value):
     if isinstance(value, bool):
         return value
     if isinstance(value, str):
-        return value.strip().lower() == "enabled"
+        normalized = value.strip().lower()
+        if normalized in {"enabled", "true", "yes", "1", "on"}:
+            return True
+        if normalized in {"disabled", "false", "no", "0", "off"}:
+            return False
+        return False
     if isinstance(value, int):
         return value != 0
     return bool(value)
@@ -459,6 +464,8 @@ class WakeWordMode:
 
                             if not audio_playing:
                                 self.audio.play_audio_file(self.ack_earcon_path)
+                            elif self.config.debug:
+                                logging.info("Skipping ack earcon: audio is already playing")
                         except Exception as e:
                             if self.config.debug:
                                 logging.warning(f"Failed to play ack earcon: {e}")

@@ -131,6 +131,27 @@ class TestWakeWordModeInitialize(unittest.TestCase):
         self.assertEqual(mode.ack_earcon_path, "/tmp/test/ack.mp3")
 
     @patch('common.wake_word.pvporcupine.create')
+    @patch('common.wake_word.create_ack_earcon')
+    @patch('common.wake_word.create_confirmation_beep')
+    def test_initialize_does_not_create_ack_earcon_when_bot_voice_disabled(self, mock_beep, mock_ack, mock_porcupine_create):
+        self.mock_config.bot_voice = False
+        self.mock_config.voice_ack_earcon = True
+        self.mock_config.voice_ack_earcon_freq = 600
+        self.mock_config.voice_ack_earcon_duration = 0.06
+
+        mock_porcupine = Mock()
+        mock_porcupine.sample_rate = 16000
+        mock_porcupine.frame_length = 512
+        mock_porcupine_create.return_value = mock_porcupine
+        mock_beep.return_value = "/tmp/test/beep.mp3"
+
+        mode = WakeWordMode(self.mock_config, self.mock_ai, self.mock_audio)
+        mode._initialize()
+
+        mock_ack.assert_not_called()
+        self.assertIsNone(mode.ack_earcon_path)
+
+    @patch('common.wake_word.pvporcupine.create')
     def test_initialize_raises_on_missing_access_key(self, mock_porcupine_create):
         self.mock_config.porcupine_access_key = ""
 
