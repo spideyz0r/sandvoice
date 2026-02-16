@@ -1,6 +1,6 @@
 # Voice UX: TTS Micro-Pauses and Pacing
 
-**Status**: 📋 Backlog
+**Status**: ✅ Completed
 **Priority**: 18
 **Platforms**: macOS M1, Raspberry Pi 3B
 
@@ -73,10 +73,10 @@ Defaults:
 
 ## Acceptance Criteria
 
-- [ ] With pause set > 0, there is a noticeable gap between chunk files
-- [ ] With pause set to 0, behavior remains unchanged
-- [ ] Barge-in can interrupt at any time (including during the pause)
-- [ ] Temporary files are still cleaned up as expected
+- [x] With pause set > 0, there is a noticeable gap between chunk files
+- [x] With pause set to 0, behavior remains unchanged
+- [x] Barge-in can interrupt at any time (including during the pause)
+- [x] Temporary files are still cleaned up as expected
 
 ---
 

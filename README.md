@@ -148,6 +148,8 @@ voice_ack_earcon: disabled
 voice_ack_earcon_freq: 600
 voice_ack_earcon_duration: 0.06
 
+tts_inter_chunk_pause_ms: 0
+
 ```
 
 ### Configuration options
@@ -215,6 +217,8 @@ All configuration keys are loaded from `common/configuration.py` defaults and ca
 - `voice_ack_earcon`: `enabled`/`disabled`; play a short ack earcon after recording and before processing
 - `voice_ack_earcon_freq`: earcon frequency (Hz, integer)
 - `voice_ack_earcon_duration`: earcon duration (seconds)
+
+- `tts_inter_chunk_pause_ms`: non-negative integer; adds a small gap between consecutive TTS chunks during playback
 
 
 Enjoy the experience!
