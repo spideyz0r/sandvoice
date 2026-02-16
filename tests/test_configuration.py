@@ -192,6 +192,32 @@ class TestConfigurationValidation(unittest.TestCase):
 
         self.write_config({
             "voice_ack_earcon": "enabled",
+            "voice_ack_earcon_freq": "+600",
+            "voice_ack_earcon_duration": 0.06,
+        })
+        config = Config()
+        self.assertEqual(config.voice_ack_earcon_freq, 600)
+
+        self.write_config({
+            "voice_ack_earcon": "enabled",
+            "voice_ack_earcon_freq": "600.0",
+            "voice_ack_earcon_duration": 0.06,
+        })
+        config = Config()
+        self.assertEqual(config.voice_ack_earcon_freq, 600)
+
+    def test_voice_ack_earcon_duration_accepts_string_value(self):
+        """Test that duration can be specified as a string and gets normalized."""
+        self.write_config({
+            "voice_ack_earcon": "enabled",
+            "voice_ack_earcon_freq": 600,
+            "voice_ack_earcon_duration": "0.06",
+        })
+        config = Config()
+        self.assertAlmostEqual(config.voice_ack_earcon_duration, 0.06)
+
+        self.write_config({
+            "voice_ack_earcon": "enabled",
             "voice_ack_earcon_freq": "600",
             "voice_ack_earcon_duration": 0.06,
         })

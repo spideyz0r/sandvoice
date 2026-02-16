@@ -165,8 +165,20 @@ class Config:
             self.voice_ack_earcon_freq = int(self.voice_ack_earcon_freq)
         elif isinstance(self.voice_ack_earcon_freq, str):
             freq_str = self.voice_ack_earcon_freq.strip()
-            if freq_str.isdigit():
-                self.voice_ack_earcon_freq = int(freq_str)
+            try:
+                freq_val = float(freq_str)
+            except Exception:
+                freq_val = None
+
+            if freq_val is not None and float(freq_val).is_integer():
+                self.voice_ack_earcon_freq = int(freq_val)
+
+        if isinstance(self.voice_ack_earcon_duration, str):
+            duration_str = self.voice_ack_earcon_duration.strip()
+            try:
+                self.voice_ack_earcon_duration = float(duration_str)
+            except Exception:
+                pass
 
         # Auto-detect channels if not explicitly configured
         if self.channels is None:
