@@ -11,7 +11,23 @@ import pvporcupine
 import pyaudio
 import webrtcvad
 
-from common.beep_generator import create_confirmation_beep
+from common.beep_generator import create_confirmation_beep, create_ack_earcon
+
+
+def _is_enabled_flag(value):
+    """Interpret common enabled/disabled flag representations."""
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        normalized = value.strip().lower()
+        if normalized in {"enabled", "true", "yes", "1", "on"}:
+            return True
+        if normalized in {"disabled", "false", "no", "0", "off"}:
+            return False
+        return False
+    if isinstance(value, int):
+        return value != 0
+    return bool(value)
 
 
 class State(Enum):
@@ -53,6 +69,7 @@ class WakeWordMode:
 
         self.porcupine = None
         self.confirmation_beep_path = None
+        self.ack_earcon_path = None
         self.recorded_audio_path = None
         self.response_text = None
         self.tts_files = None
@@ -164,6 +181,22 @@ class WakeWordMode:
                 if self.config.debug:
                     logging.warning(f"Failed to create confirmation beep: {e}")
                 self.confirmation_beep_path = None
+
+        if _is_enabled_flag(getattr(self.config, "bot_voice", False)) and _is_enabled_flag(
+            getattr(self.config, "voice_ack_earcon", False)
+        ):
+            try:
+                self.ack_earcon_path = create_ack_earcon(
+                    freq=getattr(self.config, "voice_ack_earcon_freq", 600),
+                    duration=getattr(self.config, "voice_ack_earcon_duration", 0.06),
+                    tmp_path=self.config.tmp_files_path,
+                )
+                if self.config.debug:
+                    logging.info(f"Ack earcon created at: {self.ack_earcon_path}")
+            except Exception as e:
+                if self.config.debug:
+                    logging.warning(f"Failed to create ack earcon: {e}")
+                self.ack_earcon_path = None
 
     def _create_porcupine_instance(self):
         """Create a new Porcupine instance with current config.
@@ -364,6 +397,33 @@ class WakeWordMode:
                 # Calculate final recording duration
                 elapsed = time.time() - recording_start
 
+                # Capture audio format info before we terminate PyAudio
+                sample_width = None
+                try:
+                    sample_width = pa.get_sample_size(pyaudio.paInt16)
+                except Exception as e:
+                    if self.config.debug:
+                        logging.warning(f"Failed to get sample width: {e}")
+                    sample_width = 2  # 16-bit PCM
+
+                # Close input stream before playing any earcons (improves compatibility on some devices)
+                if audio_stream is not None:
+                    try:
+                        audio_stream.stop_stream()
+                        audio_stream.close()
+                    except Exception as e:
+                        if self.config.debug:
+                            logging.warning(f"Failed to close audio stream: {e}")
+                    audio_stream = None
+
+                if pa is not None:
+                    try:
+                        pa.terminate()
+                    except Exception as e:
+                        if self.config.debug:
+                            logging.warning(f"Failed to terminate PyAudio: {e}")
+                    pa = None
+
                 self.recorded_audio_path = os.path.join(
                     self.config.tmp_files_path,
                     f"wake_word_recording_{int(time.time())}.wav"
@@ -373,15 +433,42 @@ class WakeWordMode:
                 os.makedirs(self.config.tmp_files_path, exist_ok=True)
 
                 # Write WAV file
-                with wave.open(self.recorded_audio_path, 'wb') as wf:
-                    wf.setnchannels(1)  # Mono
-                    wf.setsampwidth(pa.get_sample_size(pyaudio.paInt16))
-                    wf.setframerate(vad_sample_rate)
-                    wf.writeframes(b''.join(frames))
+                try:
+                    with wave.open(self.recorded_audio_path, 'wb') as wf:
+                        wf.setnchannels(1)  # Mono
+                        wf.setsampwidth(sample_width)
+                        wf.setframerate(vad_sample_rate)
+                        wf.writeframes(b''.join(frames))
+                except Exception:
+                    try:
+                        if self.recorded_audio_path and os.path.exists(self.recorded_audio_path):
+                            os.remove(self.recorded_audio_path)
+                    finally:
+                        self.recorded_audio_path = None
+                    raise
 
                 if self.config.debug:
                     logging.info(f"Recorded audio saved: {self.recorded_audio_path}")
                     logging.info(f"Recording duration: {elapsed:.2f}s, {len(frames)} frames")
+
+                # Voice UX: play a short ack earcon before PROCESSING begins
+                if _is_enabled_flag(getattr(self.config, "bot_voice", False)) and _is_enabled_flag(
+                    getattr(self.config, "voice_ack_earcon", False)
+                ):
+                    if self.ack_earcon_path and os.path.exists(self.ack_earcon_path):
+                        try:
+                            audio_playing = False
+                            is_playing_fn = getattr(self.audio, "is_playing", None)
+                            if callable(is_playing_fn):
+                                audio_playing = bool(is_playing_fn())
+
+                            if not audio_playing:
+                                self.audio.play_audio_file(self.ack_earcon_path)
+                            elif self.config.debug:
+                                logging.info("Skipping ack earcon: audio is already playing")
+                        except Exception as e:
+                            if self.config.debug:
+                                logging.warning(f"Failed to play ack earcon: {e}")
 
                 self.state = State.PROCESSING
             else:

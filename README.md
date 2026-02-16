@@ -144,6 +144,10 @@ visual_state_indicator: enabled
 
 barge_in: disabled
 
+voice_ack_earcon: disabled
+voice_ack_earcon_freq: 600
+voice_ack_earcon_duration: 0.06
+
 ```
 
 ### Configuration options
@@ -207,6 +211,10 @@ All configuration keys are loaded from `common/configuration.py` defaults and ca
 - `visual_state_indicator`: `enabled`/`disabled`; show terminal state indicators in wake word mode
 
 - `barge_in`: `enabled`/`disabled`; interrupt TTS in `--wake-word` mode by saying the wake word
+
+- `voice_ack_earcon`: `enabled`/`disabled`; play a short ack earcon after recording and before processing
+- `voice_ack_earcon_freq`: earcon frequency (Hz, integer)
+- `voice_ack_earcon_duration`: earcon duration (seconds)
 
 
 Enjoy the experience!

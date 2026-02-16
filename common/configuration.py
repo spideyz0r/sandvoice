@@ -71,7 +71,12 @@ class Config:
             "wake_confirmation_beep_duration": 0.1,
             "visual_state_indicator": "enabled",
             # Barge-in feature (interrupt TTS with wake word)
-            "barge_in": "disabled"
+            "barge_in": "disabled",
+
+            # Voice UX
+            "voice_ack_earcon": "disabled",
+            "voice_ack_earcon_freq": 600,
+            "voice_ack_earcon_duration": 0.06,
         }
         self.config = self.load_defaults()
         self.load_config()
@@ -149,6 +154,37 @@ class Config:
         self.visual_state_indicator = self.get("visual_state_indicator").lower() == "enabled"
         # Barge-in feature
         self.barge_in = self.get("barge_in").lower() == "enabled"
+
+        # Voice UX
+        voice_ack_earcon = self.get("voice_ack_earcon")
+        if isinstance(voice_ack_earcon, bool):
+            self.voice_ack_earcon = voice_ack_earcon
+        elif isinstance(voice_ack_earcon, int):
+            self.voice_ack_earcon = voice_ack_earcon != 0
+        else:
+            self.voice_ack_earcon = str(voice_ack_earcon or "disabled").lower() == "enabled"
+        self.voice_ack_earcon_freq = self.get("voice_ack_earcon_freq")
+        self.voice_ack_earcon_duration = self.get("voice_ack_earcon_duration")
+
+        # Normalize common YAML representations
+        if isinstance(self.voice_ack_earcon_freq, float) and self.voice_ack_earcon_freq.is_integer():
+            self.voice_ack_earcon_freq = int(self.voice_ack_earcon_freq)
+        elif isinstance(self.voice_ack_earcon_freq, str):
+            freq_str = self.voice_ack_earcon_freq.strip()
+            try:
+                freq_val = float(freq_str)
+            except Exception:
+                freq_val = None
+
+            if freq_val is not None and float(freq_val).is_integer():
+                self.voice_ack_earcon_freq = int(freq_val)
+
+        if isinstance(self.voice_ack_earcon_duration, str):
+            duration_str = self.voice_ack_earcon_duration.strip()
+            try:
+                self.voice_ack_earcon_duration = float(duration_str)
+            except Exception:
+                pass
 
         # Auto-detect channels if not explicitly configured
         if self.channels is None:
@@ -260,6 +296,13 @@ class Config:
 
         if not isinstance(self.wake_confirmation_beep_duration, (int, float)) or self.wake_confirmation_beep_duration <= 0:
             errors.append("wake_confirmation_beep_duration must be a positive number")
+
+        if self.voice_ack_earcon:
+            if not isinstance(self.voice_ack_earcon_freq, int) or self.voice_ack_earcon_freq <= 0:
+                errors.append("voice_ack_earcon_freq must be a positive integer")
+
+            if not isinstance(self.voice_ack_earcon_duration, (int, float)) or self.voice_ack_earcon_duration <= 0:
+                errors.append("voice_ack_earcon_duration must be a positive number")
 
         # Report all errors
         if errors:

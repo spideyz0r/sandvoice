@@ -105,6 +105,53 @@ class TestWakeWordModeInitialize(unittest.TestCase):
         self.assertEqual(mode.confirmation_beep_path, "/tmp/test/beep.mp3")
 
     @patch('common.wake_word.pvporcupine.create')
+    @patch('common.wake_word.create_ack_earcon')
+    @patch('common.wake_word.create_confirmation_beep')
+    def test_initialize_creates_ack_earcon_when_enabled(self, mock_beep, mock_ack, mock_porcupine_create):
+        self.mock_config.bot_voice = True
+        self.mock_config.voice_ack_earcon = True
+        self.mock_config.voice_ack_earcon_freq = 600
+        self.mock_config.voice_ack_earcon_duration = 0.06
+
+        mock_porcupine = Mock()
+        mock_porcupine.sample_rate = 16000
+        mock_porcupine.frame_length = 512
+        mock_porcupine_create.return_value = mock_porcupine
+        mock_beep.return_value = "/tmp/test/beep.mp3"
+        mock_ack.return_value = "/tmp/test/ack.mp3"
+
+        mode = WakeWordMode(self.mock_config, self.mock_ai, self.mock_audio)
+        mode._initialize()
+
+        mock_ack.assert_called_once_with(
+            freq=600,
+            duration=0.06,
+            tmp_path="/tmp/test/",
+        )
+        self.assertEqual(mode.ack_earcon_path, "/tmp/test/ack.mp3")
+
+    @patch('common.wake_word.pvporcupine.create')
+    @patch('common.wake_word.create_ack_earcon')
+    @patch('common.wake_word.create_confirmation_beep')
+    def test_initialize_does_not_create_ack_earcon_when_bot_voice_disabled(self, mock_beep, mock_ack, mock_porcupine_create):
+        self.mock_config.bot_voice = False
+        self.mock_config.voice_ack_earcon = True
+        self.mock_config.voice_ack_earcon_freq = 600
+        self.mock_config.voice_ack_earcon_duration = 0.06
+
+        mock_porcupine = Mock()
+        mock_porcupine.sample_rate = 16000
+        mock_porcupine.frame_length = 512
+        mock_porcupine_create.return_value = mock_porcupine
+        mock_beep.return_value = "/tmp/test/beep.mp3"
+
+        mode = WakeWordMode(self.mock_config, self.mock_ai, self.mock_audio)
+        mode._initialize()
+
+        mock_ack.assert_not_called()
+        self.assertIsNone(mode.ack_earcon_path)
+
+    @patch('common.wake_word.pvporcupine.create')
     def test_initialize_raises_on_missing_access_key(self, mock_porcupine_create):
         self.mock_config.porcupine_access_key = ""
 
@@ -352,6 +399,177 @@ class TestWakeWordModeStateListening(unittest.TestCase):
 
     def tearDown(self):
         logging.disable(logging.NOTSET)
+
+    @patch('common.wake_word.os.path.exists')
+    @patch('common.wake_word.time.time')
+    @patch('common.wake_word.os.makedirs')
+    @patch('common.wake_word.wave.open')
+    @patch('common.wake_word.webrtcvad.Vad')
+    @patch('common.wake_word.pyaudio.PyAudio')
+    def test_state_listening_plays_ack_earcon_before_processing(self, mock_pyaudio_class, mock_vad_class,
+                                                               mock_wave_open, mock_makedirs, mock_time, mock_exists):
+        self.mock_config.bot_voice = True
+        self.mock_config.voice_ack_earcon = True
+
+        # Make ack mp3 appear to exist
+        def exists_side_effect(path):
+            return path == "/tmp/test/ack.mp3"
+        mock_exists.side_effect = exists_side_effect
+
+        # Time triggers timeout after 1 frame; still has frames so transitions to PROCESSING
+        mock_time.side_effect = [0.0, 0.0, 31.0, 31.0, 31.0]
+
+        mock_vad = Mock()
+        mock_vad.is_speech.return_value = True
+        mock_vad_class.return_value = mock_vad
+
+        mock_stream = Mock()
+        mock_stream.read.return_value = b'\x00' * 960
+
+        mock_pa = Mock()
+        mock_pa.open.return_value = mock_stream
+        mock_pa.get_sample_size.return_value = 2
+        mock_pyaudio_class.return_value = mock_pa
+
+        mock_wf = Mock()
+        mock_wave_open.return_value.__enter__.return_value = mock_wf
+
+        # Ensure we don't skip due to "already playing"
+        self.mock_audio.is_playing.return_value = False
+
+        mode = WakeWordMode(self.mock_config, self.mock_ai, self.mock_audio)
+        mode.ack_earcon_path = "/tmp/test/ack.mp3"
+        mode.running = True
+        mode.state = State.LISTENING
+
+        mode._state_listening()
+
+        self.mock_audio.play_audio_file.assert_called_once_with("/tmp/test/ack.mp3")
+        self.assertEqual(mode.state, State.PROCESSING)
+
+    @patch('common.wake_word.os.path.exists')
+    @patch('common.wake_word.time.time')
+    @patch('common.wake_word.os.makedirs')
+    @patch('common.wake_word.wave.open')
+    @patch('common.wake_word.webrtcvad.Vad')
+    @patch('common.wake_word.pyaudio.PyAudio')
+    def test_state_listening_skips_ack_earcon_when_audio_playing(self, mock_pyaudio_class, mock_vad_class,
+                                                                 mock_wave_open, mock_makedirs, mock_time, mock_exists):
+        self.mock_config.bot_voice = True
+        self.mock_config.voice_ack_earcon = True
+
+        def exists_side_effect(path):
+            return path == "/tmp/test/ack.mp3"
+        mock_exists.side_effect = exists_side_effect
+
+        mock_time.side_effect = [0.0, 0.0, 31.0, 31.0, 31.0]
+
+        mock_vad = Mock()
+        mock_vad.is_speech.return_value = True
+        mock_vad_class.return_value = mock_vad
+
+        mock_stream = Mock()
+        mock_stream.read.return_value = b'\x00' * 960
+
+        mock_pa = Mock()
+        mock_pa.open.return_value = mock_stream
+        mock_pa.get_sample_size.return_value = 2
+        mock_pyaudio_class.return_value = mock_pa
+
+        mock_wf = Mock()
+        mock_wave_open.return_value.__enter__.return_value = mock_wf
+
+        self.mock_audio.is_playing.return_value = True
+
+        mode = WakeWordMode(self.mock_config, self.mock_ai, self.mock_audio)
+        mode.ack_earcon_path = "/tmp/test/ack.mp3"
+        mode.running = True
+        mode.state = State.LISTENING
+
+        mode._state_listening()
+
+        self.mock_audio.play_audio_file.assert_not_called()
+        self.assertEqual(mode.state, State.PROCESSING)
+
+    @patch('common.wake_word.os.path.exists')
+    @patch('common.wake_word.time.time')
+    @patch('common.wake_word.os.makedirs')
+    @patch('common.wake_word.wave.open')
+    @patch('common.wake_word.webrtcvad.Vad')
+    @patch('common.wake_word.pyaudio.PyAudio')
+    def test_state_listening_skips_ack_earcon_when_disabled(self, mock_pyaudio_class, mock_vad_class,
+                                                           mock_wave_open, mock_makedirs, mock_time, mock_exists):
+        self.mock_config.bot_voice = True
+        self.mock_config.voice_ack_earcon = False
+
+        mock_exists.return_value = True
+        mock_time.side_effect = [0.0, 0.0, 31.0, 31.0, 31.0]
+
+        mock_vad = Mock()
+        mock_vad.is_speech.return_value = True
+        mock_vad_class.return_value = mock_vad
+
+        mock_stream = Mock()
+        mock_stream.read.return_value = b'\x00' * 960
+
+        mock_pa = Mock()
+        mock_pa.open.return_value = mock_stream
+        mock_pa.get_sample_size.return_value = 2
+        mock_pyaudio_class.return_value = mock_pa
+
+        mock_wf = Mock()
+        mock_wave_open.return_value.__enter__.return_value = mock_wf
+
+        mode = WakeWordMode(self.mock_config, self.mock_ai, self.mock_audio)
+        mode.ack_earcon_path = "/tmp/test/ack.mp3"
+        mode.running = True
+        mode.state = State.LISTENING
+
+        mode._state_listening()
+
+        self.mock_audio.play_audio_file.assert_not_called()
+        self.assertEqual(mode.state, State.PROCESSING)
+
+    @patch('common.wake_word.os.path.exists')
+    @patch('common.wake_word.time.time')
+    @patch('common.wake_word.os.makedirs')
+    @patch('common.wake_word.wave.open')
+    @patch('common.wake_word.webrtcvad.Vad')
+    @patch('common.wake_word.pyaudio.PyAudio')
+    def test_state_listening_skips_ack_earcon_when_missing_file(self, mock_pyaudio_class, mock_vad_class,
+                                                                mock_wave_open, mock_makedirs, mock_time, mock_exists):
+        self.mock_config.bot_voice = True
+        self.mock_config.voice_ack_earcon = True
+
+        mock_exists.return_value = False
+        mock_time.side_effect = [0.0, 0.0, 31.0, 31.0, 31.0]
+
+        mock_vad = Mock()
+        mock_vad.is_speech.return_value = True
+        mock_vad_class.return_value = mock_vad
+
+        mock_stream = Mock()
+        mock_stream.read.return_value = b'\x00' * 960
+
+        mock_pa = Mock()
+        mock_pa.open.return_value = mock_stream
+        mock_pa.get_sample_size.return_value = 2
+        mock_pyaudio_class.return_value = mock_pa
+
+        mock_wf = Mock()
+        mock_wave_open.return_value.__enter__.return_value = mock_wf
+
+        self.mock_audio.is_playing.return_value = False
+
+        mode = WakeWordMode(self.mock_config, self.mock_ai, self.mock_audio)
+        mode.ack_earcon_path = "/tmp/test/ack.mp3"
+        mode.running = True
+        mode.state = State.LISTENING
+
+        mode._state_listening()
+
+        self.mock_audio.play_audio_file.assert_not_called()
+        self.assertEqual(mode.state, State.PROCESSING)
 
     @patch('common.wake_word.time.time')
     @patch('common.wake_word.os.makedirs')

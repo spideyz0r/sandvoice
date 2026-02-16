@@ -3,7 +3,7 @@ import unittest
 import tempfile
 import shutil
 
-from common.beep_generator import generate_sine_wave_beep, create_confirmation_beep
+from common.beep_generator import generate_sine_wave_beep, create_confirmation_beep, create_ack_earcon
 
 
 class TestGenerateSineWaveBeep(unittest.TestCase):
@@ -119,6 +119,30 @@ class TestCreateConfirmationBeep(unittest.TestCase):
         finally:
             if os.path.exists(beep_path):
                 os.remove(beep_path)
+
+
+class TestCreateAckEarcon(unittest.TestCase):
+    def setUp(self):
+        self.temp_dir = tempfile.mkdtemp()
+
+    def tearDown(self):
+        shutil.rmtree(self.temp_dir, ignore_errors=True)
+
+    def test_creates_earcon_file(self):
+        earcon_path = create_ack_earcon(tmp_path=self.temp_dir)
+        self.assertTrue(os.path.exists(earcon_path))
+        self.assertTrue(earcon_path.endswith('.mp3'))
+        self.assertGreater(os.path.getsize(earcon_path), 0)
+
+    def test_reuses_existing_earcon(self):
+        earcon_path1 = create_ack_earcon(tmp_path=self.temp_dir)
+        mtime1 = os.path.getmtime(earcon_path1)
+
+        earcon_path2 = create_ack_earcon(tmp_path=self.temp_dir)
+        mtime2 = os.path.getmtime(earcon_path2)
+
+        self.assertEqual(earcon_path1, earcon_path2)
+        self.assertEqual(mtime1, mtime2)
 
 
 if __name__ == '__main__':

@@ -145,6 +145,103 @@ class TestConfigurationValidation(unittest.TestCase):
 
         self.assertIn("verbosity must be 'brief', 'normal', or 'detailed'", str(context.exception))
 
+    def test_voice_ack_earcon_validation_only_when_enabled(self):
+        """Test that ack earcon freq/duration are only validated when enabled"""
+        # Disabled: invalid values should not fail validation
+        self.write_config({
+            "voice_ack_earcon": "disabled",
+            "voice_ack_earcon_freq": 0,
+            "voice_ack_earcon_duration": 0,
+        })
+        Config()
+
+        # Enabled: invalid values should fail validation
+        self.write_config({
+            "voice_ack_earcon": "enabled",
+            "voice_ack_earcon_freq": 0,
+            "voice_ack_earcon_duration": 0,
+        })
+
+        with self.assertRaises(ValueError) as context:
+            Config()
+
+        self.assertIn("voice_ack_earcon_freq must be a positive integer", str(context.exception))
+
+    def test_voice_ack_earcon_freq_must_be_int_when_enabled(self):
+        """Test that voice_ack_earcon_freq must be an int when enabled"""
+        self.write_config({
+            "voice_ack_earcon": "enabled",
+            "voice_ack_earcon_freq": 600.5,
+            "voice_ack_earcon_duration": 0.06,
+        })
+
+        with self.assertRaises(ValueError) as context:
+            Config()
+
+        self.assertIn("voice_ack_earcon_freq must be a positive integer", str(context.exception))
+
+    def test_voice_ack_earcon_freq_accepts_integer_like_values(self):
+        """Test that integer-like YAML values are accepted and normalized."""
+        self.write_config({
+            "voice_ack_earcon": "enabled",
+            "voice_ack_earcon_freq": 600.0,
+            "voice_ack_earcon_duration": 0.06,
+        })
+        config = Config()
+        self.assertEqual(config.voice_ack_earcon_freq, 600)
+
+        self.write_config({
+            "voice_ack_earcon": "enabled",
+            "voice_ack_earcon_freq": "+600",
+            "voice_ack_earcon_duration": 0.06,
+        })
+        config = Config()
+        self.assertEqual(config.voice_ack_earcon_freq, 600)
+
+        self.write_config({
+            "voice_ack_earcon": "enabled",
+            "voice_ack_earcon_freq": "600.0",
+            "voice_ack_earcon_duration": 0.06,
+        })
+        config = Config()
+        self.assertEqual(config.voice_ack_earcon_freq, 600)
+
+    def test_voice_ack_earcon_duration_accepts_string_value(self):
+        """Test that duration can be specified as a string and gets normalized."""
+        self.write_config({
+            "voice_ack_earcon": "enabled",
+            "voice_ack_earcon_freq": 600,
+            "voice_ack_earcon_duration": "0.06",
+        })
+        config = Config()
+        self.assertAlmostEqual(config.voice_ack_earcon_duration, 0.06)
+
+    def test_voice_ack_earcon_accepts_boolean_values(self):
+        """Test that voice_ack_earcon can be specified as YAML boolean."""
+        self.write_config({
+            "voice_ack_earcon": True,
+            "voice_ack_earcon_freq": 600,
+            "voice_ack_earcon_duration": 0.06,
+        })
+        config = Config()
+        self.assertTrue(config.voice_ack_earcon)
+
+        self.write_config({
+            "voice_ack_earcon": False,
+            "voice_ack_earcon_freq": 600,
+            "voice_ack_earcon_duration": 0.06,
+        })
+        config = Config()
+        self.assertFalse(config.voice_ack_earcon)
+
+        self.write_config({
+            "voice_ack_earcon": "enabled",
+            "voice_ack_earcon_freq": "600",
+            "voice_ack_earcon_duration": 0.06,
+        })
+        config = Config()
+        self.assertEqual(config.voice_ack_earcon_freq, 600)
+
     def test_invalid_falsy_verbosity_values(self):
         """Test that explicitly provided falsy verbosity values still fail validation"""
         for v in ["", "   ", False]:
