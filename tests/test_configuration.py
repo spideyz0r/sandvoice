@@ -216,6 +216,24 @@ class TestConfigurationValidation(unittest.TestCase):
         config = Config()
         self.assertAlmostEqual(config.voice_ack_earcon_duration, 0.06)
 
+    def test_voice_ack_earcon_accepts_boolean_values(self):
+        """Test that voice_ack_earcon can be specified as YAML boolean."""
+        self.write_config({
+            "voice_ack_earcon": True,
+            "voice_ack_earcon_freq": 600,
+            "voice_ack_earcon_duration": 0.06,
+        })
+        config = Config()
+        self.assertTrue(config.voice_ack_earcon)
+
+        self.write_config({
+            "voice_ack_earcon": False,
+            "voice_ack_earcon_freq": 600,
+            "voice_ack_earcon_duration": 0.06,
+        })
+        config = Config()
+        self.assertFalse(config.voice_ack_earcon)
+
         self.write_config({
             "voice_ack_earcon": "enabled",
             "voice_ack_earcon_freq": "600",

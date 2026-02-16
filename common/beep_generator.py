@@ -110,6 +110,12 @@ def create_ack_earcon(freq=600, duration=0.06, tmp_path=None, bitrate=128):
     Returns:
         str: Path to the saved mp3 file
     """
+    if not isinstance(freq, (int, float)) or freq <= 0:
+        raise ValueError("freq must be positive")
+    if not isinstance(duration, (int, float)) or duration <= 0:
+        raise ValueError("duration must be positive")
+
+    freq = int(freq)
     if tmp_path is None:
         tmp_path = os.path.expanduser("~/.sandvoice/tmp/")
 

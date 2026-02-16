@@ -177,7 +177,9 @@ class WakeWordMode:
                     logging.warning(f"Failed to create confirmation beep: {e}")
                 self.confirmation_beep_path = None
 
-        if _is_enabled_flag(getattr(self.config, "voice_ack_earcon", False)):
+        if _is_enabled_flag(getattr(self.config, "bot_voice", False)) and _is_enabled_flag(
+            getattr(self.config, "voice_ack_earcon", False)
+        ):
             try:
                 self.ack_earcon_path = create_ack_earcon(
                     freq=getattr(self.config, "voice_ack_earcon_freq", 600),

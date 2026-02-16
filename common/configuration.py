@@ -156,7 +156,13 @@ class Config:
         self.barge_in = self.get("barge_in").lower() == "enabled"
 
         # Voice UX
-        self.voice_ack_earcon = str(self.get("voice_ack_earcon") or "disabled").lower() == "enabled"
+        voice_ack_earcon = self.get("voice_ack_earcon")
+        if isinstance(voice_ack_earcon, bool):
+            self.voice_ack_earcon = voice_ack_earcon
+        elif isinstance(voice_ack_earcon, int):
+            self.voice_ack_earcon = voice_ack_earcon != 0
+        else:
+            self.voice_ack_earcon = str(voice_ack_earcon or "disabled").lower() == "enabled"
         self.voice_ack_earcon_freq = self.get("voice_ack_earcon_freq")
         self.voice_ack_earcon_duration = self.get("voice_ack_earcon_duration")
 

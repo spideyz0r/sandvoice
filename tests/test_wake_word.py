@@ -107,6 +107,7 @@ class TestWakeWordModeInitialize(unittest.TestCase):
     @patch('common.wake_word.pvporcupine.create')
     @patch('common.wake_word.create_ack_earcon')
     def test_initialize_creates_ack_earcon_when_enabled(self, mock_ack, mock_porcupine_create):
+        self.mock_config.bot_voice = True
         self.mock_config.voice_ack_earcon = True
         self.mock_config.voice_ack_earcon_freq = 600
         self.mock_config.voice_ack_earcon_duration = 0.06
