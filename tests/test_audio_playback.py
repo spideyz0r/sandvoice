@@ -148,6 +148,51 @@ class TestMixerInitialization(unittest.TestCase):
         self.assertIsNotNone(pygame.mixer.get_init())
 
 
+class TestIsPlaying(unittest.TestCase):
+    def setUp(self):
+        _install_fake_deps_for_common_audio()
+        from common.audio import Audio
+        self.Audio = Audio
+
+    def test_is_playing_false_when_mixer_not_initialized(self):
+        audio = self.Audio.__new__(self.Audio)
+        audio.config = Mock(debug=False)
+
+        import pygame
+        pygame.mixer.quit()
+        self.assertFalse(audio.is_playing())
+
+    def test_is_playing_true_when_busy(self):
+        audio = self.Audio.__new__(self.Audio)
+        audio.config = Mock(debug=False)
+
+        import pygame
+        pygame.mixer.init()
+
+        original_get_busy = pygame.mixer.music.get_busy
+        try:
+            pygame.mixer.music.get_busy = lambda: True
+            self.assertTrue(audio.is_playing())
+        finally:
+            pygame.mixer.music.get_busy = original_get_busy
+
+    def test_is_playing_false_on_exception(self):
+        audio = self.Audio.__new__(self.Audio)
+        audio.config = Mock(debug=False)
+
+        import pygame
+        pygame.mixer.init()
+
+        original_get_busy = pygame.mixer.music.get_busy
+        try:
+            def boom():
+                raise RuntimeError("boom")
+            pygame.mixer.music.get_busy = boom
+            self.assertFalse(audio.is_playing())
+        finally:
+            pygame.mixer.music.get_busy = original_get_busy
+
+
 class TestStopPlayback(unittest.TestCase):
     """Test stop_playback method for barge-in functionality."""
     
