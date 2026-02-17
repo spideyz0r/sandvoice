@@ -94,7 +94,7 @@ class TestAudioPlaybackHelpers(unittest.TestCase):
 
         played = []
 
-        def _play(path):
+        def _play(path, stop_event=None):
             played.append(path)
 
         audio.play_audio_file = _play
@@ -117,7 +117,7 @@ class TestAudioPlaybackHelpers(unittest.TestCase):
         audio = self.Audio.__new__(self.Audio)
         audio.config = Mock(debug=True)
 
-        def _play(path):
+        def _play(path, stop_event=None):
             if path.endswith('b.mp3'):
                 raise RuntimeError('boom')
 
@@ -149,7 +149,7 @@ class TestAudioPlaybackHelpers(unittest.TestCase):
 
         events = []
 
-        def _play(path):
+        def _play(path, stop_event=None):
             events.append(f"play:{os.path.basename(path)}")
 
         audio.play_audio_file = _play
@@ -178,7 +178,7 @@ class TestAudioPlaybackHelpers(unittest.TestCase):
         audio = self.Audio.__new__(self.Audio)
         audio.config = Mock(debug=False, tts_inter_chunk_pause_ms=0)
 
-        audio.play_audio_file = lambda _path: None
+        audio.play_audio_file = lambda _path, stop_event=None: None
 
         f1 = os.path.join(self.temp_dir, 'a.mp3')
         f2 = os.path.join(self.temp_dir, 'b.mp3')

@@ -307,10 +307,7 @@ class Audio:
         for idx, file_path in enumerate(file_paths):
             delete_file = True
             try:
-                if stop_event is None:
-                    self.play_audio_file(file_path)
-                else:
-                    self.play_audio_file(file_path, stop_event=stop_event)
+                self.play_audio_file(file_path, stop_event=stop_event)
 
                 # Optional pause between chunks to improve pacing.
                 if pause_ms > 0 and idx < (len(file_paths) - 1):
