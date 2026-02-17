@@ -1142,7 +1142,7 @@ class WakeWordMode:
                                 self._cleanup_remaining_tts_files(self.tts_files[idx + 1:])
                                 # Ensure the state transition logic below sees barge-in.
                                 break
-                            time.sleep(min(0.02, deadline - time.monotonic()))
+                            time.sleep(max(0.0, min(0.02, deadline - time.monotonic())))
 
                         if barge_in_enabled and self.barge_in_event and self.barge_in_event.is_set():
                             break
