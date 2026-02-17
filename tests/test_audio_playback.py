@@ -223,6 +223,32 @@ class TestAudioPlaybackHelpers(unittest.TestCase):
         self.assertFalse(os.path.exists(f1))
         self.assertFalse(os.path.exists(f2))
 
+    def test_play_audio_files_stop_event_interrupts_between_chunks_without_pause(self):
+        audio = self.Audio.__new__(self.Audio)
+        audio.config = Mock(debug=False, tts_inter_chunk_pause_ms=0)
+
+        f1 = os.path.join(self.temp_dir, 'a.mp3')
+        f2 = os.path.join(self.temp_dir, 'b.mp3')
+        open(f1, 'wb').close()
+        open(f2, 'wb').close()
+
+        stop_event = threading.Event()
+
+        def _play(path, stop_event=None):
+            # Simulate an external interrupter setting stop_event right after first file.
+            if stop_event is not None and path.endswith('a.mp3'):
+                stop_event.set()
+
+        audio.play_audio_file = _play
+
+        success, failed, err = self.Audio.play_audio_files(audio, [f1, f2], stop_event=stop_event)
+
+        self.assertFalse(success)
+        self.assertIsNone(failed)
+        self.assertIsNone(err)
+        self.assertFalse(os.path.exists(f1))
+        self.assertFalse(os.path.exists(f2))
+
 
 class TestMixerInitialization(unittest.TestCase):
     def setUp(self):

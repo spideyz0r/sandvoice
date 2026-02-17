@@ -293,6 +293,10 @@ class Audio:
                 - success: True if all files played successfully
                 - failed_file: path that failed (or None)
                 - error: exception instance (or None)
+
+        Notes:
+            - If stop_event is provided and becomes set between chunks, playback stops early.
+              In that case this returns (False, None, None) and cleans up any remaining unplayed files.
         """
 
         failed_file = None
@@ -308,6 +312,19 @@ class Audio:
             delete_file = True
             try:
                 self.play_audio_file(file_path, stop_event=stop_event)
+
+                # If stop_event is set between chunks (and no pause), stop early.
+                if stop_event is not None and stop_event.is_set():
+                    for remaining_file in file_paths[idx + 1:]:
+                        try:
+                            if os.path.exists(remaining_file):
+                                os.remove(remaining_file)
+                        except OSError as cleanup_error:
+                            if self.config.debug:
+                                logging.warning(
+                                    f"Failed to delete remaining temporary audio chunk file '{remaining_file}': {cleanup_error}"
+                                )
+                    return False, None, None
 
                 # Optional pause between chunks to improve pacing.
                 if pause_ms > 0 and idx < (len(file_paths) - 1):
