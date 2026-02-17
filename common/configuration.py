@@ -321,7 +321,7 @@ class Config:
             if not isinstance(self.voice_ack_earcon_duration, (int, float)) or self.voice_ack_earcon_duration <= 0:
                 errors.append("voice_ack_earcon_duration must be a positive number")
 
-        if not isinstance(self.tts_inter_chunk_pause_ms, int) or self.tts_inter_chunk_pause_ms < 0:
+        if isinstance(self.tts_inter_chunk_pause_ms, bool) or not isinstance(self.tts_inter_chunk_pause_ms, int) or self.tts_inter_chunk_pause_ms < 0:
             errors.append("tts_inter_chunk_pause_ms must be a non-negative integer")
 
         # Report all errors

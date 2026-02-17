@@ -1109,6 +1109,38 @@ class TestWakeWordModeResponding(unittest.TestCase):
         # Should still transition to IDLE despite cleanup error
         self.assertEqual(mode.state, State.IDLE)
 
+    @patch('common.wake_word.time.sleep')
+    @patch('common.wake_word.os.remove')
+    @patch('common.wake_word.os.path.exists')
+    def test_state_responding_barge_in_during_inter_chunk_pause(self, mock_exists, mock_remove, mock_sleep):
+        """If barge-in happens during the configured pause, remaining files are cleaned up and state goes to LISTENING."""
+        mock_exists.return_value = True
+
+        self.mock_config.barge_in = True
+        self.mock_config.tts_inter_chunk_pause_ms = 200
+
+        mode = WakeWordMode(self.mock_config, self.mock_ai, self.mock_audio)
+        mode.tts_files = ["/tmp/tts1.mp3", "/tmp/tts2.mp3"]
+        mode.recorded_audio_path = "/tmp/recording.wav"
+        mode.state = State.RESPONDING
+
+        mode.barge_in_event = Mock()
+        # Allow multiple checks: first is False, then always True.
+        mode.barge_in_event.is_set.side_effect = [False] + [True] * 10
+        barge_in_event = mode.barge_in_event
+        mode.barge_in_stop_flag = Mock()
+        mode.barge_in_thread = None
+
+        # Ensure sleep doesn't actually wait.
+        mock_sleep.return_value = None
+
+        mode._state_responding()
+
+        # First file played, second should be cleaned up when barge-in triggers during pause.
+        self.mock_audio.play_audio_file.assert_called_once_with("/tmp/tts1.mp3", stop_event=barge_in_event)
+        mock_remove.assert_any_call("/tmp/tts2.mp3")
+        self.assertEqual(mode.state, State.LISTENING)
+
 
 class TestBargeIn(unittest.TestCase):
     """Test barge-in functionality (interrupt TTS with wake word)."""
