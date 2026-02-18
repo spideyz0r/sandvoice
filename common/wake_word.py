@@ -1054,11 +1054,7 @@ class WakeWordMode:
 
         barge_in_enabled = getattr(self.config, "barge_in", False)
 
-        pause_ms = getattr(self.config, "tts_inter_chunk_pause_ms", 0)
-        try:
-            pause_ms = int(pause_ms) if pause_ms is not None else 0
-        except Exception:
-            pause_ms = 0
+        pause_ms = getattr(self.config, "tts_inter_chunk_pause_ms", 0) or 0
 
         # Play TTS audio if available
         if self.tts_files and len(self.tts_files) > 0:

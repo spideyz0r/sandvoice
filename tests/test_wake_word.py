@@ -992,6 +992,7 @@ class TestWakeWordModeResponding(unittest.TestCase):
         self.mock_config.debug = False
         self.mock_config.visual_state_indicator = False
         self.mock_config.barge_in = False
+        self.mock_config.tts_inter_chunk_pause_ms = 0
 
         self.mock_ai = Mock()
         self.mock_audio = Mock()
