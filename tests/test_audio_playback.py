@@ -172,6 +172,7 @@ class TestAudioPlaybackHelpers(unittest.TestCase):
         self.assertIsNone(err)
         self.assertEqual(events[0], 'play:a.mp3')
         self.assertTrue(any(e.startswith('sleep:') for e in events))
+        self.assertIn('sleep:0.12', events)
         self.assertEqual(events[-1], 'play:b.mp3')
 
     def test_play_audio_files_skips_pause_when_disabled(self):
