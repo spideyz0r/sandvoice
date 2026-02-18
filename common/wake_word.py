@@ -504,6 +504,7 @@ class WakeWordMode:
             threading.Thread or None: The barge-in thread if started, None otherwise
         """
         barge_in_enabled = getattr(self.config, "barge_in", False)
+
         if not barge_in_enabled or not self.porcupine:
             if barge_in_enabled and not self.porcupine:
                 if self.config.debug:
@@ -1053,6 +1054,8 @@ class WakeWordMode:
 
         barge_in_enabled = getattr(self.config, "barge_in", False)
 
+        pause_ms = getattr(self.config, "tts_inter_chunk_pause_ms", 0) or 0
+
         # Play TTS audio if available
         if self.tts_files and len(self.tts_files) > 0:
             # Check if barge-in thread is already running from PROCESSING state
@@ -1124,6 +1127,21 @@ class WakeWordMode:
                     except OSError as e:
                         if self.config.debug:
                             logging.warning(f"Failed to delete TTS file: {e}")
+
+                    # Optional micro-pause between chunks to improve pacing.
+                    if pause_ms > 0 and idx < (len(self.tts_files) - 1):
+                        deadline = time.monotonic() + (pause_ms / 1000.0)
+                        while time.monotonic() < deadline:
+                            if barge_in_enabled and self.barge_in_event and self.barge_in_event.is_set():
+                                if self.config.debug:
+                                    logging.info("Barge-in detected during inter-chunk pause")
+                                self._cleanup_remaining_tts_files(self.tts_files[idx + 1:])
+                                # Ensure the state transition logic below sees barge-in.
+                                break
+                            time.sleep(max(0.0, min(0.02, deadline - time.monotonic())))
+
+                        if barge_in_enabled and self.barge_in_event and self.barge_in_event.is_set():
+                            break
 
             except Exception as e:
                 if self.config.debug:

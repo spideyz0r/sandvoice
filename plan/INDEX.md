@@ -51,6 +51,10 @@ plan/
 **Document**: [completed/16-voice-ack-earcon.md](./completed/16-voice-ack-earcon.md)
 **Description**: Play a short ack earcon once per request (after recording, before processing) to reduce perceived latency in voice mode.
 
+### Priority 18: TTS Micro-Pauses and Pacing
+**Document**: [completed/18-tts-micro-pauses-and-pacing.md](./completed/18-tts-micro-pauses-and-pacing.md)
+**Description**: Add configurable pauses between TTS chunks to make speech feel less rushed.
+
 ---
 
 ## In Progress 🚧
@@ -109,10 +113,6 @@ plan/
 ### Priority 17: Voice Lead Sentence
 **Document**: [backlog/17-voice-lead-sentence-early-ack.md](./backlog/17-voice-lead-sentence-early-ack.md)
 **Description**: Speak a one-sentence acknowledgement when processing takes long, then speak the final answer when ready.
-
-### Priority 18: TTS Micro-Pauses and Pacing
-**Document**: [backlog/18-tts-micro-pauses-and-pacing.md](./backlog/18-tts-micro-pauses-and-pacing.md)
-**Description**: Add configurable pauses between TTS chunks to make speech feel less rushed.
 
 ### Priority 20: Background Cache for Frequent Voice Queries
 **Document**: [backlog/20-background-cache-frequent-voice-queries.md](./backlog/20-background-cache-frequent-voice-queries.md)

@@ -3,6 +3,7 @@ import sys
 import types
 import unittest
 import tempfile
+import threading
 from unittest.mock import Mock, patch
 
 
@@ -93,7 +94,7 @@ class TestAudioPlaybackHelpers(unittest.TestCase):
 
         played = []
 
-        def _play(path):
+        def _play(path, stop_event=None):
             played.append(path)
 
         audio.play_audio_file = _play
@@ -116,7 +117,7 @@ class TestAudioPlaybackHelpers(unittest.TestCase):
         audio = self.Audio.__new__(self.Audio)
         audio.config = Mock(debug=True)
 
-        def _play(path):
+        def _play(path, stop_event=None):
             if path.endswith('b.mp3'):
                 raise RuntimeError('boom')
 
@@ -141,6 +142,113 @@ class TestAudioPlaybackHelpers(unittest.TestCase):
         self.assertTrue(os.path.exists(f2))
         # c never played -> cleaned
         self.assertFalse(os.path.exists(f3))
+
+    def test_play_audio_files_pauses_between_chunks_when_enabled(self):
+        audio = self.Audio.__new__(self.Audio)
+        audio.config = Mock(debug=False, tts_inter_chunk_pause_ms=120)
+
+        events = []
+
+        def _play(path, stop_event=None):
+            events.append(f"play:{os.path.basename(path)}")
+
+        audio.play_audio_file = _play
+
+        f1 = os.path.join(self.temp_dir, 'a.mp3')
+        f2 = os.path.join(self.temp_dir, 'b.mp3')
+        open(f1, 'wb').close()
+        open(f2, 'wb').close()
+
+        with patch('common.audio.time.sleep') as mock_sleep:
+            def sleep_side_effect(seconds):
+                events.append(f"sleep:{seconds}")
+                return None
+            mock_sleep.side_effect = sleep_side_effect
+
+            success, failed, err = self.Audio.play_audio_files(audio, [f1, f2])
+
+        self.assertTrue(success)
+        self.assertIsNone(failed)
+        self.assertIsNone(err)
+        self.assertEqual(events[0], 'play:a.mp3')
+        self.assertTrue(any(e.startswith('sleep:') for e in events))
+        self.assertIn('sleep:0.12', events)
+        self.assertEqual(events[-1], 'play:b.mp3')
+
+    def test_play_audio_files_skips_pause_when_disabled(self):
+        audio = self.Audio.__new__(self.Audio)
+        audio.config = Mock(debug=False, tts_inter_chunk_pause_ms=0)
+
+        audio.play_audio_file = lambda _path, stop_event=None: None
+
+        f1 = os.path.join(self.temp_dir, 'a.mp3')
+        f2 = os.path.join(self.temp_dir, 'b.mp3')
+        open(f1, 'wb').close()
+        open(f2, 'wb').close()
+
+        with patch('common.audio.time.sleep') as mock_sleep:
+            success, failed, err = self.Audio.play_audio_files(audio, [f1, f2])
+
+        self.assertTrue(success)
+        self.assertIsNone(failed)
+        self.assertIsNone(err)
+        mock_sleep.assert_not_called()
+
+    def test_play_audio_files_stop_event_interrupts_during_pause(self):
+        audio = self.Audio.__new__(self.Audio)
+        audio.config = Mock(debug=False, tts_inter_chunk_pause_ms=500)
+
+        played = []
+        audio.play_audio_file = lambda path, **kwargs: played.append(os.path.basename(path))
+
+        f1 = os.path.join(self.temp_dir, 'a.mp3')
+        f2 = os.path.join(self.temp_dir, 'b.mp3')
+        open(f1, 'wb').close()
+        open(f2, 'wb').close()
+
+        stop_event = threading.Event()
+
+        # Interrupt on first sleep call
+        with patch('common.audio.time.sleep') as mock_sleep:
+            def sleep_side_effect(_seconds):
+                stop_event.set()
+                return None
+            mock_sleep.side_effect = sleep_side_effect
+
+            success, failed, err = self.Audio.play_audio_files(audio, [f1, f2], stop_event=stop_event)
+
+        self.assertFalse(success)
+        self.assertIsNone(failed)
+        self.assertIsNone(err)
+        self.assertEqual(played, ['a.mp3'])
+        self.assertFalse(os.path.exists(f1))
+        self.assertFalse(os.path.exists(f2))
+
+    def test_play_audio_files_stop_event_interrupts_between_chunks_without_pause(self):
+        audio = self.Audio.__new__(self.Audio)
+        audio.config = Mock(debug=False, tts_inter_chunk_pause_ms=0)
+
+        f1 = os.path.join(self.temp_dir, 'a.mp3')
+        f2 = os.path.join(self.temp_dir, 'b.mp3')
+        open(f1, 'wb').close()
+        open(f2, 'wb').close()
+
+        stop_event = threading.Event()
+
+        def _play(path, stop_event=None):
+            # Simulate an external interrupter setting stop_event right after first file.
+            if stop_event is not None and path.endswith('a.mp3'):
+                stop_event.set()
+
+        audio.play_audio_file = _play
+
+        success, failed, err = self.Audio.play_audio_files(audio, [f1, f2], stop_event=stop_event)
+
+        self.assertFalse(success)
+        self.assertIsNone(failed)
+        self.assertIsNone(err)
+        self.assertFalse(os.path.exists(f1))
+        self.assertFalse(os.path.exists(f2))
 
 
 class TestMixerInitialization(unittest.TestCase):

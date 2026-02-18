@@ -242,6 +242,39 @@ class TestConfigurationValidation(unittest.TestCase):
         config = Config()
         self.assertEqual(config.voice_ack_earcon_freq, 600)
 
+    def test_tts_inter_chunk_pause_ms_accepts_integer_like_values(self):
+        self.write_config({
+            "tts_inter_chunk_pause_ms": "120",
+        })
+        config = Config()
+        self.assertEqual(config.tts_inter_chunk_pause_ms, 120)
+
+        self.write_config({
+            "tts_inter_chunk_pause_ms": 0.0,
+        })
+        config = Config()
+        self.assertEqual(config.tts_inter_chunk_pause_ms, 0)
+
+    def test_tts_inter_chunk_pause_ms_must_be_non_negative_int(self):
+        self.write_config({
+            "tts_inter_chunk_pause_ms": -1,
+        })
+
+        with self.assertRaises(ValueError) as context:
+            Config()
+
+        self.assertIn("tts_inter_chunk_pause_ms must be a non-negative integer", str(context.exception))
+
+    def test_tts_inter_chunk_pause_ms_rejects_boolean(self):
+        self.write_config({
+            "tts_inter_chunk_pause_ms": True,
+        })
+
+        with self.assertRaises(ValueError) as context:
+            Config()
+
+        self.assertIn("tts_inter_chunk_pause_ms must be a non-negative integer", str(context.exception))
+
     def test_invalid_falsy_verbosity_values(self):
         """Test that explicitly provided falsy verbosity values still fail validation"""
         for v in ["", "   ", False]:

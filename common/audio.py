@@ -1,6 +1,6 @@
 #import re, os, pyaudio, wave
 #from pydub import AudioSegment
-import re, os, pyaudio, wave, lameenc, logging
+import re, os, time, pyaudio, wave, lameenc, logging
 from pynput import keyboard
 from ctypes import *
 from common.error_handling import handle_file_error
@@ -264,7 +264,28 @@ class Audio:
             print(f"Error: {error_msg}")
             raise
 
-    def play_audio_files(self, file_paths):
+    def _sleep_interruptible(self, seconds, stop_event=None, step_seconds=0.02):
+        """Sleep for `seconds`, exiting early if stop_event is set.
+
+        Returns:
+            bool: True if full sleep completed, False if interrupted.
+        """
+        if seconds <= 0:
+            return True
+        if stop_event is None:
+            time.sleep(seconds)
+            return True
+
+        deadline = time.monotonic() + seconds
+        while True:
+            if stop_event.is_set():
+                return False
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                return True
+            time.sleep(min(step_seconds, remaining))
+
+    def play_audio_files(self, file_paths, stop_event=None):
         """Play a list of audio files sequentially.
 
         Returns:
@@ -272,15 +293,54 @@ class Audio:
                 - success: True if all files played successfully
                 - failed_file: path that failed (or None)
                 - error: exception instance (or None)
+
+        Notes:
+            - If stop_event is provided and becomes set between chunks, playback stops early.
+              In that case this returns (False, None, None) and cleans up any remaining unplayed files.
         """
 
         failed_file = None
         error = None
 
+        pause_ms = getattr(self.config, "tts_inter_chunk_pause_ms", 0)
+        try:
+            pause_ms = int(pause_ms) if pause_ms is not None else 0
+        except Exception:
+            pause_ms = 0
+
         for idx, file_path in enumerate(file_paths):
             delete_file = True
             try:
-                self.play_audio_file(file_path)
+                self.play_audio_file(file_path, stop_event=stop_event)
+
+                # If stop_event is set between chunks (and no pause), stop early.
+                if stop_event is not None and stop_event.is_set():
+                    for remaining_file in file_paths[idx + 1:]:
+                        try:
+                            if os.path.exists(remaining_file):
+                                os.remove(remaining_file)
+                        except OSError as cleanup_error:
+                            if self.config.debug:
+                                logging.warning(
+                                    f"Failed to delete remaining temporary audio chunk file '{remaining_file}': {cleanup_error}"
+                                )
+                    return False, None, None
+
+                # Optional pause between chunks to improve pacing.
+                if pause_ms > 0 and idx < (len(file_paths) - 1):
+                    completed = self._sleep_interruptible(pause_ms / 1000.0, stop_event=stop_event)
+                    if not completed:
+                        # Interrupted: clean up remaining unplayed files and stop.
+                        for remaining_file in file_paths[idx + 1:]:
+                            try:
+                                if os.path.exists(remaining_file):
+                                    os.remove(remaining_file)
+                            except OSError as cleanup_error:
+                                if self.config.debug:
+                                    logging.warning(
+                                        f"Failed to delete remaining temporary audio chunk file '{remaining_file}': {cleanup_error}"
+                                    )
+                        return False, None, None
             except Exception as e:
                 failed_file = file_path
                 error = e

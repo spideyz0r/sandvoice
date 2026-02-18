@@ -77,6 +77,9 @@ class Config:
             "voice_ack_earcon": "disabled",
             "voice_ack_earcon_freq": 600,
             "voice_ack_earcon_duration": 0.06,
+
+            # TTS pacing
+            "tts_inter_chunk_pause_ms": 0,
         }
         self.config = self.load_defaults()
         self.load_config()
@@ -165,6 +168,20 @@ class Config:
             self.voice_ack_earcon = str(voice_ack_earcon or "disabled").lower() == "enabled"
         self.voice_ack_earcon_freq = self.get("voice_ack_earcon_freq")
         self.voice_ack_earcon_duration = self.get("voice_ack_earcon_duration")
+
+        # TTS pacing
+        self.tts_inter_chunk_pause_ms = self.get("tts_inter_chunk_pause_ms")
+        if self.tts_inter_chunk_pause_ms is None:
+            self.tts_inter_chunk_pause_ms = 0
+        if isinstance(self.tts_inter_chunk_pause_ms, float) and self.tts_inter_chunk_pause_ms.is_integer():
+            self.tts_inter_chunk_pause_ms = int(self.tts_inter_chunk_pause_ms)
+        elif isinstance(self.tts_inter_chunk_pause_ms, str):
+            pause_str = self.tts_inter_chunk_pause_ms.strip()
+            try:
+                self.tts_inter_chunk_pause_ms = int(pause_str)
+            except Exception:
+                # Keep as-is for validation to catch
+                pass
 
         # Normalize common YAML representations
         if isinstance(self.voice_ack_earcon_freq, float) and self.voice_ack_earcon_freq.is_integer():
@@ -303,6 +320,9 @@ class Config:
 
             if not isinstance(self.voice_ack_earcon_duration, (int, float)) or self.voice_ack_earcon_duration <= 0:
                 errors.append("voice_ack_earcon_duration must be a positive number")
+
+        if isinstance(self.tts_inter_chunk_pause_ms, bool) or not isinstance(self.tts_inter_chunk_pause_ms, int) or self.tts_inter_chunk_pause_ms < 0:
+            errors.append("tts_inter_chunk_pause_ms must be a non-negative integer")
 
         # Report all errors
         if errors:
