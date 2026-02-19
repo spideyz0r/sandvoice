@@ -64,6 +64,8 @@ class Config:
             "stream_tts_boundary": "sentence",  # sentence|paragraph
             "stream_tts_first_chunk_target_s": 6,
             "stream_tts_buffer_chunks": 2,
+            "stream_tts_tts_join_timeout_s": 30,
+            "stream_tts_player_join_timeout_s": 60,
             # Wake word mode settings (only active with --wake-word flag)
             "wake_word_enabled": "enabled",
             "wake_phrase": "hey sandvoice",
@@ -154,12 +156,19 @@ class Config:
         self.stream_tts_boundary = str(self.get("stream_tts_boundary") or "sentence").strip().lower()
         self.stream_tts_first_chunk_target_s = self.get("stream_tts_first_chunk_target_s")
         self.stream_tts_buffer_chunks = self.get("stream_tts_buffer_chunks")
+        self.stream_tts_tts_join_timeout_s = self.get("stream_tts_tts_join_timeout_s")
+        self.stream_tts_player_join_timeout_s = self.get("stream_tts_player_join_timeout_s")
 
         # Normalize numeric YAML representations for streaming TTS
         if isinstance(self.stream_tts_first_chunk_target_s, float) and self.stream_tts_first_chunk_target_s.is_integer():
             self.stream_tts_first_chunk_target_s = int(self.stream_tts_first_chunk_target_s)
         if isinstance(self.stream_tts_buffer_chunks, float) and self.stream_tts_buffer_chunks.is_integer():
             self.stream_tts_buffer_chunks = int(self.stream_tts_buffer_chunks)
+
+        if isinstance(self.stream_tts_tts_join_timeout_s, float) and self.stream_tts_tts_join_timeout_s.is_integer():
+            self.stream_tts_tts_join_timeout_s = int(self.stream_tts_tts_join_timeout_s)
+        if isinstance(self.stream_tts_player_join_timeout_s, float) and self.stream_tts_player_join_timeout_s.is_integer():
+            self.stream_tts_player_join_timeout_s = int(self.stream_tts_player_join_timeout_s)
 
         # Wake word mode settings
         self.wake_word_enabled = self.get("wake_word_enabled").lower() == "enabled"
@@ -339,6 +348,12 @@ class Config:
 
         if isinstance(self.stream_tts_buffer_chunks, bool) or not isinstance(self.stream_tts_buffer_chunks, int) or self.stream_tts_buffer_chunks < 1:
             errors.append("stream_tts_buffer_chunks must be an integer >= 1")
+
+        if isinstance(self.stream_tts_tts_join_timeout_s, bool) or not isinstance(self.stream_tts_tts_join_timeout_s, int) or self.stream_tts_tts_join_timeout_s < 1:
+            errors.append("stream_tts_tts_join_timeout_s must be an integer >= 1")
+
+        if isinstance(self.stream_tts_player_join_timeout_s, bool) or not isinstance(self.stream_tts_player_join_timeout_s, int) or self.stream_tts_player_join_timeout_s < 1:
+            errors.append("stream_tts_player_join_timeout_s must be an integer >= 1")
 
         # Report all errors
         if errors:

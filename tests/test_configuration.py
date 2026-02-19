@@ -168,6 +168,19 @@ class TestConfigurationValidation(unittest.TestCase):
         self.assertIn("stream_tts_first_chunk_target_s must be", msg)
         self.assertIn("stream_tts_buffer_chunks must be", msg)
 
+    def test_stream_tts_join_timeouts_must_be_positive_ints(self):
+        self.write_config({
+            "stream_tts_tts_join_timeout_s": 0,
+            "stream_tts_player_join_timeout_s": 0,
+        })
+
+        with self.assertRaises(ValueError) as context:
+            Config()
+
+        msg = str(context.exception)
+        self.assertIn("stream_tts_tts_join_timeout_s must be", msg)
+        self.assertIn("stream_tts_player_join_timeout_s must be", msg)
+
     def test_voice_ack_earcon_validation_only_when_enabled(self):
         """Test that ack earcon freq/duration are only validated when enabled"""
         # Disabled: invalid values should not fail validation

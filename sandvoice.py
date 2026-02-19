@@ -124,8 +124,19 @@ class SandVoice:
                 finally:
                     audio_queue.put(None)
 
+            player_success = [True]
+            player_failed_file = [""]
+            player_error = [""]
+
             def player_worker():
-                return audio.play_audio_queue(audio_queue, stop_event=stop_event)
+                success, failed_file, error = audio.play_audio_queue(audio_queue, stop_event=stop_event)
+                player_success[0] = bool(success)
+                if failed_file:
+                    player_failed_file[0] = str(failed_file)
+                if error:
+                    player_error[0] = str(error)
+                if not success:
+                    stop_event.set()
 
             tts_thread = threading.Thread(target=tts_worker, name="stream-tts-worker")
             player_thread = threading.Thread(target=player_worker, name="stream-audio-player")
@@ -156,6 +167,8 @@ class SandVoice:
                 for delta in self.ai.stream_response_deltas(user_input):
                     full_parts.append(delta)
                     if stop_event.is_set():
+                        # Voice path is interrupted (e.g. TTS/playback failure). Keep collecting deltas
+                        # so we can still print the final response text.
                         continue
 
                     buffer += delta
@@ -202,16 +215,23 @@ class SandVoice:
                 except Exception:
                     pass
 
-            # Ensure newline when printing deltas
-            if self.config.debug and stream_print_deltas:
-                print("\n", flush=True)
-
             # Wait for threads to finish playback.
-            tts_thread.join(timeout=30)
-            player_thread.join(timeout=60)
+            tts_join_timeout = int(getattr(self.config, "stream_tts_tts_join_timeout_s", 30) or 30)
+            player_join_timeout = int(getattr(self.config, "stream_tts_player_join_timeout_s", 60) or 60)
+            tts_thread.join(timeout=tts_join_timeout)
+            player_thread.join(timeout=player_join_timeout)
 
             if (tts_thread.is_alive() or player_thread.is_alive()) and self.config.debug:
                 print("Warning: streaming TTS threads did not exit cleanly within timeout")
+
+            if not player_success[0]:
+                if self.config.debug:
+                    print(
+                        f"Error during streaming audio playback for file '{player_failed_file[0]}': {player_error[0]}\n"
+                        "Stopping voice playback and continuing with text only."
+                    )
+                else:
+                    print("Audio playback failed during streaming. Continuing with text only.")
 
             response = "".join(full_parts)
             if not (self.config.debug and stream_print_deltas):
