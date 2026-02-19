@@ -636,6 +636,41 @@ class TestStreamResponseDeltas(unittest.TestCase):
         self.assertIn("User: Hi", ai.conversation_history[0])
         self.assertIn("TestBot: Hello there!", ai.conversation_history[1])
 
+    @patch('common.ai.OpenAI')
+    @patch('common.ai.setup_error_logging')
+    def test_stream_response_deltas_does_not_append_partial_assistant_on_failure(self, mock_setup, mock_openai_class):
+        mock_config = Mock()
+        mock_config.api_timeout = 10
+        mock_config.api_retry_attempts = 3
+        mock_config.gpt_response_model = 'gpt-3.5-turbo'
+        mock_config.botname = 'TestBot'
+        mock_config.language = 'English'
+        mock_config.timezone = 'EST'
+        mock_config.location = 'Test City'
+        mock_config.debug = False
+        mock_config.stream_print_deltas = False
+
+        mock_client = Mock()
+        mock_openai_class.return_value = mock_client
+
+        def _broken_stream():
+            e1 = Mock()
+            e1.choices = [Mock(delta=Mock(content="Hello"))]
+            yield e1
+            raise RuntimeError("boom")
+
+        mock_client.chat.completions.create.return_value = _broken_stream()
+
+        ai = AI(mock_config)
+        gen = ai.stream_response_deltas("Hi")
+        self.assertEqual(next(gen), "Hello")
+        with self.assertRaises(RuntimeError):
+            list(gen)
+
+        # Only the user turn should be present; assistant turn should not be persisted.
+        self.assertEqual(len(ai.conversation_history), 1)
+        self.assertIn("User: Hi", ai.conversation_history[0])
+
 
 class TestTextSummary(unittest.TestCase):
     def setUp(self):

@@ -138,6 +138,15 @@ class SandVoice:
                             break
 
                         for f in tts_files:
+                            if stop_event.is_set():
+                                # Player may have already stopped/drained the queue; delete to avoid leaking temp files.
+                                try:
+                                    if os.path.exists(f):
+                                        os.remove(f)
+                                except OSError:
+                                    pass
+                                continue
+
                             audio_queue.put(f)
                 finally:
                     audio_queue.put(None)

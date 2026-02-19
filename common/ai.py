@@ -389,6 +389,8 @@ class AI:
         ] + [{"role": "user", "content": message} for message in self.conversation_history]
 
         collected = []
+        stream_completed = False
+
         try:
             stream = self.openai_client.chat.completions.create(
                 model=model,
@@ -409,12 +411,17 @@ class AI:
                     if self.config.debug and stream_print_deltas:
                         print(piece, end="", flush=True)
                     yield piece
+
+            stream_completed = True
         finally:
             if self.config.debug and stream_print_deltas:
                 print("", flush=True)
 
-            assistant_content = "".join(collected)
-            self.conversation_history.append(f"{self.config.botname}: " + assistant_content)
+            # Only persist the assistant turn if the stream completed without raising.
+            # This avoids polluting the next prompt with partial output.
+            if stream_completed:
+                assistant_content = "".join(collected)
+                self.conversation_history.append(f"{self.config.botname}: " + assistant_content)
 
     @retry_with_backoff(max_attempts=3, initial_delay=1)
     def define_route(self, user_input, model = None):
