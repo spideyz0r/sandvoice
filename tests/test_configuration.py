@@ -145,6 +145,29 @@ class TestConfigurationValidation(unittest.TestCase):
 
         self.assertIn("verbosity must be 'brief', 'normal', or 'detailed'", str(context.exception))
 
+    def test_stream_tts_boundary_must_be_valid(self):
+        self.write_config({
+            "stream_tts_boundary": "invalid",
+        })
+
+        with self.assertRaises(ValueError) as context:
+            Config()
+
+        self.assertIn("stream_tts_boundary must be", str(context.exception))
+
+    def test_stream_tts_numeric_values_must_be_positive_ints(self):
+        self.write_config({
+            "stream_tts_first_chunk_target_s": 0,
+            "stream_tts_buffer_chunks": 0,
+        })
+
+        with self.assertRaises(ValueError) as context:
+            Config()
+
+        msg = str(context.exception)
+        self.assertIn("stream_tts_first_chunk_target_s must be", msg)
+        self.assertIn("stream_tts_buffer_chunks must be", msg)
+
     def test_voice_ack_earcon_validation_only_when_enabled(self):
         """Test that ack earcon freq/duration are only validated when enabled"""
         # Disabled: invalid values should not fail validation

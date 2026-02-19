@@ -3,6 +3,8 @@ import sys
 import types
 import unittest
 import tempfile
+import queue
+import threading
 from unittest.mock import Mock, patch
 
 
@@ -141,6 +143,65 @@ class TestAudioPlaybackHelpers(unittest.TestCase):
         self.assertTrue(os.path.exists(f2))
         # c never played -> cleaned
         self.assertFalse(os.path.exists(f3))
+
+    def test_play_audio_queue_success_cleans_up(self):
+        audio = self.Audio.__new__(self.Audio)
+        audio.config = Mock(debug=False)
+
+        played = []
+
+        def _play(path, stop_event=None):
+            played.append(path)
+
+        audio.play_audio_file = _play
+
+        f1 = os.path.join(self.temp_dir, 'a.mp3')
+        f2 = os.path.join(self.temp_dir, 'b.mp3')
+        open(f1, 'wb').close()
+        open(f2, 'wb').close()
+
+        q = queue.Queue()
+        q.put(f1)
+        q.put(f2)
+        q.put(None)
+
+        success, failed, err = self.Audio.play_audio_queue(audio, q)
+        self.assertTrue(success)
+        self.assertIsNone(failed)
+        self.assertIsNone(err)
+        self.assertEqual(played, [f1, f2])
+        self.assertFalse(os.path.exists(f1))
+        self.assertFalse(os.path.exists(f2))
+
+    def test_play_audio_queue_stop_event_drains_and_cleans(self):
+        audio = self.Audio.__new__(self.Audio)
+        audio.config = Mock(debug=False)
+
+        f1 = os.path.join(self.temp_dir, 'a.mp3')
+        f2 = os.path.join(self.temp_dir, 'b.mp3')
+        open(f1, 'wb').close()
+        open(f2, 'wb').close()
+
+        stop_event = threading.Event()
+
+        def _play(path, stop_event=None):
+            # Interrupt immediately after first file starts.
+            if path.endswith('a.mp3') and stop_event is not None:
+                stop_event.set()
+
+        audio.play_audio_file = _play
+
+        q = queue.Queue()
+        q.put(f1)
+        q.put(f2)
+        q.put(None)
+
+        success, failed, err = self.Audio.play_audio_queue(audio, q, stop_event=stop_event)
+        self.assertFalse(success)
+        self.assertIsNone(failed)
+        self.assertIsNone(err)
+        self.assertFalse(os.path.exists(f1))
+        self.assertFalse(os.path.exists(f2))
 
 
 class TestMixerInitialization(unittest.TestCase):

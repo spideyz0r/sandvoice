@@ -3,7 +3,7 @@ import tempfile
 import os
 import json
 from unittest.mock import Mock, patch, mock_open
-from common.ai import AI, ErrorMessage
+from common.ai import AI, ErrorMessage, pop_streaming_chunk
 
 
 class TestErrorMessage(unittest.TestCase):
@@ -551,6 +551,64 @@ route_role: |
 
         self.assertEqual(result["route"], "default-route")
         self.assertIn("API error", result["reason"])
+
+
+class TestStreamingHelpers(unittest.TestCase):
+    def test_pop_streaming_chunk_sentence_boundary(self):
+        buf = "Hello world. This is the next sentence."
+        chunk, rest = pop_streaming_chunk(buf, boundary="sentence", min_chars=5)
+        self.assertEqual(chunk, "Hello world.")
+        self.assertTrue(rest.startswith("This is"))
+
+    def test_pop_streaming_chunk_paragraph_boundary(self):
+        buf = "Para one.\n\nPara two."
+        chunk, rest = pop_streaming_chunk(buf, boundary="paragraph", min_chars=5)
+        self.assertEqual(chunk, "Para one.")
+        self.assertEqual(rest, "Para two.")
+
+
+class TestStreamResponseDeltas(unittest.TestCase):
+    def setUp(self):
+        self.original_api_key = os.environ.get('OPENAI_API_KEY')
+        os.environ['OPENAI_API_KEY'] = 'test-key'
+
+    def tearDown(self):
+        if self.original_api_key is not None:
+            os.environ['OPENAI_API_KEY'] = self.original_api_key
+        else:
+            os.environ.pop('OPENAI_API_KEY', None)
+
+    @patch('common.ai.OpenAI')
+    @patch('common.ai.setup_error_logging')
+    def test_stream_response_deltas_assembles_and_updates_history(self, mock_setup, mock_openai_class):
+        mock_config = Mock()
+        mock_config.api_timeout = 10
+        mock_config.api_retry_attempts = 3
+        mock_config.gpt_response_model = 'gpt-3.5-turbo'
+        mock_config.botname = 'TestBot'
+        mock_config.language = 'English'
+        mock_config.timezone = 'EST'
+        mock_config.location = 'Test City'
+        mock_config.debug = False
+        mock_config.stream_print_deltas = False
+
+        mock_client = Mock()
+        mock_openai_class.return_value = mock_client
+
+        e1 = Mock()
+        e1.choices = [Mock(delta=Mock(content="Hello"))]
+        e2 = Mock()
+        e2.choices = [Mock(delta=Mock(content=" there"))]
+        e3 = Mock()
+        e3.choices = [Mock(delta=Mock(content="!"))]
+        mock_client.chat.completions.create.return_value = iter([e1, e2, e3])
+
+        ai = AI(mock_config)
+        pieces = list(ai.stream_response_deltas("Hi"))
+        self.assertEqual("".join(pieces), "Hello there!")
+        self.assertEqual(len(ai.conversation_history), 2)
+        self.assertIn("User: Hi", ai.conversation_history[0])
+        self.assertIn("TestBot: Hello there!", ai.conversation_history[1])
 
 
 class TestTextSummary(unittest.TestCase):

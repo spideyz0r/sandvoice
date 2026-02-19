@@ -58,6 +58,12 @@ class Config:
             "stream_responses": "disabled",
             # Only used when stream_responses is enabled; useful in debug/CLI.
             "stream_print_deltas": "disabled",
+
+            # Plan 08 Phase 2: streaming TTS (buffer then play)
+            "stream_tts": "disabled",
+            "stream_tts_boundary": "sentence",  # sentence|paragraph
+            "stream_tts_first_chunk_target_s": 6,
+            "stream_tts_buffer_chunks": 2,
             # Wake word mode settings (only active with --wake-word flag)
             "wake_word_enabled": "enabled",
             "wake_phrase": "hey sandvoice",
@@ -143,6 +149,17 @@ class Config:
         # Streaming
         self.stream_responses = self.get("stream_responses").lower() == "enabled"
         self.stream_print_deltas = self.get("stream_print_deltas").lower() == "enabled"
+
+        self.stream_tts = self.get("stream_tts").lower() == "enabled"
+        self.stream_tts_boundary = str(self.get("stream_tts_boundary") or "sentence").strip().lower()
+        self.stream_tts_first_chunk_target_s = self.get("stream_tts_first_chunk_target_s")
+        self.stream_tts_buffer_chunks = self.get("stream_tts_buffer_chunks")
+
+        # Normalize numeric YAML representations for streaming TTS
+        if isinstance(self.stream_tts_first_chunk_target_s, float) and self.stream_tts_first_chunk_target_s.is_integer():
+            self.stream_tts_first_chunk_target_s = int(self.stream_tts_first_chunk_target_s)
+        if isinstance(self.stream_tts_buffer_chunks, float) and self.stream_tts_buffer_chunks.is_integer():
+            self.stream_tts_buffer_chunks = int(self.stream_tts_buffer_chunks)
 
         # Wake word mode settings
         self.wake_word_enabled = self.get("wake_word_enabled").lower() == "enabled"
@@ -312,6 +329,16 @@ class Config:
 
             if not isinstance(self.voice_ack_earcon_duration, (int, float)) or self.voice_ack_earcon_duration <= 0:
                 errors.append("voice_ack_earcon_duration must be a positive number")
+
+        # Validate streaming TTS settings
+        if self.stream_tts_boundary not in ["sentence", "paragraph"]:
+            errors.append("stream_tts_boundary must be 'sentence' or 'paragraph'")
+
+        if isinstance(self.stream_tts_first_chunk_target_s, bool) or not isinstance(self.stream_tts_first_chunk_target_s, int) or self.stream_tts_first_chunk_target_s < 1:
+            errors.append("stream_tts_first_chunk_target_s must be an integer >= 1")
+
+        if isinstance(self.stream_tts_buffer_chunks, bool) or not isinstance(self.stream_tts_buffer_chunks, int) or self.stream_tts_buffer_chunks < 1:
+            errors.append("stream_tts_buffer_chunks must be an integer >= 1")
 
         # Report all errors
         if errors:

@@ -13,6 +13,50 @@ DEFAULT_TTS_MAX_CHARS = 3800
 SENTENCE_BREAK_RE = re.compile(r"[.!?]\s+")
 
 
+def pop_streaming_chunk(buffer, boundary="sentence", min_chars=200, max_chars=1200):
+    """Pop a speakable chunk from a growing streaming buffer.
+
+    Returns:
+        (chunk, remainder)
+        - chunk: str|None (None means not enough buffered yet)
+        - remainder: str
+    """
+    if buffer is None:
+        return None, ""
+
+    remaining = str(buffer)
+    if not remaining.strip():
+        return None, remaining
+
+    remaining = remaining.lstrip()
+
+    # Prefer natural boundaries.
+    if boundary == "paragraph":
+        idx = remaining.find("\n\n")
+        if idx != -1:
+            end = idx + 2
+            candidate = remaining[:end].strip()
+            if len(candidate) >= min_chars:
+                return candidate, remaining[end:].lstrip()
+    else:
+        for match in SENTENCE_BREAK_RE.finditer(remaining):
+            end = match.end()
+            candidate = remaining[:end].strip()
+            if len(candidate) >= min_chars:
+                return candidate, remaining[end:].lstrip()
+
+    # If buffer is getting too large, fall back to a soft cut.
+    if len(remaining) > max_chars:
+        cut = remaining.rfind(" ", 0, max_chars)
+        if cut == -1 or cut < int(max_chars * 0.6):
+            cut = max_chars
+        candidate = remaining[:cut].strip()
+        if candidate:
+            return candidate, remaining[cut:].lstrip()
+
+    return None, remaining
+
+
 def split_text_for_tts(text, max_chars = DEFAULT_TTS_MAX_CHARS):
     """Split text into chunks that fit within the TTS input size limit.
 
@@ -270,6 +314,87 @@ class AI:
                 logging.error(f"Response generation error: {e}")
             print(error_msg)
             return ErrorMessage("Sorry, I'm having trouble right now. Please try again in a moment.")
+
+    def stream_response_deltas(self, user_input, extra_info=None, model=None):
+        """Yield response text deltas from the LLM stream.
+
+        This is used by Plan 08 Phase 2 to begin TTS before the full response is complete.
+        It also updates conversation history after the stream completes.
+        """
+        if not model:
+            model = self.config.gpt_response_model
+
+        # Add to conversation history only if not already present (prevents duplicates during retries)
+        user_message = "User: " + user_input
+        if not self.conversation_history or self.conversation_history[-1] != user_message:
+            self.conversation_history.append(user_message)
+
+        now = datetime.datetime.now()
+        verbosity = getattr(self.config, "verbosity", "brief")
+        if verbosity == "detailed":
+            verbosity_instruction = (
+                "Verbosity: detailed. Provide thorough, structured answers by default. "
+                "Include steps/examples when helpful. If the user asks for a short answer, comply."
+            )
+        elif verbosity == "normal":
+            verbosity_instruction = (
+                "Verbosity: normal. Be concise but complete. "
+                "Expand when the user explicitly asks for more detail."
+            )
+        else:
+            verbosity_instruction = (
+                "Verbosity: brief. Keep answers short by default (1-3 sentences). "
+                "Avoid long lists and excessive detail unless the user explicitly asks to expand, "
+                "asks for details, or says they want a longer answer."
+            )
+
+        system_role = f"""
+            Your name is {self.config.botname}.
+            You are an assistant written in Python by Breno Brand.
+            You must answer in {self.config.language}.
+            The person that is talking to you is in the {self.config.timezone} time zone.
+            The person that is talking to you is located in {self.config.location}.
+            Current date and time to be considered when answering the message: {now}.
+            Never answer as a chat, for example reading your name in a conversation.
+            DO NOT reply to messages with the format "{self.config.botname}": <message here>.
+            Reply in a natural and human way.
+            {verbosity_instruction}
+            """
+
+        if extra_info is not None:
+            system_role = system_role + "Consider the following to answer your question: " + extra_info
+
+        stream_print_deltas = (getattr(self.config, "stream_print_deltas", False) is True)
+        messages = [
+            {"role": "system", "content": system_role},
+        ] + [{"role": "user", "content": message} for message in self.conversation_history]
+
+        stream = self.openai_client.chat.completions.create(
+            model=model,
+            messages=messages,
+            stream=True,
+        )
+
+        collected = []
+        for event in stream:
+            piece = None
+            try:
+                delta = event.choices[0].delta
+                piece = getattr(delta, "content", None)
+            except Exception:
+                piece = None
+
+            if piece:
+                collected.append(piece)
+                if self.config.debug and stream_print_deltas:
+                    print(piece, end="", flush=True)
+                yield piece
+
+        if self.config.debug and stream_print_deltas:
+            print("", flush=True)
+
+        assistant_content = "".join(collected)
+        self.conversation_history.append(f"{self.config.botname}: " + assistant_content)
 
     @retry_with_backoff(max_attempts=3, initial_delay=1)
     def define_route(self, user_input, model = None):

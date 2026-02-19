@@ -5,9 +5,10 @@ warnings.filterwarnings("ignore", message="pkg_resources is deprecated")
 
 from common.configuration import Config
 from common.audio import Audio
-from common.ai import AI
+from common.ai import AI, pop_streaming_chunk
 
 import argparse, importlib, os, sys
+import queue, threading
 
 class SandVoice:
     def __init__(self):
@@ -80,32 +81,152 @@ class SandVoice:
             print(f"You: {user_input}")
 
         route = self.ai.define_route(user_input)
-        response = self.route_message(user_input, route)
-        print(f"{self.config.botname}: {response}\n")
 
-        if self.config.bot_voice:
-            tts_files = self.ai.text_to_speech(response)
-            if not tts_files:
+        # Plan 08 Phase 2 (default route only): stream LLM response and start TTS playback early.
+        can_stream_default = (
+            self.config.bot_voice and
+            getattr(self.config, "stream_responses", False) and
+            getattr(self.config, "stream_tts", False) and
+            (route.get("route") not in self.plugins)
+        )
+
+        if can_stream_default:
+            stop_event = threading.Event()
+            text_queue = queue.Queue(maxsize=max(1, int(getattr(self.config, "stream_tts_buffer_chunks", 2) or 2)))
+            audio_queue = queue.Queue()
+
+            tts_failed = {"error": None}
+
+            def tts_worker():
+                try:
+                    while not stop_event.is_set():
+                        chunk = text_queue.get()
+                        if chunk is None:
+                            break
+                        try:
+                            tts_files = self.ai.text_to_speech(chunk)
+                        except Exception as e:
+                            tts_files = []
+                            tts_failed["error"] = e
+
+                        if not tts_files:
+                            stop_event.set()
+                            if tts_failed["error"] is None:
+                                tts_failed["error"] = RuntimeError("TTS returned no audio files")
+                            break
+
+                        for f in tts_files:
+                            audio_queue.put(f)
+                finally:
+                    audio_queue.put(None)
+
+            def player_worker():
+                return audio.play_audio_queue(audio_queue, stop_event=stop_event)
+
+            tts_thread = threading.Thread(target=tts_worker, name="stream-tts-worker", daemon=True)
+            player_thread = threading.Thread(target=player_worker, name="stream-audio-player", daemon=True)
+            tts_thread.start()
+            player_thread.start()
+
+            boundary = str(getattr(self.config, "stream_tts_boundary", "sentence") or "sentence").strip().lower()
+            try:
+                target_s = int(getattr(self.config, "stream_tts_first_chunk_target_s", 6) or 6)
+            except Exception:
+                target_s = 6
+
+            first_min_chars = max(120, int(target_s * 35))
+            next_min_chars = 200
+
+            buffer = ""
+            full_parts = []
+            is_first = True
+
+            if self.config.debug and getattr(self.config, "stream_print_deltas", False):
+                print(f"{self.config.botname}: ", end="", flush=True)
+
+            for delta in self.ai.stream_response_deltas(user_input):
+                full_parts.append(delta)
+                if stop_event.is_set():
+                    continue
+
+                buffer += delta
+                while not stop_event.is_set():
+                    min_chars = first_min_chars if is_first else next_min_chars
+                    chunk, buffer = pop_streaming_chunk(buffer, boundary=boundary, min_chars=min_chars)
+                    if chunk is None:
+                        break
+                    is_first = False
+
+                    # Enqueue chunk for TTS generation, respecting backpressure.
+                    while not stop_event.is_set():
+                        try:
+                            text_queue.put(chunk, timeout=0.1)
+                            break
+                        except queue.Full:
+                            continue
+
+            # Flush remaining text as final chunk (best effort)
+            if not stop_event.is_set():
+                final_chunk = buffer.strip()
+                if final_chunk:
+                    while not stop_event.is_set():
+                        try:
+                            text_queue.put(final_chunk, timeout=0.1)
+                            break
+                        except queue.Full:
+                            continue
+
+            # Signal TTS worker completion
+            if not stop_event.is_set():
+                try:
+                    text_queue.put(None, timeout=0.1)
+                except queue.Full:
+                    # Best-effort: if queue is full, worker will still exit after draining.
+                    pass
+
+            # Ensure newline when printing deltas
+            if self.config.debug and getattr(self.config, "stream_print_deltas", False):
+                print("\n", flush=True)
+
+            # Wait for threads to finish playback.
+            tts_thread.join(timeout=30)
+            player_thread.join(timeout=60)
+
+            response = "".join(full_parts)
+            if not (self.config.debug and getattr(self.config, "stream_print_deltas", False)):
+                print(f"{self.config.botname}: {response}\n")
+
+            if stop_event.is_set() and tts_failed["error"] is not None:
                 if self.config.debug:
-                    response_str = "" if response is None else str(response)
-                    if not response_str.strip():
-                        print("TTS was requested (bot_voice enabled) but response text was empty; skipping audio playback.")
-                    else:
-                        print(
-                            "TTS was requested (bot_voice enabled) for a non-empty response, "
-                            "but no audio files were generated. This may indicate that the TTS API failed, "
-                            "that the response text was filtered out as empty/whitespace during preprocessing, "
-                            "or another internal TTS issue. Skipping audio playback."
-                        )
-            else:
-                success, failed_file, error = audio.play_audio_files(tts_files)
-                if not success:
+                    print(f"Streaming TTS failed; continuing with text only. Error: {tts_failed['error']}")
+
+        else:
+            response = self.route_message(user_input, route)
+            print(f"{self.config.botname}: {response}\n")
+
+            if self.config.bot_voice:
+                tts_files = self.ai.text_to_speech(response)
+                if not tts_files:
                     if self.config.debug:
-                        print(f"Error during audio playback for file '{failed_file}': {error}")
-                        print("Stopping voice playback and continuing with text only.")
-                        print(f"Preserving TTS file '{failed_file}' for debugging.")
-                    else:
-                        print("Audio playback failed. Continuing with text only.")
+                        response_str = "" if response is None else str(response)
+                        if not response_str.strip():
+                            print("TTS was requested (bot_voice enabled) but response text was empty; skipping audio playback.")
+                        else:
+                            print(
+                                "TTS was requested (bot_voice enabled) for a non-empty response, "
+                                "but no audio files were generated. This may indicate that the TTS API failed, "
+                                "that the response text was filtered out as empty/whitespace during preprocessing, "
+                                "or another internal TTS issue. Skipping audio playback."
+                            )
+                else:
+                    success, failed_file, error = audio.play_audio_files(tts_files)
+                    if not success:
+                        if self.config.debug:
+                            print(f"Error during audio playback for file '{failed_file}': {error}")
+                            print("Stopping voice playback and continuing with text only.")
+                            print(f"Preserving TTS file '{failed_file}' for debugging.")
+                        else:
+                            print("Audio playback failed. Continuing with text only.")
 
         if self.config.push_to_talk and not self.config.cli_input:
             input("Press any key to speak...")
