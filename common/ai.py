@@ -336,6 +336,9 @@ class AI:
 
         Note: this method updates self.conversation_history with the user input and the
         final assistant response (assembled from deltas).
+
+        Retries are intentionally not applied here because streaming retry semantics are
+        ambiguous (partial output may already have been emitted).
         """
         if not model:
             model = self.config.gpt_response_model

@@ -9,7 +9,7 @@ from common.ai import AI, pop_streaming_chunk
 from common.error_handling import handle_api_error
 
 import argparse, importlib, os, sys
-import queue, threading
+import queue, threading, time
 
 class SandVoice:
     def __init__(self):
@@ -98,6 +98,23 @@ class SandVoice:
 
             tts_error = [""]
 
+            # Bound queue-put loops so we don't spin forever if the worker dies/hangs.
+            queue_put_max_wait_s = 10.0
+
+            def _put_text_queue(item, allow_when_stopped=False):
+                deadline = time.monotonic() + queue_put_max_wait_s
+                while True:
+                    if stop_event.is_set() and not allow_when_stopped:
+                        return False
+                    try:
+                        text_queue.put(item, timeout=0.1)
+                        return True
+                    except queue.Full:
+                        if time.monotonic() >= deadline:
+                            if self.config.debug:
+                                print("Warning: timed out enqueueing streaming text chunk")
+                            return False
+
             def tts_worker():
                 try:
                     while not stop_event.is_set():
@@ -115,6 +132,7 @@ class SandVoice:
 
                         if not tts_files:
                             stop_event.set()
+                            # Preserve the first error (if any) from text_to_speech.
                             if not tts_error[0]:
                                 tts_error[0] = "TTS returned no audio files"
                             break
@@ -180,12 +198,9 @@ class SandVoice:
                         is_first = False
 
                         # Enqueue chunk for TTS generation, respecting backpressure.
-                        while not stop_event.is_set():
-                            try:
-                                text_queue.put(chunk, timeout=0.1)
-                                break
-                            except queue.Full:
-                                continue
+                        if not _put_text_queue(chunk):
+                            stop_event.set()
+                            break
             except Exception as e:
                 stop_event.set()
                 print(handle_api_error(e, service_name="OpenAI GPT (streaming)"))
@@ -194,32 +209,13 @@ class SandVoice:
             if not stop_event.is_set():
                 final_chunk = buffer.strip()
                 if final_chunk:
-                    while not stop_event.is_set():
-                        try:
-                            text_queue.put(final_chunk, timeout=0.1)
-                            break
-                        except queue.Full:
-                            continue
+                    if not _put_text_queue(final_chunk):
+                        stop_event.set()
 
             # Signal TTS worker completion
-            if not stop_event.is_set():
-                # Ensure the sentinel is eventually enqueued so the TTS worker can exit.
-                while True:
-                    try:
-                        text_queue.put(None, timeout=0.1)
-                        break
-                    except queue.Full:
-                        continue
-            else:
-                # Best-effort: unblock worker if it is waiting.
-                while True:
-                    try:
-                        text_queue.put(None, timeout=0.1)
-                        break
-                    except queue.Full:
-                        continue
-                    except Exception:
-                        break
+            # Ensure the sentinel is eventually enqueued so the TTS worker can exit.
+            # Even if stop_event is set, we still try to enqueue the sentinel to unblock.
+            _put_text_queue(None, allow_when_stopped=True)
 
             # Wait for threads to finish playback.
             tts_join_timeout = int(getattr(self.config, "stream_tts_tts_join_timeout_s", 30) or 30)
