@@ -1,6 +1,7 @@
 from openai import OpenAI
 from jinja2 import Template
 import datetime, json, yaml, warnings, os, logging, re, uuid
+from types import SimpleNamespace
 from common.error_handling import retry_with_backoff, setup_error_logging, handle_api_error, handle_file_error
 
 
@@ -220,14 +221,49 @@ class AI:
                 print (f"System role: {system_role}")
             # Be very sympathetic, helpful and don't be rude or have short answers"
 
-            completion = self.openai_client.chat.completions.create(
-            model = model,
+            # Only treat explicit boolean True as enabled.
+            # This avoids accidental truthiness with Mock() in tests/callers.
+            stream_responses = (getattr(self.config, "stream_responses", False) is True)
+            stream_print_deltas = (getattr(self.config, "stream_print_deltas", False) is True)
+
             messages = [
                 {"role": "system", "content": system_role},
-                ] + [{"role": "user", "content": message} for message in self.conversation_history]
+            ] + [{"role": "user", "content": message} for message in self.conversation_history]
+
+            if not stream_responses:
+                completion = self.openai_client.chat.completions.create(
+                    model=model,
+                    messages=messages,
+                )
+                assistant_content = completion.choices[0].message.content
+                self.conversation_history.append(f"{self.config.botname}: " + assistant_content)
+                return completion.choices[0].message
+
+            stream = self.openai_client.chat.completions.create(
+                model=model,
+                messages=messages,
+                stream=True,
             )
-            self.conversation_history.append(f"{self.config.botname}: " + completion.choices[0].message.content)
-            return completion.choices[0].message
+
+            collected = []
+            for event in stream:
+                try:
+                    delta = event.choices[0].delta
+                    piece = getattr(delta, "content", None)
+                except Exception:
+                    piece = None
+
+                if piece:
+                    collected.append(piece)
+                    if self.config.debug and stream_print_deltas:
+                        print(piece, end="", flush=True)
+
+            if self.config.debug and stream_print_deltas:
+                print("", flush=True)
+
+            assistant_content = "".join(collected)
+            self.conversation_history.append(f"{self.config.botname}: " + assistant_content)
+            return SimpleNamespace(content=assistant_content)
         except Exception as e:
             error_msg = handle_api_error(e, service_name="OpenAI GPT")
             if self.config.debug:

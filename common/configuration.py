@@ -53,6 +53,11 @@ class Config:
             "enable_error_logging": "disabled",
             "error_log_path": f"{os.environ['HOME']}/.sandvoice/error.log",
             "fallback_to_text_on_audio_error": "enabled",
+
+            # LLM streaming (Phase 1: stream text assembly)
+            "stream_responses": "disabled",
+            # Only used when stream_responses is enabled; useful in debug/CLI.
+            "stream_print_deltas": "disabled",
             # Wake word mode settings (only active with --wake-word flag)
             "wake_word_enabled": "enabled",
             "wake_phrase": "hey sandvoice",
@@ -134,6 +139,10 @@ class Config:
         self.enable_error_logging = self.get("enable_error_logging").lower() == "enabled"
         self.error_log_path = self.get("error_log_path")
         self.fallback_to_text_on_audio_error = self.get("fallback_to_text_on_audio_error").lower() == "enabled"
+
+        # Streaming
+        self.stream_responses = self.get("stream_responses").lower() == "enabled"
+        self.stream_print_deltas = self.get("stream_print_deltas").lower() == "enabled"
 
         # Wake word mode settings
         self.wake_word_enabled = self.get("wake_word_enabled").lower() == "enabled"
