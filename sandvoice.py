@@ -165,8 +165,9 @@ class SandVoice:
                 if not success:
                     stop_event.set()
 
-            tts_thread = threading.Thread(target=tts_worker, name="stream-tts-worker")
-            player_thread = threading.Thread(target=player_worker, name="stream-audio-player")
+            # Use daemon threads so unexpected main-thread exits don't hang shutdown.
+            tts_thread = threading.Thread(target=tts_worker, name="stream-tts-worker", daemon=True)
+            player_thread = threading.Thread(target=player_worker, name="stream-audio-player", daemon=True)
             tts_thread.start()
             player_thread.start()
 
