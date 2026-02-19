@@ -13,7 +13,12 @@ DEFAULT_TTS_MAX_CHARS = 3800
 SENTENCE_BREAK_RE = re.compile(r"[.!?]\s+")
 
 
-def pop_streaming_chunk(buffer, boundary="sentence", min_chars=200, max_chars=1200):
+# Streaming chunking defaults are intentionally smaller than DEFAULT_TTS_MAX_CHARS
+# to reduce time-to-first-audio and keep queued chunks short.
+DEFAULT_STREAM_MAX_CHARS = 1200
+
+
+def pop_streaming_chunk(buffer, boundary="sentence", min_chars=200, max_chars=DEFAULT_STREAM_MAX_CHARS):
     """Pop a speakable chunk from a growing streaming buffer.
 
     Returns:
