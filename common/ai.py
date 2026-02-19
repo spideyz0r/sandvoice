@@ -28,31 +28,44 @@ def pop_streaming_chunk(buffer, boundary="sentence", min_chars=200, max_chars=12
     if not remaining.strip():
         return None, remaining
 
-    remaining = remaining.lstrip()
-
     # Prefer natural boundaries.
     if boundary == "paragraph":
         idx = remaining.find("\n\n")
         if idx != -1:
             end = idx + 2
-            candidate = remaining[:end].strip()
+            raw_chunk = remaining[:end]
+            raw_remainder = remaining[end:]
+            candidate = raw_chunk.strip()
             if len(candidate) >= min_chars:
-                return candidate, remaining[end:].lstrip()
+                remainder = raw_remainder.lstrip()
+                if raw_chunk.rstrip() != raw_chunk and candidate and remainder:
+                    candidate = candidate + " "
+                return candidate, remainder
     else:
         for match in SENTENCE_BREAK_RE.finditer(remaining):
             end = match.end()
-            candidate = remaining[:end].strip()
+            raw_chunk = remaining[:end]
+            raw_remainder = remaining[end:]
+            candidate = raw_chunk.strip()
             if len(candidate) >= min_chars:
-                return candidate, remaining[end:].lstrip()
+                remainder = raw_remainder.lstrip()
+                if raw_chunk.rstrip() != raw_chunk and candidate and remainder:
+                    candidate = candidate + " "
+                return candidate, remainder
 
     # If buffer is getting too large, fall back to a soft cut.
     if len(remaining) > max_chars:
         cut = remaining.rfind(" ", 0, max_chars)
         if cut == -1 or cut < int(max_chars * 0.6):
             cut = max_chars
-        candidate = remaining[:cut].strip()
+        raw_chunk = remaining[:cut]
+        raw_remainder = remaining[cut:]
+        candidate = raw_chunk.strip()
         if candidate:
-            return candidate, remaining[cut:].lstrip()
+            remainder = raw_remainder.lstrip()
+            if raw_remainder[:1].isspace() and candidate and remainder:
+                candidate = candidate + " "
+            return candidate, remainder
 
     return None, remaining
 
@@ -320,6 +333,9 @@ class AI:
 
         This is used by Plan 08 Phase 2 to begin TTS before the full response is complete.
         It also updates conversation history after the stream completes.
+
+        Note: this method updates self.conversation_history with the user input and the
+        final assistant response (assembled from deltas).
         """
         if not model:
             model = self.config.gpt_response_model

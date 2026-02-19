@@ -203,6 +203,43 @@ class TestAudioPlaybackHelpers(unittest.TestCase):
         self.assertFalse(os.path.exists(f1))
         self.assertFalse(os.path.exists(f2))
 
+    def test_play_audio_queue_failure_preserves_failed_in_debug_and_cleans_rest(self):
+        audio = self.Audio.__new__(self.Audio)
+        audio.config = Mock(debug=True)
+
+        played = []
+
+        def _play(path, stop_event=None):
+            if path.endswith('b.mp3'):
+                raise RuntimeError('playback failed')
+            played.append(path)
+
+        audio.play_audio_file = _play
+
+        f1 = os.path.join(self.temp_dir, 'a.mp3')
+        f2 = os.path.join(self.temp_dir, 'b.mp3')
+        f3 = os.path.join(self.temp_dir, 'c.mp3')
+        open(f1, 'wb').close()
+        open(f2, 'wb').close()
+        open(f3, 'wb').close()
+
+        q = queue.Queue()
+        q.put(f1)
+        q.put(f2)
+        q.put(f3)
+        q.put(None)
+
+        success, failed, err = self.Audio.play_audio_queue(audio, q)
+        self.assertFalse(success)
+        self.assertEqual(failed, f2)
+        self.assertIsNotNone(err)
+        self.assertIn(f1, played)
+        self.assertNotIn(f2, played)
+
+        self.assertFalse(os.path.exists(f1))
+        self.assertTrue(os.path.exists(f2))
+        self.assertFalse(os.path.exists(f3))
+
 
 class TestMixerInitialization(unittest.TestCase):
     def setUp(self):

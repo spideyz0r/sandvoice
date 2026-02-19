@@ -557,14 +557,40 @@ class TestStreamingHelpers(unittest.TestCase):
     def test_pop_streaming_chunk_sentence_boundary(self):
         buf = "Hello world. This is the next sentence."
         chunk, rest = pop_streaming_chunk(buf, boundary="sentence", min_chars=5)
-        self.assertEqual(chunk, "Hello world.")
+        self.assertEqual(chunk, "Hello world. ")
         self.assertTrue(rest.startswith("This is"))
 
     def test_pop_streaming_chunk_paragraph_boundary(self):
         buf = "Para one.\n\nPara two."
         chunk, rest = pop_streaming_chunk(buf, boundary="paragraph", min_chars=5)
-        self.assertEqual(chunk, "Para one.")
+        self.assertEqual(chunk, "Para one. ")
         self.assertEqual(rest, "Para two.")
+
+    def test_pop_streaming_chunk_buffer_too_small(self):
+        buf = "Hi"
+        chunk, rest = pop_streaming_chunk(buf, boundary="sentence", min_chars=5)
+        self.assertIsNone(chunk)
+        self.assertEqual(rest, buf)
+
+    def test_pop_streaming_chunk_none_buffer(self):
+        chunk, rest = pop_streaming_chunk(None, boundary="sentence", min_chars=5)
+        self.assertIsNone(chunk)
+        self.assertEqual(rest, "")
+
+    def test_pop_streaming_chunk_whitespace_only(self):
+        buf = "   \n\t  "
+        chunk, rest = pop_streaming_chunk(buf, boundary="sentence", min_chars=5)
+        self.assertIsNone(chunk)
+        self.assertEqual(rest, buf)
+
+    def test_pop_streaming_chunk_exceeds_max_chars_soft_cut_preserves_text(self):
+        buf = "This is a somewhat longer buffer used for testing soft cuts."
+        max_chars = 20
+        chunk, rest = pop_streaming_chunk(buf, boundary="sentence", min_chars=5, max_chars=max_chars)
+        self.assertIsNotNone(chunk)
+        chunk = chunk or ""
+        self.assertLessEqual(len(chunk), max_chars)
+        self.assertEqual((chunk + rest), buf)
 
 
 class TestStreamResponseDeltas(unittest.TestCase):

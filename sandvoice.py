@@ -6,6 +6,7 @@ warnings.filterwarnings("ignore", message="pkg_resources is deprecated")
 from common.configuration import Config
 from common.audio import Audio
 from common.ai import AI, pop_streaming_chunk
+from common.error_handling import handle_api_error
 
 import argparse, importlib, os, sys
 import queue, threading
@@ -95,24 +96,27 @@ class SandVoice:
             text_queue = queue.Queue(maxsize=max(1, int(getattr(self.config, "stream_tts_buffer_chunks", 2) or 2)))
             audio_queue = queue.Queue()
 
-            tts_failed = {"error": None}
+            tts_error = [""]
 
             def tts_worker():
                 try:
                     while not stop_event.is_set():
-                        chunk = text_queue.get()
+                        try:
+                            chunk = text_queue.get(timeout=0.1)
+                        except queue.Empty:
+                            continue
                         if chunk is None:
                             break
                         try:
                             tts_files = self.ai.text_to_speech(chunk)
                         except Exception as e:
                             tts_files = []
-                            tts_failed["error"] = e
+                            tts_error[0] = str(e)
 
                         if not tts_files:
                             stop_event.set()
-                            if tts_failed["error"] is None:
-                                tts_failed["error"] = RuntimeError("TTS returned no audio files")
+                            if not tts_error[0]:
+                                tts_error[0] = "TTS returned no audio files"
                             break
 
                         for f in tts_files:
@@ -123,8 +127,8 @@ class SandVoice:
             def player_worker():
                 return audio.play_audio_queue(audio_queue, stop_event=stop_event)
 
-            tts_thread = threading.Thread(target=tts_worker, name="stream-tts-worker", daemon=True)
-            player_thread = threading.Thread(target=player_worker, name="stream-audio-player", daemon=True)
+            tts_thread = threading.Thread(target=tts_worker, name="stream-tts-worker")
+            player_thread = threading.Thread(target=player_worker, name="stream-audio-player")
             tts_thread.start()
             player_thread.start()
 
@@ -134,36 +138,44 @@ class SandVoice:
             except Exception:
                 target_s = 6
 
-            first_min_chars = max(120, int(target_s * 35))
+            # Rough heuristic for English: ~35 characters/sec spoken.
+            chars_per_second = 35
+            first_min_chars = max(120, int(target_s * chars_per_second))
             next_min_chars = 200
+
+            stream_print_deltas = bool(getattr(self.config, "stream_print_deltas", False))
 
             buffer = ""
             full_parts = []
             is_first = True
 
-            if self.config.debug and getattr(self.config, "stream_print_deltas", False):
+            if self.config.debug and stream_print_deltas:
                 print(f"{self.config.botname}: ", end="", flush=True)
 
-            for delta in self.ai.stream_response_deltas(user_input):
-                full_parts.append(delta)
-                if stop_event.is_set():
-                    continue
+            try:
+                for delta in self.ai.stream_response_deltas(user_input):
+                    full_parts.append(delta)
+                    if stop_event.is_set():
+                        continue
 
-                buffer += delta
-                while not stop_event.is_set():
-                    min_chars = first_min_chars if is_first else next_min_chars
-                    chunk, buffer = pop_streaming_chunk(buffer, boundary=boundary, min_chars=min_chars)
-                    if chunk is None:
-                        break
-                    is_first = False
-
-                    # Enqueue chunk for TTS generation, respecting backpressure.
+                    buffer += delta
                     while not stop_event.is_set():
-                        try:
-                            text_queue.put(chunk, timeout=0.1)
+                        min_chars = first_min_chars if is_first else next_min_chars
+                        chunk, buffer = pop_streaming_chunk(buffer, boundary=boundary, min_chars=min_chars)
+                        if chunk is None:
                             break
-                        except queue.Full:
-                            continue
+                        is_first = False
+
+                        # Enqueue chunk for TTS generation, respecting backpressure.
+                        while not stop_event.is_set():
+                            try:
+                                text_queue.put(chunk, timeout=0.1)
+                                break
+                            except queue.Full:
+                                continue
+            except Exception as e:
+                stop_event.set()
+                print(handle_api_error(e, service_name="OpenAI GPT (streaming)"))
 
             # Flush remaining text as final chunk (best effort)
             if not stop_event.is_set():
@@ -183,22 +195,31 @@ class SandVoice:
                 except queue.Full:
                     # Best-effort: if queue is full, worker will still exit after draining.
                     pass
+            else:
+                # Best-effort: unblock worker if it is waiting.
+                try:
+                    text_queue.put(None, timeout=0.1)
+                except Exception:
+                    pass
 
             # Ensure newline when printing deltas
-            if self.config.debug and getattr(self.config, "stream_print_deltas", False):
+            if self.config.debug and stream_print_deltas:
                 print("\n", flush=True)
 
             # Wait for threads to finish playback.
             tts_thread.join(timeout=30)
             player_thread.join(timeout=60)
 
+            if (tts_thread.is_alive() or player_thread.is_alive()) and self.config.debug:
+                print("Warning: streaming TTS threads did not exit cleanly within timeout")
+
             response = "".join(full_parts)
-            if not (self.config.debug and getattr(self.config, "stream_print_deltas", False)):
+            if not (self.config.debug and stream_print_deltas):
                 print(f"{self.config.botname}: {response}\n")
 
-            if stop_event.is_set() and tts_failed["error"] is not None:
+            if stop_event.is_set() and tts_error[0]:
                 if self.config.debug:
-                    print(f"Streaming TTS failed; continuing with text only. Error: {tts_failed['error']}")
+                    print(f"Streaming TTS failed; continuing with text only. Error: {tts_error[0]}")
 
         else:
             response = self.route_message(user_input, route)
