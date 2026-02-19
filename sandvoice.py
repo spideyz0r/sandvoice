@@ -203,6 +203,9 @@ class SandVoice:
                             break
             except Exception as e:
                 stop_event.set()
+                if self.config.debug and stream_print_deltas:
+                    # Ensure the error message starts on a new line, separate from streamed output.
+                    print()
                 print(handle_api_error(e, service_name="OpenAI GPT (streaming)"))
 
             # Flush remaining text as final chunk (best effort)
