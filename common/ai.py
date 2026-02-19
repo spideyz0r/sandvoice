@@ -340,7 +340,7 @@ class AI:
         if not model:
             model = self.config.gpt_response_model
 
-        # Add to conversation history only if not already present (prevents duplicates during retries)
+        # Add to conversation history only if not already present.
         user_message = "User: " + user_input
         if not self.conversation_history or self.conversation_history[-1] != user_message:
             self.conversation_history.append(user_message)
@@ -385,32 +385,33 @@ class AI:
             {"role": "system", "content": system_role},
         ] + [{"role": "user", "content": message} for message in self.conversation_history]
 
-        stream = self.openai_client.chat.completions.create(
-            model=model,
-            messages=messages,
-            stream=True,
-        )
-
         collected = []
-        for event in stream:
-            piece = None
-            try:
-                delta = event.choices[0].delta
-                piece = getattr(delta, "content", None)
-            except Exception:
+        try:
+            stream = self.openai_client.chat.completions.create(
+                model=model,
+                messages=messages,
+                stream=True,
+            )
+
+            for event in stream:
                 piece = None
+                try:
+                    delta = event.choices[0].delta
+                    piece = getattr(delta, "content", None)
+                except Exception:
+                    piece = None
 
-            if piece:
-                collected.append(piece)
-                if self.config.debug and stream_print_deltas:
-                    print(piece, end="", flush=True)
-                yield piece
+                if piece:
+                    collected.append(piece)
+                    if self.config.debug and stream_print_deltas:
+                        print(piece, end="", flush=True)
+                    yield piece
+        finally:
+            if self.config.debug and stream_print_deltas:
+                print("", flush=True)
 
-        if self.config.debug and stream_print_deltas:
-            print("", flush=True)
-
-        assistant_content = "".join(collected)
-        self.conversation_history.append(f"{self.config.botname}: " + assistant_content)
+            assistant_content = "".join(collected)
+            self.conversation_history.append(f"{self.config.botname}: " + assistant_content)
 
     @retry_with_backoff(max_attempts=3, initial_delay=1)
     def define_route(self, user_input, model = None):

@@ -203,17 +203,23 @@ class SandVoice:
 
             # Signal TTS worker completion
             if not stop_event.is_set():
-                try:
-                    text_queue.put(None, timeout=0.1)
-                except queue.Full:
-                    # Best-effort: if queue is full, worker will still exit after draining.
-                    pass
+                # Ensure the sentinel is eventually enqueued so the TTS worker can exit.
+                while True:
+                    try:
+                        text_queue.put(None, timeout=0.1)
+                        break
+                    except queue.Full:
+                        continue
             else:
                 # Best-effort: unblock worker if it is waiting.
-                try:
-                    text_queue.put(None, timeout=0.1)
-                except Exception:
-                    pass
+                while True:
+                    try:
+                        text_queue.put(None, timeout=0.1)
+                        break
+                    except queue.Full:
+                        continue
+                    except Exception:
+                        break
 
             # Wait for threads to finish playback.
             tts_join_timeout = int(getattr(self.config, "stream_tts_tts_join_timeout_s", 30) or 30)
