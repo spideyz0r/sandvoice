@@ -341,6 +341,45 @@ class TestGenerateResponse(unittest.TestCase):
 
     @patch('common.ai.OpenAI')
     @patch('common.ai.setup_error_logging')
+    def test_generate_response_streaming_success(self, mock_setup, mock_openai_class):
+        """Test streaming response assembly produces final content."""
+        mock_config = Mock()
+        mock_config.api_timeout = 10
+        mock_config.api_retry_attempts = 3
+        mock_config.gpt_response_model = 'gpt-3.5-turbo'
+        mock_config.botname = 'TestBot'
+        mock_config.language = 'English'
+        mock_config.timezone = 'EST'
+        mock_config.location = 'Test City'
+        mock_config.debug = False
+        mock_config.stream_responses = True
+        mock_config.stream_print_deltas = False
+
+        mock_client = Mock()
+        mock_openai_class.return_value = mock_client
+
+        e1 = Mock()
+        e1.choices = [Mock(delta=Mock(content="Hello"))]
+        e2 = Mock()
+        e2.choices = [Mock(delta=Mock(content=" world"))]
+        e3 = Mock()
+        e3.choices = [Mock(delta=Mock(content="!"))]
+
+        mock_client.chat.completions.create.return_value = iter([e1, e2, e3])
+
+        ai = AI(mock_config)
+        result = ai.generate_response("Hello")
+
+        self.assertEqual(result.content, "Hello world!")
+        self.assertEqual(len(ai.conversation_history), 2)
+        self.assertIn("User: Hello", ai.conversation_history[0])
+        self.assertIn("TestBot: Hello world!", ai.conversation_history[1])
+
+        _args, kwargs = mock_client.chat.completions.create.call_args
+        self.assertTrue(kwargs.get('stream'))
+
+    @patch('common.ai.OpenAI')
+    @patch('common.ai.setup_error_logging')
     def test_generate_response_with_extra_info(self, mock_setup, mock_openai_class):
         """Test response generation with extra context"""
         mock_config = Mock()
