@@ -1,6 +1,6 @@
 #import re, os, pyaudio, wave
 #from pydub import AudioSegment
-import re, os, pyaudio, wave, lameenc, logging, queue
+import re, os, time, pyaudio, wave, lameenc, logging, queue
 from pynput import keyboard
 from ctypes import *
 from common.error_handling import handle_file_error
@@ -368,14 +368,29 @@ class Audio:
 
         finally:
             # Drain any queued items and delete to avoid leaks.
-            try:
-                while True:
-                    item = audio_queue.get_nowait()
-                    if item is None:
+            # If stop_event is set, a producer may still enqueue a few paths before it notices.
+            # In that case, wait briefly for the sentinel so cleanup is reliable under concurrency.
+            drain_deadline = None
+            if stop_event is not None and stop_event.is_set():
+                drain_deadline = time.monotonic() + 2.0
+
+            while True:
+                try:
+                    if drain_deadline is None:
+                        item = audio_queue.get_nowait()
+                    else:
+                        remaining = drain_deadline - time.monotonic()
+                        if remaining <= 0:
+                            break
+                        item = audio_queue.get(timeout=min(0.1, remaining))
+                except queue.Empty:
+                    if drain_deadline is None:
                         break
-                    _cleanup_path(item)
-            except queue.Empty:
-                pass
+                    continue
+
+                if item is None:
+                    break
+                _cleanup_path(item)
 
         if failed_file is None and error is None and interrupted:
             return False, None, None

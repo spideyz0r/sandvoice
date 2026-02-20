@@ -203,6 +203,47 @@ class TestAudioPlaybackHelpers(unittest.TestCase):
         self.assertFalse(os.path.exists(f1))
         self.assertFalse(os.path.exists(f2))
 
+    def test_play_audio_queue_stop_event_drains_items_enqueued_after_interrupt(self):
+        audio = self.Audio.__new__(self.Audio)
+        audio.config = Mock(debug=False)
+
+        f1 = os.path.join(self.temp_dir, 'a.mp3')
+        f2 = os.path.join(self.temp_dir, 'b.mp3')
+        open(f1, 'wb').close()
+        open(f2, 'wb').close()
+
+        stop_event = threading.Event()
+        q = queue.Queue()
+        q.put(f1)
+
+        def _play(path, stop_event=None):
+            if path.endswith('a.mp3') and stop_event is not None:
+                stop_event.set()
+
+        audio.play_audio_file = _play
+
+        def producer():
+            # Enqueue after the consumer has already been interrupted.
+            import time
+            time.sleep(0.02)
+            q.put(f2)
+            q.put(None)
+
+        t = threading.Thread(target=producer)
+        t.start()
+        try:
+            success, failed, err = self.Audio.play_audio_queue(audio, q, stop_event=stop_event)
+        finally:
+            t.join(timeout=1)
+
+        self.assertFalse(success)
+        self.assertIsNone(failed)
+        self.assertIsNone(err)
+
+        self.assertFalse(os.path.exists(f1))
+        # The file enqueued after interrupt should still be cleaned up.
+        self.assertFalse(os.path.exists(f2))
+
     def test_play_audio_queue_failure_preserves_failed_in_debug_and_cleans_rest(self):
         audio = self.Audio.__new__(self.Audio)
         audio.config = Mock(debug=True)
