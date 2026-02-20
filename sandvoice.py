@@ -228,7 +228,12 @@ class SandVoice:
             # Signal TTS worker completion
             # Ensure the sentinel is eventually enqueued so the TTS worker can exit.
             # Even if stop_event is set, we still try to enqueue the sentinel to unblock.
-            _put_text_queue(None, allow_when_stopped=True)
+            sentinel_enqueued = _put_text_queue(None, allow_when_stopped=True)
+            if not sentinel_enqueued:
+                # If the queue is stuck full (e.g., hung/slow TTS worker), force an exit path.
+                stop_event.set()
+                if self.config.debug:
+                    print("Warning: failed to enqueue streaming TTS sentinel; forcing stop_event")
 
             # Wait for threads to finish playback.
             tts_join_timeout = int(getattr(self.config, "stream_tts_tts_join_timeout_s", 30) or 30)
