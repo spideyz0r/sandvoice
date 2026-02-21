@@ -93,8 +93,14 @@ class SandVoice:
 
         if can_stream_default:
             stop_event = threading.Event()
-            text_queue = queue.Queue(maxsize=max(1, int(getattr(self.config, "stream_tts_buffer_chunks", 2) or 2)))
-            audio_queue = queue.Queue()
+            stream_tts_buffer_chunks = max(1, int(getattr(self.config, "stream_tts_buffer_chunks", 2) or 2))
+            text_queue = queue.Queue(maxsize=stream_tts_buffer_chunks)
+
+            # Bound audio queue to avoid unbounded temp-file growth if TTS outpaces playback.
+            # Each text chunk can map to 1+ audio files (depending on TTS chunking), so keep this
+            # a little larger than the text buffer.
+            audio_queue_max_files = max(4, stream_tts_buffer_chunks * 4)
+            audio_queue = queue.Queue(maxsize=audio_queue_max_files)
 
             tts_error = [""]
 
@@ -147,9 +153,29 @@ class SandVoice:
                                     pass
                                 continue
 
-                            audio_queue.put(f)
+                            deadline = time.monotonic() + queue_put_max_wait_s
+                            while not stop_event.is_set():
+                                try:
+                                    audio_queue.put(f, timeout=0.1)
+                                    break
+                                except queue.Full:
+                                    if time.monotonic() >= deadline:
+                                        # Apply backpressure failure path: stop and clean up this file.
+                                        stop_event.set()
+                                        if not tts_error[0]:
+                                            tts_error[0] = "Timed out enqueueing streaming audio chunk"
+                                        try:
+                                            if os.path.exists(f):
+                                                os.remove(f)
+                                        except OSError:
+                                            pass
+                                        break
                 finally:
-                    audio_queue.put(None)
+                    # Best-effort: notify player to exit; if the queue is stuck full, force stop_event.
+                    try:
+                        audio_queue.put(None, timeout=0.1)
+                    except queue.Full:
+                        stop_event.set()
 
             player_success = [True]
             player_failed_file = [""]
