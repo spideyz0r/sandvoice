@@ -30,7 +30,8 @@ def _is_enabled_flag(value):
         return False
     if isinstance(value, int):
         return value != 0
-    return bool(value)
+    # For unknown types (e.g. mocks), default to disabled to avoid accidental enablement.
+    return False
 
 
 class State(Enum):
@@ -766,9 +767,9 @@ class WakeWordMode:
                     logging.info(f"Route: {route}")
 
                 stream_default_route = (
-                    self.config.bot_voice and
-                    (getattr(self.config, "stream_responses", False) is True) and
-                    (getattr(self.config, "stream_tts", False) is True) and
+                    _is_enabled_flag(getattr(self.config, "bot_voice", False)) and
+                    _is_enabled_flag(getattr(self.config, "stream_responses", False)) and
+                    _is_enabled_flag(getattr(self.config, "stream_tts", False)) and
                     (self.plugins is not None) and
                     (route.get("route") not in self.plugins)
                 )
@@ -805,9 +806,9 @@ class WakeWordMode:
             else:
                 # Direct AI response (with barge-in support if enabled)
                 stream_default_route = (
-                    self.config.bot_voice and
-                    (getattr(self.config, "stream_responses", False) is True) and
-                    (getattr(self.config, "stream_tts", False) is True)
+                    _is_enabled_flag(getattr(self.config, "bot_voice", False)) and
+                    _is_enabled_flag(getattr(self.config, "stream_responses", False)) and
+                    _is_enabled_flag(getattr(self.config, "stream_tts", False))
                 )
 
                 if stream_default_route:
@@ -1280,7 +1281,7 @@ class WakeWordMode:
             first_min_chars = max(120, int(target_s * chars_per_second))
             next_min_chars = 200
 
-            stream_print_deltas = (getattr(self.config, "stream_print_deltas", False) is True)
+            stream_print_deltas = _is_enabled_flag(getattr(self.config, "stream_print_deltas", False))
             buffer = ""
             full_parts = []
             is_first = True
@@ -1297,9 +1298,10 @@ class WakeWordMode:
                     if barge_in_event and barge_in_event.is_set():
                         break
 
-                    # If playback is interrupted (player failure), stop producing.
+                    # If playback is interrupted (player failure), keep collecting deltas so
+                    # the text fallback can still print a full response, but stop producing audio.
                     if interrupt_event.is_set():
-                        break
+                        continue
 
                     if production_failed_event.is_set():
                         continue
@@ -1320,6 +1322,8 @@ class WakeWordMode:
 
             except Exception as e:
                 interrupt_event.set()
+                if self.config.debug and stream_print_deltas:
+                    print()
                 print(handle_api_error(e, service_name="OpenAI GPT (streaming)"))
 
             # If streaming did not complete, remove the last user turn to avoid dangling history.
@@ -1370,7 +1374,10 @@ class WakeWordMode:
                 logging.warning(f"Wake-word streaming TTS production failed: {tts_error[0]}")
 
             if not player_success[0]:
-                if self.config.debug:
+                if barge_in_event and barge_in_event.is_set():
+                    # Expected interruption; avoid logging as a playback failure.
+                    pass
+                elif self.config.debug:
                     logging.warning(
                         f"Wake-word streaming audio playback failed for file '{player_failed_file[0]}': {player_error[0]}"
                     )

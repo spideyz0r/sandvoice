@@ -923,8 +923,8 @@ class TestWakeWordModeProcessing(unittest.TestCase):
     def test_state_processing_sets_up_streaming_for_default_route_when_plugins_provided(self, mock_exists):
         mock_exists.return_value = True
 
-        self.mock_config.stream_responses = True
-        self.mock_config.stream_tts = True
+        self.mock_config.stream_responses = "enabled"
+        self.mock_config.stream_tts = "enabled"
         self.mock_config.stream_tts_boundary = "sentence"
         self.mock_config.stream_tts_first_chunk_target_s = 2
         self.mock_config.stream_tts_buffer_chunks = 1
@@ -1067,6 +1067,40 @@ class TestWakeWordModeResponding(unittest.TestCase):
         self.mock_ai.stream_response_deltas.assert_called_once_with("Hi")
         self.mock_audio.play_audio_queue.assert_called()
         self.assertEqual(mode.state, State.IDLE)
+
+    @patch('common.wake_word.os.remove')
+    @patch('common.wake_word.os.path.exists')
+    def test_state_responding_streaming_continues_collecting_deltas_on_playback_failure(self, mock_exists, mock_remove):
+        mock_exists.return_value = True
+
+        self.mock_config.botname = "TestBot"
+        self.mock_config.stream_print_deltas = False
+        self.mock_config.stream_tts_boundary = "sentence"
+        self.mock_config.stream_tts_first_chunk_target_s = 1
+        self.mock_config.stream_tts_buffer_chunks = 1
+        self.mock_config.stream_tts_tts_join_timeout_s = 1
+        self.mock_config.stream_tts_player_join_timeout_s = 1
+
+        consumed = []
+
+        def deltas():
+            for p in ["A", "B", "C"]:
+                consumed.append(p)
+                yield p
+
+        self.mock_ai.stream_response_deltas.side_effect = lambda _ui: deltas()
+
+        # Player fails immediately -> interrupt_event set.
+        self.mock_audio.play_audio_queue.return_value = (False, "/tmp/fail.mp3", Exception("boom"))
+
+        mode = WakeWordMode(self.mock_config, self.mock_ai, self.mock_audio)
+        mode.streaming_user_input = "Hi"
+        mode.recorded_audio_path = "/tmp/recording.wav"
+        mode.state = State.RESPONDING
+
+        mode._state_responding()
+
+        self.assertEqual(consumed, ["A", "B", "C"])
 
     @patch('common.wake_word.os.remove')
     @patch('common.wake_word.os.path.exists')
