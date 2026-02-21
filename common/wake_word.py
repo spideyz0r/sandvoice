@@ -1348,6 +1348,18 @@ class WakeWordMode:
             tts_thread.join(timeout=tts_join_timeout)
             player_thread.join(timeout=player_join_timeout)
 
+            if self.config.debug:
+                if tts_thread.is_alive():
+                    logging.warning(
+                        "Wake-word streaming TTS thread did not exit within %s seconds",
+                        tts_join_timeout,
+                    )
+                if player_thread.is_alive():
+                    logging.warning(
+                        "Wake-word streaming player thread did not exit within %s seconds",
+                        player_join_timeout,
+                    )
+
             response_text = "".join(full_parts).strip()
             # Print final text (unless we are streaming deltas in debug or barge-in occurred)
             if response_text and (not (self.config.debug and stream_print_deltas)):

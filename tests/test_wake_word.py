@@ -930,7 +930,7 @@ class TestWakeWordModeProcessing(unittest.TestCase):
         self.mock_config.stream_tts_buffer_chunks = 1
 
         self.mock_ai.transcribe_and_translate.return_value = "Tell me something long"
-        self.mock_ai.define_route.return_value = {"route": "default-rote", "reason": "default"}
+        self.mock_ai.define_route.return_value = {"route": "default-route", "reason": "default"}
 
         route_message = Mock(return_value="non-streaming default")
         plugins = {"weather": Mock()}
