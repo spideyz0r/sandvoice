@@ -3,6 +3,8 @@ import sys
 import types
 import unittest
 import tempfile
+import queue
+import threading
 from unittest.mock import Mock, patch
 
 
@@ -141,6 +143,183 @@ class TestAudioPlaybackHelpers(unittest.TestCase):
         self.assertTrue(os.path.exists(f2))
         # c never played -> cleaned
         self.assertFalse(os.path.exists(f3))
+
+    def test_play_audio_queue_success_cleans_up(self):
+        audio = self.Audio.__new__(self.Audio)
+        audio.config = Mock(debug=False)
+
+        played = []
+
+        def _play(path, stop_event=None):
+            played.append(path)
+
+        audio.play_audio_file = _play
+
+        f1 = os.path.join(self.temp_dir, 'a.mp3')
+        f2 = os.path.join(self.temp_dir, 'b.mp3')
+        open(f1, 'wb').close()
+        open(f2, 'wb').close()
+
+        q = queue.Queue()
+        q.put(f1)
+        q.put(f2)
+        q.put(None)
+
+        success, failed, err = self.Audio.play_audio_queue(audio, q)
+        self.assertTrue(success)
+        self.assertIsNone(failed)
+        self.assertIsNone(err)
+        self.assertEqual(played, [f1, f2])
+        self.assertFalse(os.path.exists(f1))
+        self.assertFalse(os.path.exists(f2))
+
+    def test_play_audio_queue_stop_event_drains_and_cleans(self):
+        audio = self.Audio.__new__(self.Audio)
+        audio.config = Mock(debug=False)
+
+        f1 = os.path.join(self.temp_dir, 'a.mp3')
+        f2 = os.path.join(self.temp_dir, 'b.mp3')
+        open(f1, 'wb').close()
+        open(f2, 'wb').close()
+
+        stop_event = threading.Event()
+
+        def _play(path, stop_event=None):
+            # Interrupt immediately after first file starts.
+            if path.endswith('a.mp3') and stop_event is not None:
+                stop_event.set()
+
+        audio.play_audio_file = _play
+
+        q = queue.Queue()
+        q.put(f1)
+        q.put(f2)
+        q.put(None)
+
+        success, failed, err = self.Audio.play_audio_queue(audio, q, stop_event=stop_event)
+        self.assertFalse(success)
+        self.assertIsNone(failed)
+        self.assertIsNone(err)
+        self.assertFalse(os.path.exists(f1))
+        self.assertFalse(os.path.exists(f2))
+
+    def test_play_audio_queue_stop_event_drains_items_enqueued_after_interrupt(self):
+        audio = self.Audio.__new__(self.Audio)
+        audio.config = Mock(debug=False)
+
+        f1 = os.path.join(self.temp_dir, 'a.mp3')
+        f2 = os.path.join(self.temp_dir, 'b.mp3')
+        open(f1, 'wb').close()
+        open(f2, 'wb').close()
+
+        stop_event = threading.Event()
+        q = queue.Queue()
+        q.put(f1)
+
+        def _play(path, stop_event=None):
+            if path.endswith('a.mp3') and stop_event is not None:
+                stop_event.set()
+
+        audio.play_audio_file = _play
+
+        def producer():
+            # Enqueue after the consumer has already been interrupted.
+            import time
+            time.sleep(0.02)
+            q.put(f2)
+            q.put(None)
+
+        t = threading.Thread(target=producer)
+        t.start()
+        try:
+            success, failed, err = self.Audio.play_audio_queue(audio, q, stop_event=stop_event)
+        finally:
+            t.join(timeout=1)
+
+        self.assertFalse(success)
+        self.assertIsNone(failed)
+        self.assertIsNone(err)
+
+        self.assertFalse(os.path.exists(f1))
+        # The file enqueued after interrupt should still be cleaned up.
+        self.assertFalse(os.path.exists(f2))
+
+    def test_play_audio_queue_failure_preserves_failed_in_debug_and_cleans_rest(self):
+        audio = self.Audio.__new__(self.Audio)
+        audio.config = Mock(debug=True)
+
+        played = []
+
+        def _play(path, stop_event=None):
+            if path.endswith('b.mp3'):
+                raise RuntimeError('playback failed')
+            played.append(path)
+
+        audio.play_audio_file = _play
+
+        f1 = os.path.join(self.temp_dir, 'a.mp3')
+        f2 = os.path.join(self.temp_dir, 'b.mp3')
+        f3 = os.path.join(self.temp_dir, 'c.mp3')
+        open(f1, 'wb').close()
+        open(f2, 'wb').close()
+        open(f3, 'wb').close()
+
+        q = queue.Queue()
+        q.put(f1)
+        q.put(f2)
+        q.put(f3)
+        q.put(None)
+
+        success, failed, err = self.Audio.play_audio_queue(audio, q)
+        self.assertFalse(success)
+        self.assertEqual(failed, f2)
+        self.assertIsNotNone(err)
+        self.assertIn(f1, played)
+        self.assertNotIn(f2, played)
+
+        self.assertFalse(os.path.exists(f1))
+        self.assertTrue(os.path.exists(f2))
+        self.assertFalse(os.path.exists(f3))
+
+    def test_play_audio_queue_playback_failure_drains_items_enqueued_after_failure(self):
+        audio = self.Audio.__new__(self.Audio)
+        audio.config = Mock(debug=False)
+
+        f1 = os.path.join(self.temp_dir, 'a.mp3')
+        f2 = os.path.join(self.temp_dir, 'b.mp3')
+        open(f1, 'wb').close()
+        open(f2, 'wb').close()
+
+        stop_event = threading.Event()
+        q = queue.Queue()
+        q.put(f1)
+
+        def _play(path, stop_event=None):
+            raise RuntimeError('playback failed')
+
+        audio.play_audio_file = _play
+
+        def producer():
+            import time
+            time.sleep(0.02)
+            q.put(f2)
+            q.put(None)
+
+        t = threading.Thread(target=producer)
+        t.start()
+        try:
+            success, failed, err = self.Audio.play_audio_queue(audio, q, stop_event=stop_event)
+        finally:
+            t.join(timeout=1)
+
+        self.assertFalse(success)
+        self.assertEqual(failed, f1)
+        self.assertIsNotNone(err)
+
+        # Failed file should be cleaned up (debug is disabled)
+        self.assertFalse(os.path.exists(f1))
+        # File enqueued after failure should still be cleaned up.
+        self.assertFalse(os.path.exists(f2))
 
 
 class TestMixerInitialization(unittest.TestCase):

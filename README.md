@@ -111,6 +111,13 @@ gpt_response_model: gpt-3.5-turbo
 stream_responses: disabled
 stream_print_deltas: disabled
 
+stream_tts: disabled
+stream_tts_boundary: sentence
+stream_tts_first_chunk_target_s: 6
+stream_tts_buffer_chunks: 2
+stream_tts_tts_join_timeout_s: 30
+stream_tts_player_join_timeout_s: 60
+
 speech_to_text_model: whisper-1
 speech_to_text_task: translate
 speech_to_text_language: ""
@@ -182,6 +189,13 @@ All configuration keys are loaded from `common/configuration.py` defaults and ca
 
 - `stream_responses`: `enabled`/`disabled`; stream LLM responses and assemble final text from deltas
 - `stream_print_deltas`: `enabled`/`disabled`; when streaming and `debug` is enabled, print deltas as they arrive
+
+- `stream_tts`: `enabled`/`disabled`; when streaming responses, generate and play TTS chunks before the full response completes (default route only)
+- `stream_tts_boundary`: `sentence` or `paragraph`; chunk boundary preference
+- `stream_tts_first_chunk_target_s`: integer seconds; target size of the first speakable chunk
+- `stream_tts_buffer_chunks`: integer; how many text chunks to buffer ahead of playback
+- `stream_tts_tts_join_timeout_s`: integer seconds; join timeout for the TTS worker thread
+- `stream_tts_player_join_timeout_s`: integer seconds; join timeout for the audio player thread
 - `speech_to_text_model`: model used for speech-to-text
 - `speech_to_text_task`: `translate` or `transcribe` (translate outputs English; transcribe keeps the spoken language)
 - `speech_to_text_language`: optional ISO-639-1 hint for transcription (e.g. `pt`, `en`); empty means auto-detect

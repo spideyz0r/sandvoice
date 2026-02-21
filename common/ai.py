@@ -13,6 +13,68 @@ DEFAULT_TTS_MAX_CHARS = 3800
 SENTENCE_BREAK_RE = re.compile(r"[.!?]\s+")
 
 
+# Streaming chunking defaults are intentionally smaller than DEFAULT_TTS_MAX_CHARS
+# to reduce time-to-first-audio and keep queued chunks short.
+DEFAULT_STREAM_MAX_CHARS = 1200
+
+
+def pop_streaming_chunk(buffer, boundary="sentence", min_chars=200, max_chars=DEFAULT_STREAM_MAX_CHARS):
+    """Pop a speakable chunk from a growing streaming buffer.
+
+    Returns:
+        (chunk, remainder)
+        - chunk: str|None (None means not enough buffered yet)
+        - remainder: str
+    """
+    if buffer is None:
+        return None, ""
+
+    remaining = str(buffer)
+    if not remaining.strip():
+        return None, remaining
+
+    # Prefer natural boundaries.
+    if boundary == "paragraph":
+        idx = remaining.find("\n\n")
+        if idx != -1:
+            end = idx + 2
+            raw_chunk = remaining[:end]
+            raw_remainder = remaining[end:]
+            candidate = raw_chunk.strip()
+            if len(candidate) >= min_chars:
+                remainder = raw_remainder.lstrip()
+                if raw_chunk.rstrip() != raw_chunk and candidate and remainder:
+                    candidate = candidate + " "
+                return candidate, remainder
+    else:
+        for match in SENTENCE_BREAK_RE.finditer(remaining):
+            end = match.end()
+            raw_chunk = remaining[:end]
+            raw_remainder = remaining[end:]
+            candidate = raw_chunk.strip()
+            if len(candidate) >= min_chars:
+                remainder = raw_remainder.lstrip()
+                if raw_chunk.rstrip() != raw_chunk and candidate and remainder:
+                    candidate = candidate + " "
+                return candidate, remainder
+
+    # If buffer is getting too large, fall back to a soft cut.
+    if len(remaining) > max_chars:
+        cut = remaining.rfind(" ", 0, max_chars)
+        if cut == -1 or cut < int(max_chars * 0.6):
+            cut = max_chars
+        raw_chunk = remaining[:cut]
+        raw_remainder = remaining[cut:]
+        candidate = raw_chunk.strip()
+        if candidate:
+            remainder = raw_remainder.lstrip()
+            if raw_remainder[:1].isspace() and candidate and remainder:
+                candidate = candidate + " "
+            return candidate, remainder
+
+    return None, remaining
+
+
 def split_text_for_tts(text, max_chars = DEFAULT_TTS_MAX_CHARS):
     """Split text into chunks that fit within the TTS input size limit.
 
@@ -270,6 +332,101 @@ class AI:
                 logging.error(f"Response generation error: {e}")
             print(error_msg)
             return ErrorMessage("Sorry, I'm having trouble right now. Please try again in a moment.")
+
+    def stream_response_deltas(self, user_input, extra_info=None, model=None):
+        """Yield response text deltas from the LLM stream.
+
+        This is used by Plan 08 Phase 2 to begin TTS before the full response is complete.
+        It also updates conversation history after the stream completes.
+
+        Note: this method updates self.conversation_history with the user input and the
+        final assistant response (assembled from deltas).
+
+        Retries are intentionally not applied here because streaming retry semantics are
+        ambiguous (partial output may already have been emitted).
+        """
+        if not model:
+            model = self.config.gpt_response_model
+
+        # Add to conversation history only if not already present.
+        user_message = "User: " + user_input
+        if not self.conversation_history or self.conversation_history[-1] != user_message:
+            self.conversation_history.append(user_message)
+
+        now = datetime.datetime.now()
+        verbosity = getattr(self.config, "verbosity", "brief")
+        if verbosity == "detailed":
+            verbosity_instruction = (
+                "Verbosity: detailed. Provide thorough, structured answers by default. "
+                "Include steps/examples when helpful. If the user asks for a short answer, comply."
+            )
+        elif verbosity == "normal":
+            verbosity_instruction = (
+                "Verbosity: normal. Be concise but complete. "
+                "Expand when the user explicitly asks for more detail."
+            )
+        else:
+            verbosity_instruction = (
+                "Verbosity: brief. Keep answers short by default (1-3 sentences). "
+                "Avoid long lists and excessive detail unless the user explicitly asks to expand, "
+                "asks for details, or says they want a longer answer."
+            )
+
+        system_role = f"""
+            Your name is {self.config.botname}.
+            You are an assistant written in Python by Breno Brand.
+            You must answer in {self.config.language}.
+            The person that is talking to you is in the {self.config.timezone} time zone.
+            The person that is talking to you is located in {self.config.location}.
+            Current date and time to be considered when answering the message: {now}.
+            Never answer as a chat, for example reading your name in a conversation.
+            DO NOT reply to messages with the format "{self.config.botname}": <message here>.
+            Reply in a natural and human way.
+            {verbosity_instruction}
+            """
+
+        if extra_info is not None:
+            system_role = system_role + "Consider the following to answer your question: " + extra_info
+
+        stream_print_deltas = (getattr(self.config, "stream_print_deltas", False) is True)
+        messages = [
+            {"role": "system", "content": system_role},
+        ] + [{"role": "user", "content": message} for message in self.conversation_history]
+
+        collected = []
+        stream_completed = False
+
+        try:
+            stream = self.openai_client.chat.completions.create(
+                model=model,
+                messages=messages,
+                stream=True,
+            )
+
+            for event in stream:
+                piece = None
+                try:
+                    delta = event.choices[0].delta
+                    piece = getattr(delta, "content", None)
+                except Exception:
+                    piece = None
+
+                if piece:
+                    collected.append(piece)
+                    if self.config.debug and stream_print_deltas:
+                        print(piece, end="", flush=True)
+                    yield piece
+
+            stream_completed = True
+        finally:
+            if self.config.debug and stream_print_deltas:
+                print("", flush=True)
+
+            # Only persist the assistant turn if the stream completed without raising.
+            # This avoids polluting the next prompt with partial output.
+            if stream_completed:
+                assistant_content = "".join(collected)
+                self.conversation_history.append(f"{self.config.botname}: " + assistant_content)
 
     @retry_with_backoff(max_attempts=3, initial_delay=1)
     def define_route(self, user_input, model = None):

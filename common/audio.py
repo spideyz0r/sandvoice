@@ -1,6 +1,6 @@
 #import re, os, pyaudio, wave
 #from pydub import AudioSegment
-import re, os, pyaudio, wave, lameenc, logging
+import re, os, time, pyaudio, wave, lameenc, logging, queue
 from pynput import keyboard
 from ctypes import *
 from common.error_handling import handle_file_error
@@ -311,5 +311,94 @@ class Audio:
                             logging.warning(
                                 f"Failed to delete temporary audio file '{file_path}': {cleanup_error}"
                             )
+
+        return failed_file is None, failed_file, error
+
+    def play_audio_queue(self, audio_queue, stop_event=None, delete_files=True):
+        """Play audio files from a queue until a sentinel None is received.
+
+        Args:
+            audio_queue: queue.Queue yielding file paths (str). Use None as sentinel.
+            stop_event: optional threading.Event; when set, playback stops early and the queue is drained.
+            delete_files: if True, delete files after playing.
+
+        Returns:
+            (success, failed_file, error)
+        """
+        failed_file = None
+        error = None
+        interrupted = False
+
+        def _cleanup_path(path):
+            if not delete_files:
+                return
+            try:
+                if path and os.path.exists(path):
+                    os.remove(path)
+            except OSError as cleanup_error:
+                if self.config.debug:
+                    logging.warning(f"Failed to delete temporary audio file '{path}': {cleanup_error}")
+
+        try:
+            while True:
+                if stop_event is not None and stop_event.is_set():
+                    interrupted = True
+                    break
+
+                try:
+                    item = audio_queue.get(timeout=0.1)
+                except queue.Empty:
+                    continue
+
+                if item is None:
+                    break
+
+                delete_this_file = delete_files
+                try:
+                    self.play_audio_file(item, stop_event=stop_event)
+                except Exception as e:
+                    failed_file = item
+                    error = e
+                    if stop_event is not None:
+                        stop_event.set()
+                    interrupted = True
+                    if self.config.debug:
+                        delete_this_file = False
+                    break
+                finally:
+                    if delete_this_file:
+                        _cleanup_path(item)
+
+        finally:
+            # Drain any queued items and delete to avoid leaks.
+            # If interrupted (stop_event set or playback error), a producer may still enqueue paths
+            # briefly before it notices. Drain until we see a sentinel, or until the queue has been
+            # inactive for a short period.
+            drain_with_inactivity_timeout = interrupted or (stop_event is not None and stop_event.is_set())
+            inactivity_timeout_s = 2.0
+            last_activity = time.monotonic() if drain_with_inactivity_timeout else 0.0
+
+            while True:
+                try:
+                    if not drain_with_inactivity_timeout:
+                        item = audio_queue.get_nowait()
+                    else:
+                        item = audio_queue.get(timeout=0.1)
+                except queue.Empty:
+                    if not drain_with_inactivity_timeout:
+                        break
+                    if time.monotonic() - last_activity >= inactivity_timeout_s:
+                        break
+                    continue
+
+                if drain_with_inactivity_timeout:
+                    last_activity = time.monotonic()
+
+                if item is None:
+                    break
+                _cleanup_path(item)
+
+        if failed_file is None and error is None and interrupted:
+            return False, None, None
 
         return failed_file is None, failed_file, error
