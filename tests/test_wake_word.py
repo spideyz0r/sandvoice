@@ -920,6 +920,44 @@ class TestWakeWordModeProcessing(unittest.TestCase):
         self.assertEqual(mode.state, State.RESPONDING)
 
     @patch('common.wake_word.os.path.exists')
+    def test_state_processing_sets_up_streaming_for_default_route_when_plugins_provided(self, mock_exists):
+        mock_exists.return_value = True
+
+        self.mock_config.stream_responses = True
+        self.mock_config.stream_tts = True
+        self.mock_config.stream_tts_boundary = "sentence"
+        self.mock_config.stream_tts_first_chunk_target_s = 2
+        self.mock_config.stream_tts_buffer_chunks = 1
+
+        self.mock_ai.transcribe_and_translate.return_value = "Tell me something long"
+        self.mock_ai.define_route.return_value = {"route": "default-rote", "reason": "default"}
+
+        route_message = Mock(return_value="non-streaming default")
+        plugins = {"weather": Mock()}
+
+        mode = WakeWordMode(
+            self.mock_config,
+            self.mock_ai,
+            self.mock_audio,
+            route_message=route_message,
+            plugins=plugins,
+        )
+        mode._start_barge_in_detection = Mock(return_value=None)
+        mode.recorded_audio_path = "/tmp/recording.wav"
+        mode.state = State.PROCESSING
+
+        mode._state_processing()
+
+        # Should set up streaming and skip route_message/generate_response/text_to_speech
+        route_message.assert_not_called()
+        self.mock_ai.generate_response.assert_not_called()
+        self.mock_ai.text_to_speech.assert_not_called()
+
+        self.assertEqual(mode.state, State.RESPONDING)
+        self.assertEqual(mode.streaming_user_input, "Tell me something long")
+        self.assertIsNotNone(mode.streaming_route)
+
+    @patch('common.wake_word.os.path.exists')
     def test_state_processing_without_bot_voice(self, mock_exists):
         mock_exists.return_value = True
         self.mock_config.bot_voice = False
@@ -998,6 +1036,37 @@ class TestWakeWordModeResponding(unittest.TestCase):
 
     def tearDown(self):
         logging.disable(logging.NOTSET)
+
+    @patch('common.wake_word.os.remove')
+    @patch('common.wake_word.os.path.exists')
+    def test_state_responding_streaming_uses_stream_response_deltas_and_audio_queue(self, mock_exists, mock_remove):
+        mock_exists.return_value = True
+
+        self.mock_config.botname = "TestBot"
+        self.mock_config.stream_print_deltas = False
+        self.mock_config.stream_tts_boundary = "sentence"
+        self.mock_config.stream_tts_first_chunk_target_s = 1
+        self.mock_config.stream_tts_buffer_chunks = 1
+        self.mock_config.stream_tts_tts_join_timeout_s = 1
+        self.mock_config.stream_tts_player_join_timeout_s = 1
+
+        # Streaming yields a short response and completes
+        self.mock_ai.stream_response_deltas.return_value = iter(["Hello world. "])
+        self.mock_ai.text_to_speech.return_value = ["/tmp/tts1.mp3"]
+
+        # Mock queue-based playback (do not consume queue in this test)
+        self.mock_audio.play_audio_queue.return_value = (True, None, None)
+
+        mode = WakeWordMode(self.mock_config, self.mock_ai, self.mock_audio)
+        mode.streaming_user_input = "Hi"
+        mode.recorded_audio_path = "/tmp/recording.wav"
+        mode.state = State.RESPONDING
+
+        mode._state_responding()
+
+        self.mock_ai.stream_response_deltas.assert_called_once_with("Hi")
+        self.mock_audio.play_audio_queue.assert_called()
+        self.assertEqual(mode.state, State.IDLE)
 
     @patch('common.wake_word.os.remove')
     @patch('common.wake_word.os.path.exists')
