@@ -92,7 +92,10 @@ class SandVoice:
         )
 
         if can_stream_default:
+            # stop_event: interrupt playback now (used for playback failures / fatal streaming errors)
             stop_event = threading.Event()
+            # production_failed_event: stop producing new streaming audio (but allow already-queued audio to finish)
+            production_failed_event = threading.Event()
             stream_tts_buffer_chunks = max(1, int(getattr(self.config, "stream_tts_buffer_chunks", 2) or 2))
             text_queue = queue.Queue(maxsize=stream_tts_buffer_chunks)
 
@@ -137,7 +140,7 @@ class SandVoice:
                             tts_error[0] = str(e)
 
                         if not tts_files:
-                            stop_event.set()
+                            production_failed_event.set()
                             # Preserve the first error (if any) from text_to_speech.
                             if not tts_error[0]:
                                 tts_error[0] = "TTS returned no audio files"
@@ -161,7 +164,7 @@ class SandVoice:
                                 except queue.Full:
                                     if time.monotonic() >= deadline:
                                         # Apply backpressure failure path: stop and clean up this file.
-                                        stop_event.set()
+                                        production_failed_event.set()
                                         if not tts_error[0]:
                                             tts_error[0] = "Timed out enqueueing streaming audio chunk"
                                         try:
@@ -225,6 +228,11 @@ class SandVoice:
                         # so we can still print the final response text.
                         continue
 
+                    # If TTS production failed, keep collecting deltas for final text output,
+                    # but stop producing new audio chunks.
+                    if production_failed_event.is_set():
+                        continue
+
                     buffer += delta
                     while not stop_event.is_set():
                         min_chars = first_min_chars if is_first else next_min_chars
@@ -245,7 +253,7 @@ class SandVoice:
                 print(handle_api_error(e, service_name="OpenAI GPT (streaming)"))
 
             # Flush remaining text as final chunk (best effort)
-            if not stop_event.is_set():
+            if (not stop_event.is_set()) and (not production_failed_event.is_set()):
                 final_chunk = buffer.strip()
                 if final_chunk:
                     if not _put_text_queue(final_chunk):
@@ -254,12 +262,14 @@ class SandVoice:
             # Signal TTS worker completion
             # Ensure the sentinel is eventually enqueued so the TTS worker can exit.
             # Even if stop_event is set, we still try to enqueue the sentinel to unblock.
-            sentinel_enqueued = _put_text_queue(None, allow_when_stopped=True)
-            if not sentinel_enqueued:
-                # If the queue is stuck full (e.g., hung/slow TTS worker), force an exit path.
-                stop_event.set()
-                if self.config.debug:
-                    print("Warning: failed to enqueue streaming TTS sentinel; forcing stop_event")
+            sentinel_enqueued = False
+            if not production_failed_event.is_set():
+                sentinel_enqueued = _put_text_queue(None, allow_when_stopped=True)
+                if not sentinel_enqueued:
+                    # If the queue is stuck full (e.g., hung/slow TTS worker), force an exit path.
+                    stop_event.set()
+                    if self.config.debug:
+                        print("Warning: failed to enqueue streaming TTS sentinel; forcing stop_event")
 
             # Wait for threads to finish playback.
             tts_join_timeout = int(getattr(self.config, "stream_tts_tts_join_timeout_s", 30) or 30)
@@ -282,6 +292,12 @@ class SandVoice:
             response = "".join(full_parts)
             if not (self.config.debug and stream_print_deltas):
                 print(f"{self.config.botname}: {response}\n")
+
+            if production_failed_event.is_set() and tts_error[0] and self.config.debug:
+                print(
+                    "Streaming TTS production failed; finishing playback of already-queued audio and continuing with text only. "
+                    f"Error: {tts_error[0]}"
+                )
 
             if stop_event.is_set() and tts_error[0]:
                 if self.config.debug:
