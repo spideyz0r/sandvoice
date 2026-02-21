@@ -1,6 +1,6 @@
 # Streaming Responses (And Optional Streaming TTS)
 
-**Status**: ✅ Completed
+**Status**: 🚧 In progress (Phases 1-2 completed)
 **Priority**: 8
 
 ---
@@ -77,6 +77,20 @@ Acceptance criteria:
 - [x] Playback continues smoothly for long answers (queue-based playback)
 - [x] If any chunk fails TTS, stop producing new audio and fall back to text-only
 - [x] Temporary chunk files are cleaned up (preserve failed files in debug where applicable)
+
+### Phase 3: Wake Word Mode Support (Most Used Path)
+
+Implement the same streaming "buffer then play" pipeline for `--wake-word` mode (`common/wake_word.py`), while preserving barge-in semantics.
+
+Notes:
+- Wake word mode uses a state machine (LISTENING -> PROCESSING -> RESPONDING) and has its own TTS playback loop and barge-in thread.
+- The wake word path should use the existing `barge_in_event` as the stop_event for streaming playback.
+
+Acceptance criteria:
+- [ ] Streaming TTS works in wake word mode for the default route
+- [ ] Barge-in interrupts streaming playback immediately and returns to LISTENING
+- [ ] No temp MP3 leaks on barge-in / failures / timeouts
+- [ ] If TTS production fails, stop producing new audio but allow already-queued audio to finish (configurable if needed)
 
 ---
 
