@@ -1,6 +1,6 @@
 # Streaming Responses (And Optional Streaming TTS)
 
-**Status**: 🚧 In progress (Phases 1-2 completed)
+**Status**: ✅ Completed
 **Priority**: 8
 
 ---
@@ -87,10 +87,16 @@ Notes:
 - The wake word path should use the existing `barge_in_event` as the stop_event for streaming playback.
 
 Acceptance criteria:
-- [ ] Streaming TTS works in wake word mode for the default route
-- [ ] Barge-in interrupts streaming playback immediately and returns to LISTENING
-- [ ] No temp MP3 leaks on barge-in / failures / timeouts
-- [ ] If TTS production fails, stop producing new audio but allow already-queued audio to finish (configurable if needed)
+- [x] Streaming TTS works in wake word mode for the default route
+- [x] Barge-in interrupts streaming playback immediately and returns to LISTENING
+- [x] No temp MP3 leaks on barge-in / failures / timeouts
+- [x] If TTS production fails, stop producing new audio but allow already-queued audio to finish (configurable if needed)
+
+---
+
+## Status
+
+Phases 1-3 are implemented.
 
 ---
 

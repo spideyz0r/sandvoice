@@ -1030,6 +1030,7 @@ class TestWakeWordModeResponding(unittest.TestCase):
         self.mock_config.debug = False
         self.mock_config.visual_state_indicator = False
         self.mock_config.barge_in = False
+        self.mock_config.tmp_files_path = "/tmp/test/"
 
         self.mock_ai = Mock()
         self.mock_audio = Mock()
