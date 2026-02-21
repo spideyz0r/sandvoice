@@ -281,6 +281,46 @@ class TestAudioPlaybackHelpers(unittest.TestCase):
         self.assertTrue(os.path.exists(f2))
         self.assertFalse(os.path.exists(f3))
 
+    def test_play_audio_queue_playback_failure_drains_items_enqueued_after_failure(self):
+        audio = self.Audio.__new__(self.Audio)
+        audio.config = Mock(debug=False)
+
+        f1 = os.path.join(self.temp_dir, 'a.mp3')
+        f2 = os.path.join(self.temp_dir, 'b.mp3')
+        open(f1, 'wb').close()
+        open(f2, 'wb').close()
+
+        stop_event = threading.Event()
+        q = queue.Queue()
+        q.put(f1)
+
+        def _play(path, stop_event=None):
+            raise RuntimeError('playback failed')
+
+        audio.play_audio_file = _play
+
+        def producer():
+            import time
+            time.sleep(0.02)
+            q.put(f2)
+            q.put(None)
+
+        t = threading.Thread(target=producer)
+        t.start()
+        try:
+            success, failed, err = self.Audio.play_audio_queue(audio, q, stop_event=stop_event)
+        finally:
+            t.join(timeout=1)
+
+        self.assertFalse(success)
+        self.assertEqual(failed, f1)
+        self.assertIsNotNone(err)
+
+        # Failed file should be cleaned up (debug is disabled)
+        self.assertFalse(os.path.exists(f1))
+        # File enqueued after failure should still be cleaned up.
+        self.assertFalse(os.path.exists(f2))
+
 
 class TestMixerInitialization(unittest.TestCase):
     def setUp(self):

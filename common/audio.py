@@ -359,6 +359,9 @@ class Audio:
                 except Exception as e:
                     failed_file = item
                     error = e
+                    if stop_event is not None:
+                        stop_event.set()
+                    interrupted = True
                     if self.config.debug:
                         delete_this_file = False
                     break
@@ -368,25 +371,28 @@ class Audio:
 
         finally:
             # Drain any queued items and delete to avoid leaks.
-            # If stop_event is set, a producer may still enqueue a few paths before it notices.
-            # In that case, wait briefly for the sentinel so cleanup is reliable under concurrency.
-            drain_deadline = None
-            if stop_event is not None and stop_event.is_set():
-                drain_deadline = time.monotonic() + 2.0
+            # If interrupted (stop_event set or playback error), a producer may still enqueue paths
+            # briefly before it notices. Drain until we see a sentinel, or until the queue has been
+            # inactive for a short period.
+            drain_with_inactivity_timeout = interrupted or (stop_event is not None and stop_event.is_set())
+            inactivity_timeout_s = 2.0
+            last_activity = time.monotonic() if drain_with_inactivity_timeout else 0.0
 
             while True:
                 try:
-                    if drain_deadline is None:
+                    if not drain_with_inactivity_timeout:
                         item = audio_queue.get_nowait()
                     else:
-                        remaining = drain_deadline - time.monotonic()
-                        if remaining <= 0:
-                            break
-                        item = audio_queue.get(timeout=min(0.1, remaining))
+                        item = audio_queue.get(timeout=0.1)
                 except queue.Empty:
-                    if drain_deadline is None:
+                    if not drain_with_inactivity_timeout:
+                        break
+                    if time.monotonic() - last_activity >= inactivity_timeout_s:
                         break
                     continue
+
+                if drain_with_inactivity_timeout:
+                    last_activity = time.monotonic()
 
                 if item is None:
                     break

@@ -127,6 +127,8 @@ class SandVoice:
             def tts_worker():
                 try:
                     while not stop_event.is_set():
+                        if production_failed_event.is_set():
+                            break
                         try:
                             chunk = text_queue.get(timeout=0.1)
                         except queue.Empty:
@@ -146,7 +148,9 @@ class SandVoice:
                                 tts_error[0] = "TTS returned no audio files"
                             break
 
-                        for f in tts_files:
+                        last_idx = -1
+                        for idx, f in enumerate(tts_files):
+                            last_idx = idx
                             if stop_event.is_set():
                                 # Player may have already stopped/drained the queue; delete to avoid leaking temp files.
                                 try:
@@ -155,6 +159,9 @@ class SandVoice:
                                 except OSError:
                                     pass
                                 continue
+
+                            if production_failed_event.is_set():
+                                break
 
                             deadline = time.monotonic() + queue_put_max_wait_s
                             while not stop_event.is_set():
@@ -173,6 +180,21 @@ class SandVoice:
                                         except OSError:
                                             pass
                                         break
+
+                            if production_failed_event.is_set():
+                                break
+
+                        # If we failed mid-chunk, delete any remaining chunk files that were generated but not enqueued.
+                        if production_failed_event.is_set() and last_idx != -1 and last_idx < (len(tts_files) - 1):
+                            for remaining_file in tts_files[last_idx + 1:]:
+                                try:
+                                    if os.path.exists(remaining_file):
+                                        os.remove(remaining_file)
+                                except OSError:
+                                    pass
+
+                        if production_failed_event.is_set():
+                            break
                 finally:
                     # Best-effort: notify player to exit; if the queue is stuck full, force stop_event.
                     try:
@@ -262,14 +284,12 @@ class SandVoice:
             # Signal TTS worker completion
             # Ensure the sentinel is eventually enqueued so the TTS worker can exit.
             # Even if stop_event is set, we still try to enqueue the sentinel to unblock.
-            sentinel_enqueued = False
-            if not production_failed_event.is_set():
-                sentinel_enqueued = _put_text_queue(None, allow_when_stopped=True)
-                if not sentinel_enqueued:
-                    # If the queue is stuck full (e.g., hung/slow TTS worker), force an exit path.
-                    stop_event.set()
-                    if self.config.debug:
-                        print("Warning: failed to enqueue streaming TTS sentinel; forcing stop_event")
+            sentinel_enqueued = _put_text_queue(None, allow_when_stopped=True)
+            if not sentinel_enqueued:
+                # If the queue is stuck full (e.g., hung/slow TTS worker), force an exit path.
+                stop_event.set()
+                if self.config.debug:
+                    print("Warning: failed to enqueue streaming TTS sentinel; forcing stop_event")
 
             # Wait for threads to finish playback.
             tts_join_timeout = int(getattr(self.config, "stream_tts_tts_join_timeout_s", 30) or 30)
