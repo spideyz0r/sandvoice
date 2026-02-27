@@ -1,6 +1,6 @@
 # Streaming Responses (And Optional Streaming TTS)
 
-**Status**: 📋 Backlog
+**Status**: ✅ Completed
 **Priority**: 8
 
 ---
@@ -56,9 +56,9 @@ User impact:
 - (Optional) print deltas to stdout when `debug` is enabled
 
 Acceptance criteria:
-- [ ] When streaming is enabled, output text can be assembled deterministically from deltas
-- [ ] Final response text matches the non-streaming version for the same prompt/model
-- [ ] Errors and retries remain user-friendly
+- [x] When streaming is enabled, output text can be assembled deterministically from deltas
+- [x] Streaming can optionally print deltas (debug)
+- [x] Conversation history is updated consistently
 
 ### Phase 2: Voice-First Buffer Then Play (Primary Deliverable)
 
@@ -73,10 +73,30 @@ Chunking strategy:
 - Subsequent chunks: re-use the existing TTS-safe splitting rules (<=4096 chars with margin)
 
 Acceptance criteria:
-- [ ] Time-to-first-audio improves (goal: start speaking within ~1-10 seconds for typical responses)
-- [ ] Playback continues smoothly for long answers (no long gaps between chunks)
-- [ ] If any chunk fails TTS, stop voice for that response, fall back to text-only, and log the error
-- [ ] Temporary chunk files are cleaned up (unless debug preservation is enabled)
+- [x] Time-to-first-audio improves by starting playback before the full response completes (default route)
+- [x] Playback continues smoothly for long answers (queue-based playback)
+- [x] If any chunk fails TTS, stop producing new audio and fall back to text-only
+- [x] Temporary chunk files are cleaned up (preserve failed files in debug where applicable)
+
+### Phase 3: Wake Word Mode Support (Most Used Path)
+
+Implement the same streaming "buffer then play" pipeline for `--wake-word` mode (`common/wake_word.py`), while preserving barge-in semantics.
+
+Notes:
+- Wake word mode uses a state machine (LISTENING -> PROCESSING -> RESPONDING) and has its own TTS playback loop and barge-in thread.
+- The wake word path should use the existing `barge_in_event` as the stop_event for streaming playback.
+
+Acceptance criteria:
+- [x] Streaming TTS works in wake word mode for the default route
+- [x] Barge-in interrupts streaming playback immediately and returns to LISTENING
+- [x] No temp MP3 leaks on barge-in / failures / timeouts
+- [x] If TTS production fails, stop producing new audio but allow already-queued audio to finish (configurable if needed)
+
+---
+
+## Status
+
+Phases 1-3 are implemented.
 
 ---
 

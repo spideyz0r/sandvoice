@@ -374,6 +374,7 @@ if __name__ == "__main__":
             sandvoice.ai,
             audio,
             route_message=sandvoice.route_message,
+            plugins=sandvoice.plugins,
         )
         wake_word_mode.run()
     # Default mode (ESC key) or CLI mode

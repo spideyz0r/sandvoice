@@ -79,7 +79,7 @@ plan/
 **Description**: Full compatibility testing and documentation for Raspberry Pi 3B deployment. Setup process, dependencies, and performance validation.
 
 ### Priority 8: Streaming Responses (And Optional Streaming TTS)
-**Document**: [backlog/08-streaming-responses-and-tts.md](./backlog/08-streaming-responses-and-tts.md)
+**Document**: [completed/08-streaming-responses-and-tts.md](./completed/08-streaming-responses-and-tts.md)
 **Description**: Stream LLM responses to stdout for lower perceived latency; optional follow-up to pipeline streaming text into chunked TTS for earlier voice playback.
 
 ### Priority 10: Speech-to-Text Task and Language
