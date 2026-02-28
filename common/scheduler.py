@@ -67,8 +67,15 @@ class TaskScheduler:
         self._thread.start()
         logger.info("Task scheduler started (poll_interval=%ds)", self._poll_interval)
 
-    def stop(self):
+    def stop(self, timeout: Optional[float] = None):
+        """Signal the scheduler to stop and wait for the worker thread to exit."""
         self._stop_event.set()
+        if self._thread.is_alive() and threading.current_thread() is not self._thread:
+            self._thread.join(timeout=timeout)
+            if self._thread.is_alive():
+                logger.warning(
+                    "Scheduler thread did not exit within %s seconds", timeout
+                )
 
     # ── public API ─────────────────────────────────────────────────────────
 
@@ -108,7 +115,18 @@ class TaskScheduler:
 
     def _first_run(self, schedule_type: str, schedule_value: str) -> str:
         if schedule_type == "once":
-            return schedule_value  # caller provides the ISO timestamp directly
+            # Validate and normalize to UTC ISO string so TEXT comparison is reliable.
+            try:
+                dt = datetime.fromisoformat(schedule_value)
+            except ValueError as e:
+                raise ValueError(
+                    f"Invalid ISO timestamp for 'once' schedule: {schedule_value!r}"
+                ) from e
+            if dt.tzinfo is None:
+                dt = dt.replace(tzinfo=timezone.utc)
+            else:
+                dt = dt.astimezone(timezone.utc)
+            return dt.isoformat()
         return calc_next_run(schedule_type, schedule_value)
 
     def _loop(self):
@@ -135,8 +153,15 @@ class TaskScheduler:
             logger.error("Task '%s' failed: %s", task.name, e)
             result = str(e)
 
-        next_run = calc_next_run(task.schedule_type, task.schedule_value)
-        status = "completed" if next_run is None else "active"
+        try:
+            next_run = calc_next_run(task.schedule_type, task.schedule_value)
+            status = "completed" if next_run is None else "active"
+        except Exception as e:
+            logger.error("Scheduler: failed to compute next run for task '%s': %s", task.id, e)
+            error_msg = f"schedule error: {e}"
+            result = f"{result}\n{error_msg}" if result else error_msg
+            next_run = None
+            status = "completed"
         try:
             self._db.update_after_run(task.id, result, next_run, status)
         except Exception as e:

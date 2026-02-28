@@ -22,6 +22,7 @@ class SandVoice:
             os.makedirs(self.config.tmp_files_path)
         self.plugins = {}
         self.load_plugins()
+        self._ai_audio_lock = threading.Lock()
         self.scheduler = self._init_scheduler()
         if self.args.cli:
             self.config.cli_input = True
@@ -82,19 +83,21 @@ class SandVoice:
         def speak(text):
             if not text or not self.config.bot_voice:
                 return
-            tts_files = self.ai.text_to_speech(text)
-            if tts_files:
-                audio.play_audio_files(tts_files)
+            with self._ai_audio_lock:
+                tts_files = self.ai.text_to_speech(text)
+                if tts_files:
+                    audio.play_audio_files(tts_files)
         return speak
 
     def _scheduler_invoke_plugin(self, audio):
         def invoke(plugin_name, query, refresh_only):
-            route = {"route": plugin_name}
-            result = self.route_message(query or plugin_name, route)
-            if not refresh_only and self.config.bot_voice and result:
-                tts_files = self.ai.text_to_speech(result)
-                if tts_files:
-                    audio.play_audio_files(tts_files)
+            with self._ai_audio_lock:
+                route = {"route": plugin_name}
+                result = self.route_message(query or plugin_name, route)
+                if not refresh_only and self.config.bot_voice and result:
+                    tts_files = self.ai.text_to_speech(result)
+                    if tts_files:
+                        audio.play_audio_files(tts_files)
             return result
         return invoke
 
@@ -397,7 +400,12 @@ if __name__ == "__main__":
 
     def _shutdown(signum, frame):
         if sandvoice.scheduler:
-            sandvoice.scheduler.stop()
+            sandvoice.scheduler.stop(timeout=5)
+            if sandvoice.scheduler._db:
+                try:
+                    sandvoice.scheduler._db.close()
+                except Exception:
+                    pass
         sys.exit(0)
 
     signal.signal(signal.SIGINT, _shutdown)

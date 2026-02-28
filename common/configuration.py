@@ -197,8 +197,13 @@ class Config:
 
         # Task Scheduler
         self.scheduler_enabled = str(self.get("scheduler_enabled") or "enabled").lower() == "enabled"
-        self.scheduler_poll_interval = int(self.get("scheduler_poll_interval") or 30)
-        self.scheduler_db_path = str(self.get("scheduler_db_path"))
+        raw_poll = self.get("scheduler_poll_interval")
+        try:
+            self.scheduler_poll_interval = max(1, int(raw_poll)) if raw_poll is not None else 30
+        except (TypeError, ValueError):
+            self.scheduler_poll_interval = 30
+        raw_db_path = self.get("scheduler_db_path")
+        self.scheduler_db_path = str(raw_db_path) if raw_db_path else self.defaults["scheduler_db_path"]
 
         # Voice UX
         voice_ack_earcon = self.get("voice_ack_earcon")
