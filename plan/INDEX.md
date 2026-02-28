@@ -118,6 +118,10 @@ plan/
 **Document**: [backlog/20-background-cache-frequent-voice-queries.md](./backlog/20-background-cache-frequent-voice-queries.md)
 **Description**: Opt-in background refresh of weather/crypto/common info to enable instant spoken answers with freshness hints.
 
+### Priority 21: Task Scheduler
+**Document**: [backlog/21-task-scheduler.md](./backlog/21-task-scheduler.md)
+**Description**: Lightweight SQLite-backed in-process scheduler supporting cron, interval, and one-shot tasks. Prerequisite for Plan 20 periodic refresh and future Timers & Reminders.
+
 ### Future Enhancements
 **Document**: [backlog/FUTURE.md](./backlog/FUTURE.md)
 **Description**: Long-term feature ideas including:
