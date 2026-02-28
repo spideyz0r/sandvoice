@@ -90,6 +90,11 @@ class Config:
             "voice_ack_earcon": "disabled",
             "voice_ack_earcon_freq": 600,
             "voice_ack_earcon_duration": 0.06,
+
+            # Task Scheduler (Plan 21)
+            "scheduler_enabled": "enabled",
+            "scheduler_poll_interval": 30,
+            "scheduler_db_path": f"{os.environ['HOME']}/.sandvoice/sandvoice.db",
         }
         self.config = self.load_defaults()
         self.load_config()
@@ -189,6 +194,11 @@ class Config:
         self.visual_state_indicator = self.get("visual_state_indicator").lower() == "enabled"
         # Barge-in feature
         self.barge_in = self.get("barge_in").lower() == "enabled"
+
+        # Task Scheduler
+        self.scheduler_enabled = str(self.get("scheduler_enabled") or "enabled").lower() == "enabled"
+        self.scheduler_poll_interval = int(self.get("scheduler_poll_interval") or 30)
+        self.scheduler_db_path = str(self.get("scheduler_db_path"))
 
         # Voice UX
         voice_ack_earcon = self.get("voice_ack_earcon")

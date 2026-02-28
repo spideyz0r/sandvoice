@@ -1,3 +1,4 @@
+croniter
 setuptools<81
 beautifulsoup4
 coverage

@@ -7,8 +7,10 @@ from common.configuration import Config
 from common.audio import Audio
 from common.ai import AI, pop_streaming_chunk
 from common.error_handling import handle_api_error
+from common.db import SchedulerDB
+from common.scheduler import TaskScheduler
 
-import argparse, importlib, os, sys
+import argparse, importlib, os, signal, sys
 import queue, threading, time
 
 class SandVoice:
@@ -20,6 +22,7 @@ class SandVoice:
             os.makedirs(self.config.tmp_files_path)
         self.plugins = {}
         self.load_plugins()
+        self.scheduler = self._init_scheduler()
         if self.args.cli:
             self.config.cli_input = True
 
@@ -62,6 +65,38 @@ class SandVoice:
                     self.plugins[module_name] = module.Plugin()
                 elif hasattr(module, 'process'):
                     self.plugins[module_name] = module.process
+
+    def _init_scheduler(self):
+        if not self.config.scheduler_enabled:
+            return None
+        db = SchedulerDB(self.config.scheduler_db_path)
+        audio = Audio(self.config)
+        return TaskScheduler(
+            db=db,
+            speak_fn=self._scheduler_speak(audio),
+            invoke_plugin_fn=self._scheduler_invoke_plugin(audio),
+            poll_interval_s=self.config.scheduler_poll_interval,
+        )
+
+    def _scheduler_speak(self, audio):
+        def speak(text):
+            if not text or not self.config.bot_voice:
+                return
+            tts_files = self.ai.text_to_speech(text)
+            if tts_files:
+                audio.play_audio_files(tts_files)
+        return speak
+
+    def _scheduler_invoke_plugin(self, audio):
+        def invoke(plugin_name, query, refresh_only):
+            route = {"route": plugin_name}
+            result = self.route_message(query or plugin_name, route)
+            if not refresh_only and self.config.bot_voice and result:
+                tts_files = self.ai.text_to_speech(result)
+                if tts_files:
+                    audio.play_audio_files(tts_files)
+            return result
+        return invoke
 
     def route_message(self, user_input, route):
         if self.config.debug:
@@ -356,6 +391,17 @@ class SandVoice:
 
 if __name__ == "__main__":
     sandvoice = SandVoice()
+
+    if sandvoice.scheduler:
+        sandvoice.scheduler.start()
+
+    def _shutdown(signum, frame):
+        if sandvoice.scheduler:
+            sandvoice.scheduler.stop()
+        sys.exit(0)
+
+    signal.signal(signal.SIGINT, _shutdown)
+    signal.signal(signal.SIGTERM, _shutdown)
 
     # Wake word mode: hands-free voice activation
     if sandvoice.args.wake_word:
