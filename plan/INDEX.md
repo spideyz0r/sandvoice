@@ -122,6 +122,10 @@ plan/
 **Document**: [backlog/21-task-scheduler.md](./backlog/21-task-scheduler.md)
 **Description**: Lightweight SQLite-backed in-process scheduler supporting cron, interval, and one-shot tasks. Prerequisite for Plan 20 periodic refresh and future Timers & Reminders.
 
+### Priority 22: Plugin Manifest System
+**Document**: [backlog/22-plugin-manifest-system.md](./backlog/22-plugin-manifest-system.md)
+**Description**: Self-contained plugin folders with `plugin.yaml` manifests that self-register routes, config defaults, and env var requirements — eliminating manual edits to `routes.yaml` when adding or removing plugins.
+
 ### Future Enhancements
 **Document**: [backlog/FUTURE.md](./backlog/FUTURE.md)
 **Description**: Long-term feature ideas including:
