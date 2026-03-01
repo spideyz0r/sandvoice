@@ -564,6 +564,22 @@ class TestSandVoiceSchedulerInit(unittest.TestCase):
         sv.ai.generate_response.assert_not_called()
         self.assertEqual(result, "plugin output")
 
+    def test_scheduler_context_route_message_uses_scheduler_route(self):
+        """_SchedulerContext.route_message must delegate to _scheduler_route_message,
+        not SandVoice.route_message, so plugins calling ctx.route_message() still
+        use the scheduler AI."""
+        from sandvoice import _SchedulerContext
+        sv = self._make_stub()
+        sv._scheduler_ai = MagicMock()
+        sv.ai = MagicMock()
+        sv._scheduler_route_message = MagicMock(return_value="scheduler routed")
+        sv.route_message = MagicMock(return_value="main routed")
+        ctx = _SchedulerContext(sv, sv._scheduler_ai)
+        result = ctx.route_message("query", {"route": "plugin"})
+        sv._scheduler_route_message.assert_called_once_with("query", {"route": "plugin"})
+        sv.route_message.assert_not_called()
+        self.assertEqual(result, "scheduler routed")
+
 
 if __name__ == "__main__":
     unittest.main()

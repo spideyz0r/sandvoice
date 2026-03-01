@@ -25,6 +25,10 @@ class _SchedulerContext:
         self._base = base
         self.ai = scheduler_ai
 
+    def route_message(self, *args, **kwargs):
+        """Route messages via the scheduler AI to avoid polluting interactive history."""
+        return self._base._scheduler_route_message(*args, **kwargs)
+
     def __getattr__(self, name):
         return getattr(self._base, name)
 
@@ -480,6 +484,7 @@ if __name__ == "__main__":
             audio,
             route_message=sandvoice.route_message,
             plugins=sandvoice.plugins,
+            audio_lock=sandvoice._ai_audio_lock,
         )
         wake_word_mode.run()
     # Default mode (ESC key) or CLI mode
