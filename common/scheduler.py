@@ -80,8 +80,14 @@ class TaskScheduler:
         logger.info("Task scheduler started (poll_interval=%ds)", self._poll_interval)
 
     def stop(self, timeout: Optional[float] = None):
-        """Signal the scheduler to stop and wait for the worker thread to exit."""
+        """Signal the scheduler to stop and wait for the worker thread to exit.
+
+        Pass ``timeout=0`` to signal shutdown without joining (e.g. from a
+        signal handler where blocking is not allowed).
+        """
         self._stop_event.set()
+        if timeout == 0:
+            return
         thread = self._thread
         if thread is not None and thread.is_alive() and threading.current_thread() is not thread:
             thread.join(timeout=timeout)
