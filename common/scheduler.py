@@ -113,10 +113,16 @@ class TaskScheduler:
         action_type: str,
         action_payload: dict,
     ) -> str:
-        if action_type == "speak" and "text" not in action_payload:
-            raise ValueError("'speak' action requires 'text' in action_payload")
-        if action_type == "plugin" and "plugin" not in action_payload:
-            raise ValueError("'plugin' action requires 'plugin' in action_payload")
+        if action_type not in ("speak", "plugin"):
+            raise ValueError(f"Unsupported action_type: {action_type!r}")
+        if action_type == "speak":
+            text = action_payload.get("text")
+            if not isinstance(text, str) or not text.strip():
+                raise ValueError("'speak' action requires non-empty 'text' in action_payload")
+        if action_type == "plugin":
+            plugin_name = action_payload.get("plugin")
+            if not isinstance(plugin_name, str) or not plugin_name.strip():
+                raise ValueError("'plugin' action requires non-empty 'plugin' in action_payload")
         first_run = self._first_run(schedule_type, schedule_value)
         task_id = self._db.add_task(
             name=name,
@@ -229,8 +235,34 @@ class TaskScheduler:
                 raise _PermanentTaskError(
                     "missing or empty 'plugin' in action_payload for 'plugin' task"
                 )
-            query = payload.get("query", "")
-            refresh_only = bool(payload.get("refresh_only", False))
+            raw_query = payload.get("query", "")
+            if raw_query is None:
+                query = ""
+            elif isinstance(raw_query, str):
+                query = raw_query
+            else:
+                raise _PermanentTaskError(
+                    "non-string 'query' in action_payload for 'plugin' task"
+                )
+            raw_refresh_only = payload.get("refresh_only", False)
+            if isinstance(raw_refresh_only, bool):
+                refresh_only = raw_refresh_only
+            elif isinstance(raw_refresh_only, str):
+                val = raw_refresh_only.strip().lower()
+                if val in ("true", "1", "yes", "y", "on"):
+                    refresh_only = True
+                elif val in ("false", "0", "no", "n", "off", ""):
+                    refresh_only = False
+                else:
+                    raise _PermanentTaskError(
+                        f"invalid 'refresh_only' string value {raw_refresh_only!r} "
+                        "in action_payload for 'plugin' task"
+                    )
+            else:
+                raise _PermanentTaskError(
+                    "invalid type for 'refresh_only' in action_payload for 'plugin' task; "
+                    "expected a boolean or boolean-like string"
+                )
             result = self._invoke_plugin_fn(plugin_name, query, refresh_only)
             return result or ""
         raise _PermanentTaskError(f"Unknown action_type: {task.action_type!r}")

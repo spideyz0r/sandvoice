@@ -316,6 +316,14 @@ class TestTaskScheduler(unittest.TestCase):
                 action_type="speak", action_payload={},
             )
 
+    def test_add_task_speak_empty_text_raises(self):
+        """add_task() must reject a speak action with empty 'text'."""
+        with self.assertRaises(ValueError):
+            self.scheduler.add_task(
+                name="bad", schedule_type="interval", schedule_value="60",
+                action_type="speak", action_payload={"text": "  "},
+            )
+
     def test_add_task_plugin_missing_plugin_raises(self):
         """add_task() must reject a plugin action with no 'plugin' key."""
         with self.assertRaises(ValueError):
@@ -323,6 +331,58 @@ class TestTaskScheduler(unittest.TestCase):
                 name="bad", schedule_type="interval", schedule_value="60",
                 action_type="plugin", action_payload={"query": "weather"},
             )
+
+    def test_add_task_unknown_action_type_raises(self):
+        """add_task() must reject unknown action_type values."""
+        with self.assertRaises(ValueError):
+            self.scheduler.add_task(
+                name="bad", schedule_type="interval", schedule_value="60",
+                action_type="email", action_payload={},
+            )
+
+    def test_dispatch_plugin_non_string_query_permanent_error(self):
+        """Plugin task with non-string 'query' is a permanent error."""
+        task_id = self.db.add_task(
+            name="bad-query", schedule_type="interval", schedule_value="60",
+            action_type="speak", action_payload={"text": "hi"},
+            next_run=self._past(),
+        )
+        bad_task = self.db.get_task(task_id)
+        object.__setattr__(bad_task, "action_type", "plugin")
+        object.__setattr__(bad_task, "action_payload", '{"plugin": "weather", "query": 42}')
+        with patch.object(self.db, "get_due_tasks", return_value=[bad_task]):
+            self.scheduler._tick()
+        task = self.db.get_task(task_id)
+        self.assertEqual(task.status, "completed")
+
+    def test_dispatch_plugin_invalid_refresh_only_permanent_error(self):
+        """Plugin task with invalid 'refresh_only' type is a permanent error."""
+        task_id = self.db.add_task(
+            name="bad-refresh", schedule_type="interval", schedule_value="60",
+            action_type="speak", action_payload={"text": "hi"},
+            next_run=self._past(),
+        )
+        bad_task = self.db.get_task(task_id)
+        object.__setattr__(bad_task, "action_type", "plugin")
+        object.__setattr__(bad_task, "action_payload", '{"plugin": "weather", "refresh_only": []}')
+        with patch.object(self.db, "get_due_tasks", return_value=[bad_task]):
+            self.scheduler._tick()
+        task = self.db.get_task(task_id)
+        self.assertEqual(task.status, "completed")
+
+    def test_dispatch_plugin_string_refresh_only_true(self):
+        """Plugin task with refresh_only='true' string resolves to True."""
+        task_id = self.db.add_task(
+            name="str-refresh", schedule_type="interval", schedule_value="60",
+            action_type="speak", action_payload={"text": "hi"},
+            next_run=self._past(),
+        )
+        bad_task = self.db.get_task(task_id)
+        object.__setattr__(bad_task, "action_type", "plugin")
+        object.__setattr__(bad_task, "action_payload", '{"plugin": "weather", "refresh_only": "true"}')
+        with patch.object(self.db, "get_due_tasks", return_value=[bad_task]):
+            self.scheduler._tick()
+        self.invoke_fn.assert_called_once_with("weather", "", True)
 
     def test_close_stops_scheduler_and_closes_db(self):
         """close() must stop the scheduler thread and close the DB without errors."""
