@@ -87,7 +87,7 @@ class SandVoice:
     def _scheduler_speak(self, text):
         if not text or not self.config.bot_voice:
             return
-        tts_files = self.ai.text_to_speech(text)
+        tts_files = self._scheduler_ai.text_to_speech(text)
         if not tts_files:
             return
         with self._ai_audio_lock:
@@ -101,7 +101,7 @@ class SandVoice:
         route = {"route": plugin_name}
         result = self._scheduler_route_message(query or plugin_name, route)
         if not refresh_only and self.config.bot_voice and result:
-            tts_files = self.ai.text_to_speech(result)
+            tts_files = self._scheduler_ai.text_to_speech(result)
             if tts_files:
                 with self._ai_audio_lock:
                     if self._scheduler_audio is None:
@@ -266,7 +266,10 @@ class SandVoice:
             player_error = [""]
 
             def player_worker():
-                success, failed_file, error = audio.play_audio_queue(audio_queue, stop_event=stop_event)
+                # Hold the audio lock only for actual playback to avoid blocking
+                # scheduler audio tasks during LLM streaming.
+                with self._ai_audio_lock:
+                    success, failed_file, error = audio.play_audio_queue(audio_queue, stop_event=stop_event)
                 player_success[0] = bool(success)
                 if failed_file:
                     player_failed_file[0] = str(failed_file)
@@ -278,12 +281,9 @@ class SandVoice:
             # Use daemon threads so unexpected main-thread exits don't hang shutdown.
             tts_thread = threading.Thread(target=tts_worker, name="stream-tts-worker", daemon=True)
             player_thread = threading.Thread(target=player_worker, name="stream-audio-player", daemon=True)
-            # Serialize with scheduler audio to prevent pygame mixer contention
-            # while streaming TTS worker and player threads are active.
-            self._ai_audio_lock.acquire()
+            tts_thread.start()
+            player_thread.start()
             try:
-                tts_thread.start()
-                player_thread.start()
 
                 boundary = str(getattr(self.config, "stream_tts_boundary", "sentence") or "sentence").strip().lower()
                 try:
@@ -359,8 +359,9 @@ class SandVoice:
                 player_join_timeout = int(getattr(self.config, "stream_tts_player_join_timeout_s", 60) or 60)
                 tts_thread.join(timeout=tts_join_timeout)
                 player_thread.join(timeout=player_join_timeout)
-            finally:
-                self._ai_audio_lock.release()
+            except Exception:
+                stop_event.set()
+                raise
 
             if (tts_thread.is_alive() or player_thread.is_alive()) and self.config.debug:
                 print("Warning: streaming TTS threads did not exit cleanly within timeout")
