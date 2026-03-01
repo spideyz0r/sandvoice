@@ -10,7 +10,7 @@ from common.error_handling import handle_api_error
 from common.db import SchedulerDB
 from common.scheduler import TaskScheduler
 
-import argparse, importlib, os, signal, sys
+import argparse, atexit, importlib, os, signal, sys
 import queue, threading, time
 
 class _SchedulerContext:
@@ -473,6 +473,11 @@ if __name__ == "__main__":
 
     signal.signal(signal.SIGINT, _shutdown)
     signal.signal(signal.SIGTERM, _shutdown)
+
+    if sandvoice.scheduler:
+        # On normal interpreter exit (including after sys.exit()), join the
+        # scheduler thread and close the DB so in-flight writes are not cut short.
+        atexit.register(sandvoice.scheduler.close)
 
     # Wake word mode: hands-free voice activation
     if sandvoice.args.wake_word:
