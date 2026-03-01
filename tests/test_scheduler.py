@@ -2,12 +2,11 @@ import json
 import os
 import tempfile
 import threading
-import time
 import unittest
 from datetime import datetime, timedelta, timezone
 from unittest.mock import MagicMock, patch
 
-from common.db import SchedulerDB, ScheduledTask
+from common.db import SchedulerDB
 from common.scheduler import TaskScheduler, calc_next_run
 
 

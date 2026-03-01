@@ -93,7 +93,9 @@ class SandVoice:
         with self._ai_audio_lock:
             if self._scheduler_audio is None:
                 self._scheduler_audio = Audio(self.config)
-            self._scheduler_audio.play_audio_files(tts_files)
+            success, failed_file, error = self._scheduler_audio.play_audio_files(tts_files)
+            if not success and self.config.debug:
+                print(f"Scheduler speak: audio playback failed for '{failed_file}': {error}")
 
     def _scheduler_invoke_plugin(self, plugin_name, query, refresh_only):
         route = {"route": plugin_name}
@@ -104,7 +106,9 @@ class SandVoice:
                 with self._ai_audio_lock:
                     if self._scheduler_audio is None:
                         self._scheduler_audio = Audio(self.config)
-                    self._scheduler_audio.play_audio_files(tts_files)
+                    success, failed_file, error = self._scheduler_audio.play_audio_files(tts_files)
+                    if not success and self.config.debug:
+                        print(f"Scheduler plugin: audio playback failed for '{failed_file}': {error}")
         return result
 
     def _scheduler_route_message(self, user_input, route):
