@@ -322,6 +322,9 @@ class Audio:
             audio_queue: queue.Queue yielding file paths (str). Use None as sentinel.
             stop_event: optional threading.Event; when set, playback stops early and the queue is drained.
             delete_files: if True, delete files after playing.
+            playback_lock: optional threading.Lock (or compatible) acquired around each
+                play_audio_file() call to serialize mixer usage across threads. If None,
+                no external locking is applied.
 
         Returns:
             (success, failed_file, error)

@@ -67,6 +67,9 @@ class WakeWordMode:
             plugins: Optional dict of plugin route handlers (used to decide when "default route"
                 streaming is safe). If not provided, wake word mode will not attempt streaming
                 for routed requests.
+            audio_lock: Optional threading.Lock (or compatible) acquired around every
+                audio playback call to serialize mixer usage with other threads (e.g.,
+                the scheduler's TTS output). If None, no external locking is applied.
         """
         self.config = config
         self.ai = ai_instance
