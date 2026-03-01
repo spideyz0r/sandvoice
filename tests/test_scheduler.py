@@ -373,13 +373,18 @@ class TestTaskScheduler(unittest.TestCase):
         self.assertIsNotNone(task_id)
 
     def test_add_task_plugin_whitespace_query_normalized(self):
-        """add_task() must normalize whitespace-only 'query' to empty string."""
+        """add_task() must normalize whitespace-only 'query' to empty string in
+        the persisted task, without mutating the caller's original dict."""
         payload = {"plugin": "weather", "query": "   "}
-        self.scheduler.add_task(
+        task_id = self.scheduler.add_task(
             name="ws", schedule_type="interval", schedule_value="60",
             action_type="plugin", action_payload=payload,
         )
-        self.assertEqual(payload["query"], "")
+        # Caller's dict must NOT be mutated
+        self.assertEqual(payload["query"], "   ")
+        # Persisted JSON must have the normalized value
+        task = self.db.get_task(task_id)
+        self.assertIn('"query": ""', task.action_payload)
 
     def test_once_schedule_z_suffix_accepted(self):
         """add_task() must accept ISO timestamps with trailing Z for 'once' schedules."""
@@ -620,13 +625,18 @@ class TestAddTaskPluginNameNormalization(unittest.TestCase):
         shutil.rmtree(self.tmp, ignore_errors=True)
 
     def test_add_task_plugin_name_whitespace_stripped(self):
-        """add_task() must normalize plugin name by stripping whitespace."""
+        """add_task() must normalize plugin name in the persisted task without
+        mutating the caller's original dict."""
         payload = {"plugin": "  weather  "}
-        self.scheduler.add_task(
+        task_id = self.scheduler.add_task(
             name="ws-plugin", schedule_type="interval", schedule_value="60",
             action_type="plugin", action_payload=payload,
         )
-        self.assertEqual(payload["plugin"], "weather")
+        # Caller's dict must NOT be mutated
+        self.assertEqual(payload["plugin"], "  weather  ")
+        # Persisted JSON must have the stripped value
+        task = self.db.get_task(task_id)
+        self.assertIn('"plugin": "weather"', task.action_payload)
 
     def test_dispatch_plugin_name_stripped_before_invoke(self):
         """_dispatch() must strip plugin_name before calling invoke_plugin_fn."""

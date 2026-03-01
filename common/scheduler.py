@@ -119,6 +119,9 @@ class TaskScheduler:
         action_type: str,
         action_payload: dict,
     ) -> str:
+        # Work on a copy so callers are not surprised by in-place mutations
+        # (e.g. plugin-name stripping, query normalization).
+        action_payload = dict(action_payload)
         if action_type not in ("speak", "plugin"):
             raise ValueError(f"Unsupported action_type: {action_type!r}")
         if action_type == "speak":
