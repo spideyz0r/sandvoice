@@ -384,7 +384,7 @@ class TestTaskScheduler(unittest.TestCase):
         self.assertEqual(payload["query"], "   ")
         # Persisted JSON must have the normalized value
         task = self.db.get_task(task_id)
-        self.assertIn('"query": ""', task.action_payload)
+        self.assertEqual("", json.loads(task.action_payload).get("query"))
 
     def test_once_schedule_z_suffix_accepted(self):
         """add_task() must accept ISO timestamps with trailing Z for 'once' schedules."""
@@ -636,7 +636,7 @@ class TestAddTaskPluginNameNormalization(unittest.TestCase):
         self.assertEqual(payload["plugin"], "  weather  ")
         # Persisted JSON must have the stripped value
         task = self.db.get_task(task_id)
-        self.assertIn('"plugin": "weather"', task.action_payload)
+        self.assertEqual("weather", json.loads(task.action_payload)["plugin"])
 
     def test_dispatch_plugin_name_stripped_before_invoke(self):
         """_dispatch() must strip plugin_name before calling invoke_plugin_fn."""
