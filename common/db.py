@@ -48,7 +48,7 @@ class SchedulerDB:
                     action_type    TEXT NOT NULL
                                    CHECK(action_type IN ('plugin', 'speak')),
                     action_payload TEXT NOT NULL,
-                    next_run       TEXT NOT NULL,
+                    next_run       TEXT,
                     last_run       TEXT,
                     last_result    TEXT,
                     status         TEXT NOT NULL DEFAULT 'active'
@@ -108,14 +108,24 @@ class SchedulerDB:
         now = datetime.now(timezone.utc).isoformat()
         truncated = (result or "")[:500]
         with self._lock:
-            self._conn.execute(
-                """
-                UPDATE scheduled_tasks
-                SET last_run = ?, last_result = ?, next_run = COALESCE(?, next_run), status = ?
-                WHERE id = ?
-                """,
-                (now, truncated, next_run, status, task_id),
-            )
+            if next_run is None:
+                self._conn.execute(
+                    """
+                    UPDATE scheduled_tasks
+                    SET last_run = ?, last_result = ?, next_run = NULL, status = ?
+                    WHERE id = ?
+                    """,
+                    (now, truncated, status, task_id),
+                )
+            else:
+                self._conn.execute(
+                    """
+                    UPDATE scheduled_tasks
+                    SET last_run = ?, last_result = ?, next_run = ?, status = ?
+                    WHERE id = ?
+                    """,
+                    (now, truncated, next_run, status, task_id),
+                )
             self._conn.commit()
 
     def set_status(self, task_id: str, status: str):

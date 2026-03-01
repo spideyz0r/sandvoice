@@ -71,17 +71,27 @@ class SandVoice:
     def _init_scheduler(self):
         if not self.config.scheduler_enabled:
             return None
+        ai = None
+        db = None
         try:
-            self._scheduler_ai = AI(self.config)
+            ai = AI(self.config)
             db = SchedulerDB(self.config.scheduler_db_path)
-            return TaskScheduler(
+            scheduler = TaskScheduler(
                 db=db,
                 speak_fn=self._scheduler_speak,
                 invoke_plugin_fn=self._scheduler_invoke_plugin,
                 poll_interval_s=self.config.scheduler_poll_interval,
             )
+            self._scheduler_ai = ai
+            return scheduler
         except Exception as e:
             print(f"Warning: scheduler disabled — failed to initialize: {e}")
+            if db is not None:
+                try:
+                    db.close()
+                except Exception:
+                    pass
+            self._scheduler_ai = None
             return None
 
     def _scheduler_speak(self, text):
