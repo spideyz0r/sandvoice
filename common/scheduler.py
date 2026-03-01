@@ -9,11 +9,18 @@ from common.db import SchedulerDB, ScheduledTask
 logger = logging.getLogger(__name__)
 
 
+class _PermanentTaskError(Exception):
+    """Raised for unrecoverable task configuration errors (bad JSON, unknown action type)."""
+
+
 def calc_next_run(schedule_type: str, schedule_value: str) -> Optional[str]:
     """Return the next ISO 8601 UTC run time, or None for once tasks."""
     now = datetime.now(timezone.utc)
     if schedule_type == "interval":
-        return (now + timedelta(seconds=int(schedule_value))).isoformat()
+        interval_s = int(schedule_value)
+        if interval_s < 1:
+            raise ValueError(f"Interval must be >= 1 second, got {interval_s}")
+        return (now + timedelta(seconds=interval_s)).isoformat()
     if schedule_type == "cron":
         from croniter import croniter
         return croniter(schedule_value, now).get_next(datetime).isoformat()
@@ -64,6 +71,8 @@ class TaskScheduler:
     # ── lifecycle ──────────────────────────────────────────────────────────
 
     def start(self):
+        if self._thread.is_alive():
+            return
         self._thread.start()
         logger.info("Task scheduler started (poll_interval=%ds)", self._poll_interval)
 
@@ -77,6 +86,11 @@ class TaskScheduler:
                     "Scheduler thread did not exit within %s seconds", timeout
                 )
 
+    def close(self, timeout: Optional[float] = 5.0):
+        """Stop the scheduler thread and close the database connection."""
+        self.stop(timeout=timeout)
+        self._db.close()
+
     # ── public API ─────────────────────────────────────────────────────────
 
     def add_task(
@@ -87,6 +101,10 @@ class TaskScheduler:
         action_type: str,
         action_payload: dict,
     ) -> str:
+        if action_type == "speak" and "text" not in action_payload:
+            raise ValueError("'speak' action requires 'text' in action_payload")
+        if action_type == "plugin" and "plugin" not in action_payload:
+            raise ValueError("'plugin' action requires 'plugin' in action_payload")
         first_run = self._first_run(schedule_type, schedule_value)
         task_id = self._db.add_task(
             name=name,
@@ -147,28 +165,40 @@ class TaskScheduler:
     def _run(self, task: ScheduledTask):
         logger.debug("Running task '%s' (%s)", task.name, task.id)
         result = ""
+        permanent_error = False
         try:
             result = self._dispatch(task) or ""
+        except _PermanentTaskError as e:
+            logger.error("Task '%s' has a permanent configuration error: %s", task.name, e)
+            result = str(e)
+            permanent_error = True
         except Exception as e:
             logger.error("Task '%s' failed: %s", task.name, e)
             result = str(e)
 
-        try:
-            next_run = calc_next_run(task.schedule_type, task.schedule_value)
-            status = "completed" if next_run is None else "active"
-        except Exception as e:
-            logger.error("Scheduler: failed to compute next run for task '%s': %s", task.id, e)
-            error_msg = f"schedule error: {e}"
-            result = f"{result}\n{error_msg}" if result else error_msg
+        if permanent_error:
             next_run = None
             status = "completed"
+        else:
+            try:
+                next_run = calc_next_run(task.schedule_type, task.schedule_value)
+                status = "completed" if next_run is None else "active"
+            except Exception as e:
+                logger.error("Scheduler: failed to compute next run for task '%s': %s", task.id, e)
+                error_msg = f"schedule error: {e}"
+                result = f"{result}\n{error_msg}" if result else error_msg
+                next_run = None
+                status = "completed"
         try:
             self._db.update_after_run(task.id, result, next_run, status)
         except Exception as e:
             logger.error("Scheduler: failed to update task '%s' after run: %s", task.id, e)
 
     def _dispatch(self, task: ScheduledTask) -> str:
-        payload = json.loads(task.action_payload)
+        try:
+            payload = json.loads(task.action_payload)
+        except json.JSONDecodeError as e:
+            raise _PermanentTaskError(f"malformed action_payload JSON: {e}") from e
         if task.action_type == "speak":
             text = payload.get("text", "")
             self._speak_fn(text)
@@ -179,4 +209,4 @@ class TaskScheduler:
             refresh_only = bool(payload.get("refresh_only", False))
             result = self._invoke_plugin_fn(plugin_name, query, refresh_only)
             return result or ""
-        raise ValueError(f"Unknown action_type: {task.action_type!r}")
+        raise _PermanentTaskError(f"Unknown action_type: {task.action_type!r}")

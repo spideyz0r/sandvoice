@@ -267,6 +267,78 @@ class TestTaskScheduler(unittest.TestCase):
         task = self.db.get_task(task_id)
         self.assertIn("Unknown action_type", task.last_result)
 
+    def test_unknown_action_type_marked_completed(self):
+        """Permanent config errors (unknown action_type) must not reschedule the task."""
+        task_id = self.db.add_task(
+            name="bad-action", schedule_type="interval", schedule_value="60",
+            action_type="speak", action_payload={"text": "hi"},
+            next_run=self._past(),
+        )
+        bad_task = self.db.get_task(task_id)
+        object.__setattr__(bad_task, "action_type", "unknown")
+        with patch.object(self.db, "get_due_tasks", return_value=[bad_task]):
+            self.scheduler._tick()
+        task = self.db.get_task(task_id)
+        self.assertEqual(task.status, "completed")
+
+    def test_bad_json_payload_permanent_error(self):
+        """Malformed action_payload JSON marks task completed rather than rescheduling."""
+        task_id = self.db.add_task(
+            name="bad-json", schedule_type="interval", schedule_value="60",
+            action_type="speak", action_payload={"text": "hi"},
+            next_run=self._past(),
+        )
+        bad_task = self.db.get_task(task_id)
+        object.__setattr__(bad_task, "action_payload", "{invalid json")
+        with patch.object(self.db, "get_due_tasks", return_value=[bad_task]):
+            self.scheduler._tick()
+        task = self.db.get_task(task_id)
+        self.assertEqual(task.status, "completed")
+
+    def test_start_idempotent(self):
+        """Calling start() twice must not raise."""
+        self.scheduler.start()
+        self.scheduler.start()  # should be a no-op
+        self.assertTrue(self.scheduler._thread.is_alive())
+
+    def test_add_task_speak_missing_text_raises(self):
+        """add_task() must reject a speak action with no 'text' key."""
+        with self.assertRaises(ValueError):
+            self.scheduler.add_task(
+                name="bad", schedule_type="interval", schedule_value="60",
+                action_type="speak", action_payload={},
+            )
+
+    def test_add_task_plugin_missing_plugin_raises(self):
+        """add_task() must reject a plugin action with no 'plugin' key."""
+        with self.assertRaises(ValueError):
+            self.scheduler.add_task(
+                name="bad", schedule_type="interval", schedule_value="60",
+                action_type="plugin", action_payload={"query": "weather"},
+            )
+
+    def test_close_stops_scheduler_and_closes_db(self):
+        """close() must stop the scheduler thread and close the DB without errors."""
+        self.scheduler.start()
+        self.scheduler.close(timeout=2)
+        self.assertTrue(self.scheduler._stop_event.is_set())
+
+
+# ── calc_next_run interval validation ──────────────────────────────────────────
+
+class TestCalcNextRunIntervalValidation(unittest.TestCase):
+    def test_zero_interval_raises(self):
+        with self.assertRaises(ValueError):
+            calc_next_run("interval", "0")
+
+    def test_negative_interval_raises(self):
+        with self.assertRaises(ValueError):
+            calc_next_run("interval", "-10")
+
+    def test_one_second_interval_ok(self):
+        result = calc_next_run("interval", "1")
+        self.assertIsNotNone(result)
+
 
 if __name__ == "__main__":
     unittest.main()
