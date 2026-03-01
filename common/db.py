@@ -1,5 +1,4 @@
 import json
-import logging
 import os
 import sqlite3
 import threading
@@ -7,8 +6,6 @@ import uuid
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Optional
-
-logger = logging.getLogger(__name__)
 
 
 @dataclass
