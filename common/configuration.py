@@ -4,13 +4,13 @@ from common.audio_device_detection import get_optimal_channels, log_device_info
 
 class Config:
     def __init__(self):
-        self.config_file = f"{os.environ['HOME']}/.sandvoice/config.yaml"
+        self.config_file = os.path.join(os.path.expanduser("~"), ".sandvoice", "config.yaml")
         self.defaults  = {
             "channels": None,
             "bitrate": 128,
             "rate": 44100,
             "chunk": 1024,
-            "tmp_files_path": f"{os.environ['HOME']}/.sandvoice/tmp/",
+            "tmp_files_path": os.path.join(os.path.expanduser("~"), ".sandvoice", "tmp") + os.sep,
             "botname": "SandVoice",
             "timezone": "EST",
             "location": "Toronto, ON, CA",
@@ -51,7 +51,7 @@ class Config:
             "api_timeout": 10,
             "api_retry_attempts": 3,
             "enable_error_logging": "disabled",
-            "error_log_path": f"{os.environ['HOME']}/.sandvoice/error.log",
+            "error_log_path": os.path.join(os.path.expanduser("~"), ".sandvoice", "error.log"),
             "fallback_to_text_on_audio_error": "enabled",
 
             # LLM streaming (Phase 1: stream text assembly)
@@ -94,7 +94,7 @@ class Config:
             # Task Scheduler (Plan 21)
             "scheduler_enabled": "enabled",
             "scheduler_poll_interval": 30,
-            "scheduler_db_path": f"{os.environ['HOME']}/.sandvoice/sandvoice.db",
+            "scheduler_db_path": os.path.join(os.path.expanduser("~"), ".sandvoice", "sandvoice.db"),
         }
         self.config = self.load_defaults()
         self.load_config()

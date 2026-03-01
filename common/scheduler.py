@@ -64,24 +64,28 @@ class TaskScheduler:
         self._invoke_plugin_fn = invoke_plugin_fn
         self._poll_interval = poll_interval_s
         self._stop_event = threading.Event()
-        self._thread = threading.Thread(
-            target=self._loop, name="sandvoice-scheduler", daemon=True
-        )
+        self._thread: Optional[threading.Thread] = None
 
     # ── lifecycle ──────────────────────────────────────────────────────────
 
     def start(self):
-        if self._thread.is_alive():
+        if self._thread is not None and self._thread.is_alive():
             return
+        # Clear any previous stop signal so the new worker loop can run.
+        self._stop_event.clear()
+        self._thread = threading.Thread(
+            target=self._loop, name="sandvoice-scheduler", daemon=True
+        )
         self._thread.start()
         logger.info("Task scheduler started (poll_interval=%ds)", self._poll_interval)
 
     def stop(self, timeout: Optional[float] = None):
         """Signal the scheduler to stop and wait for the worker thread to exit."""
         self._stop_event.set()
-        if self._thread.is_alive() and threading.current_thread() is not self._thread:
-            self._thread.join(timeout=timeout)
-            if self._thread.is_alive():
+        thread = self._thread
+        if thread is not None and thread.is_alive() and threading.current_thread() is not thread:
+            thread.join(timeout=timeout)
+            if thread.is_alive():
                 logger.warning(
                     "Scheduler thread did not exit within %s seconds", timeout
                 )

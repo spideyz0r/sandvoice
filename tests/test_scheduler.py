@@ -301,6 +301,13 @@ class TestTaskScheduler(unittest.TestCase):
         self.scheduler.start()  # should be a no-op
         self.assertTrue(self.scheduler._thread.is_alive())
 
+    def test_restart_after_stop(self):
+        """start() after stop() must work without RuntimeError (fresh thread)."""
+        self.scheduler.start()
+        self.scheduler.stop(timeout=2)
+        self.scheduler.start()  # must not raise
+        self.assertTrue(self.scheduler._thread.is_alive())
+
     def test_add_task_speak_missing_text_raises(self):
         """add_task() must reject a speak action with no 'text' key."""
         with self.assertRaises(ValueError):
