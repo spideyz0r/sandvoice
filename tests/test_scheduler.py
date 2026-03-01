@@ -446,5 +446,85 @@ class TestCalcNextRunIntervalValidation(unittest.TestCase):
         self.assertIsNotNone(result)
 
 
+# ── SchedulerDB compound index ─────────────────────────────────────────────────
+
+class TestSchedulerDBIndex(unittest.TestCase):
+    """Verify the compound index on (status, next_run) is created by _init_schema()."""
+
+    def test_status_next_run_index_exists(self):
+        import sqlite3
+        tmp = tempfile.mkdtemp()
+        try:
+            db_path = os.path.join(tmp, "idx_test.db")
+            db = SchedulerDB(db_path)
+            db.close()
+            conn = sqlite3.connect(db_path)
+            rows = conn.execute(
+                "SELECT name FROM sqlite_master "
+                "WHERE type='index' AND tbl_name='scheduled_tasks'"
+            ).fetchall()
+            conn.close()
+            index_names = [r[0] for r in rows]
+            self.assertIn("idx_scheduled_tasks_status_next_run", index_names)
+        finally:
+            import shutil
+            shutil.rmtree(tmp, ignore_errors=True)
+
+
+# ── SandVoice scheduler init / route ──────────────────────────────────────────
+
+class TestSandVoiceSchedulerInit(unittest.TestCase):
+    """Tests for SandVoice._init_scheduler() error handling and _scheduler_route_message()."""
+
+    def _make_stub(self, scheduler_enabled=True):
+        from sandvoice import SandVoice
+        sv = object.__new__(SandVoice)
+        sv.config = MagicMock()
+        sv.config.scheduler_enabled = scheduler_enabled
+        sv.config.scheduler_db_path = ":memory:"
+        sv.config.scheduler_poll_interval = 30
+        sv.config.debug = False
+        sv._scheduler_ai = None
+        sv._ai_audio_lock = threading.Lock()
+        sv._scheduler_audio = None
+        sv.plugins = {}
+        return sv
+
+    def test_init_scheduler_disabled_returns_none(self):
+        sv = self._make_stub(scheduler_enabled=False)
+        self.assertIsNone(sv._init_scheduler())
+
+    def test_init_scheduler_db_failure_returns_none(self):
+        """_init_scheduler must catch SchedulerDB init failures and return None."""
+        sv = self._make_stub(scheduler_enabled=True)
+        with patch("sandvoice.SchedulerDB", side_effect=OSError("permission denied")):
+            result = sv._init_scheduler()
+        self.assertIsNone(result)
+
+    def test_scheduler_route_message_uses_scheduler_ai(self):
+        """_scheduler_route_message must use _scheduler_ai for LLM fallback, not self.ai."""
+        sv = self._make_stub()
+        sv._scheduler_ai = MagicMock()
+        sv._scheduler_ai.generate_response.return_value.content = "scheduler response"
+        sv.ai = MagicMock()  # main AI instance — must NOT be called
+        result = sv._scheduler_route_message("hello", {"route": "nonexistent"})
+        sv._scheduler_ai.generate_response.assert_called_once_with("hello")
+        sv.ai.generate_response.assert_not_called()
+        self.assertEqual(result, "scheduler response")
+
+    def test_scheduler_route_message_uses_plugin(self):
+        """_scheduler_route_message must dispatch to a plugin when route matches."""
+        sv = self._make_stub()
+        sv._scheduler_ai = MagicMock()
+        sv.ai = MagicMock()
+        mock_plugin = MagicMock(return_value="plugin output")
+        sv.plugins = {"weather": mock_plugin}
+        result = sv._scheduler_route_message("weather now", {"route": "weather"})
+        mock_plugin.assert_called_once_with("weather now", {"route": "weather"}, sv)
+        sv._scheduler_ai.generate_response.assert_not_called()
+        sv.ai.generate_response.assert_not_called()
+        self.assertEqual(result, "plugin output")
+
+
 if __name__ == "__main__":
     unittest.main()

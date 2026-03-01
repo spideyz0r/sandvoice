@@ -56,6 +56,10 @@ class SchedulerDB:
                     created_at     TEXT NOT NULL
                 )
             """)
+            self._conn.execute("""
+                CREATE INDEX IF NOT EXISTS idx_scheduled_tasks_status_next_run
+                ON scheduled_tasks (status, next_run)
+            """)
             self._conn.commit()
 
     def add_task(

@@ -71,13 +71,18 @@ class SandVoice:
     def _init_scheduler(self):
         if not self.config.scheduler_enabled:
             return None
-        db = SchedulerDB(self.config.scheduler_db_path)
-        return TaskScheduler(
-            db=db,
-            speak_fn=self._scheduler_speak,
-            invoke_plugin_fn=self._scheduler_invoke_plugin,
-            poll_interval_s=self.config.scheduler_poll_interval,
-        )
+        try:
+            self._scheduler_ai = AI(self.config)
+            db = SchedulerDB(self.config.scheduler_db_path)
+            return TaskScheduler(
+                db=db,
+                speak_fn=self._scheduler_speak,
+                invoke_plugin_fn=self._scheduler_invoke_plugin,
+                poll_interval_s=self.config.scheduler_poll_interval,
+            )
+        except Exception as e:
+            print(f"Warning: scheduler disabled — failed to initialize: {e}")
+            return None
 
     def _scheduler_speak(self, text):
         if not text or not self.config.bot_voice:
@@ -92,7 +97,7 @@ class SandVoice:
     def _scheduler_invoke_plugin(self, plugin_name, query, refresh_only):
         with self._ai_audio_lock:
             route = {"route": plugin_name}
-            result = self.route_message(query or plugin_name, route)
+            result = self._scheduler_route_message(query or plugin_name, route)
             if not refresh_only and self.config.bot_voice and result:
                 if self._scheduler_audio is None:
                     self._scheduler_audio = Audio(self.config)
@@ -100,6 +105,17 @@ class SandVoice:
                 if tts_files:
                     self._scheduler_audio.play_audio_files(tts_files)
         return result
+
+    def _scheduler_route_message(self, user_input, route):
+        """Route a scheduler-triggered message using a dedicated AI instance to avoid
+        polluting the interactive conversation history."""
+        if self.config.debug:
+            print(route)
+            print(f"Plugins: {str(self.plugins)}")
+        if route["route"] in self.plugins:
+            return self.plugins[route["route"]](user_input, route, self)
+        else:
+            return self._scheduler_ai.generate_response(user_input).content
 
     def route_message(self, user_input, route):
         if self.config.debug:
