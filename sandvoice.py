@@ -44,6 +44,7 @@ class SandVoice:
         self.load_plugins()
         self._ai_audio_lock = threading.Lock()
         self._scheduler_audio = None  # lazily created on first scheduler voice task
+        self._scheduler_ai = None  # set by _init_scheduler() on success; None when disabled
         self.scheduler = self._init_scheduler()
         if self.args.cli:
             self.config.cli_input = True
