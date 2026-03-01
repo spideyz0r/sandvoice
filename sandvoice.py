@@ -461,7 +461,9 @@ if __name__ == "__main__":
 
     def _shutdown(signum, frame):
         if sandvoice.scheduler:
-            sandvoice.scheduler.close()
+            # Signal the scheduler to stop without blocking in the signal handler.
+            # The scheduler thread is a daemon; it will be cleaned up at process exit.
+            sandvoice.scheduler.stop(timeout=0)
         if signum == signal.SIGINT:
             # Raise KeyboardInterrupt so existing handlers (e.g. WakeWordMode) still work.
             signal.default_int_handler(signum, frame)
