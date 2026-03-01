@@ -123,6 +123,25 @@ class TaskScheduler:
             plugin_name = action_payload.get("plugin")
             if not isinstance(plugin_name, str) or not plugin_name.strip():
                 raise ValueError("'plugin' action requires non-empty 'plugin' in action_payload")
+            query = action_payload.get("query")
+            if query is not None and not isinstance(query, str):
+                raise ValueError("'plugin' action 'query' must be a string or None in action_payload")
+            refresh_only = action_payload.get("refresh_only")
+            if refresh_only is not None:
+                _valid_bool_strings = ("true", "1", "yes", "y", "on", "false", "0", "no", "n", "off", "")
+                if isinstance(refresh_only, bool):
+                    pass
+                elif isinstance(refresh_only, str):
+                    if refresh_only.strip().lower() not in _valid_bool_strings:
+                        raise ValueError(
+                            "'plugin' action 'refresh_only' must be a boolean or boolean-like string "
+                            "in action_payload"
+                        )
+                else:
+                    raise ValueError(
+                        "'plugin' action 'refresh_only' must be a bool or boolean-like string "
+                        "in action_payload"
+                    )
         first_run = self._first_run(schedule_type, schedule_value)
         task_id = self._db.add_task(
             name=name,

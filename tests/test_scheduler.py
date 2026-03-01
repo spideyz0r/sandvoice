@@ -339,6 +339,39 @@ class TestTaskScheduler(unittest.TestCase):
                 action_type="email", action_payload={},
             )
 
+    def test_add_task_plugin_non_string_query_raises(self):
+        """add_task() must reject a plugin action with non-string 'query'."""
+        with self.assertRaises(ValueError):
+            self.scheduler.add_task(
+                name="bad", schedule_type="interval", schedule_value="60",
+                action_type="plugin", action_payload={"plugin": "weather", "query": 42},
+            )
+
+    def test_add_task_plugin_invalid_refresh_only_type_raises(self):
+        """add_task() must reject a plugin action with invalid 'refresh_only' type."""
+        with self.assertRaises(ValueError):
+            self.scheduler.add_task(
+                name="bad", schedule_type="interval", schedule_value="60",
+                action_type="plugin", action_payload={"plugin": "weather", "refresh_only": []},
+            )
+
+    def test_add_task_plugin_invalid_refresh_only_string_raises(self):
+        """add_task() must reject a plugin action with an unrecognized 'refresh_only' string."""
+        with self.assertRaises(ValueError):
+            self.scheduler.add_task(
+                name="bad", schedule_type="interval", schedule_value="60",
+                action_type="plugin", action_payload={"plugin": "weather", "refresh_only": "maybe"},
+            )
+
+    def test_add_task_plugin_valid_optional_fields_accepted(self):
+        """add_task() must accept valid optional plugin fields without raising."""
+        task_id = self.scheduler.add_task(
+            name="ok", schedule_type="interval", schedule_value="60",
+            action_type="plugin",
+            action_payload={"plugin": "weather", "query": "weather", "refresh_only": "true"},
+        )
+        self.assertIsNotNone(task_id)
+
     def test_dispatch_plugin_non_string_query_permanent_error(self):
         """Plugin task with non-string 'query' is a permanent error."""
         task_id = self.db.add_task(
@@ -512,14 +545,21 @@ class TestSandVoiceSchedulerInit(unittest.TestCase):
         self.assertEqual(result, "scheduler response")
 
     def test_scheduler_route_message_uses_plugin(self):
-        """_scheduler_route_message must dispatch to a plugin when route matches."""
+        """_scheduler_route_message must pass a _SchedulerContext proxy to plugins so
+        plugin calls to ctx.ai use the scheduler AI, not the main self.ai."""
         sv = self._make_stub()
         sv._scheduler_ai = MagicMock()
         sv.ai = MagicMock()
         mock_plugin = MagicMock(return_value="plugin output")
         sv.plugins = {"weather": mock_plugin}
         result = sv._scheduler_route_message("weather now", {"route": "weather"})
-        mock_plugin.assert_called_once_with("weather now", {"route": "weather"}, sv)
+        mock_plugin.assert_called_once()
+        call_args = mock_plugin.call_args[0]
+        self.assertEqual(call_args[0], "weather now")
+        self.assertEqual(call_args[1], {"route": "weather"})
+        # Third arg must be a proxy whose .ai is the scheduler AI (not self.ai)
+        ctx = call_args[2]
+        self.assertIs(ctx.ai, sv._scheduler_ai)
         sv._scheduler_ai.generate_response.assert_not_called()
         sv.ai.generate_response.assert_not_called()
         self.assertEqual(result, "plugin output")

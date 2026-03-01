@@ -13,6 +13,22 @@ from common.scheduler import TaskScheduler
 import argparse, importlib, os, signal, sys
 import queue, threading, time
 
+class _SchedulerContext:
+    """Proxy passed to plugins when invoked from the scheduler.
+
+    Exposes the scheduler-dedicated AI instance as `.ai` so plugins don't
+    accidentally mutate the interactive conversation history.
+    All other attributes delegate to the underlying SandVoice instance.
+    """
+
+    def __init__(self, base, scheduler_ai):
+        self._base = base
+        self.ai = scheduler_ai
+
+    def __getattr__(self, name):
+        return getattr(self._base, name)
+
+
 class SandVoice:
     def __init__(self):
         self.parse_args()
@@ -128,7 +144,8 @@ class SandVoice:
             print(route)
             print(f"Plugins: {str(self.plugins)}")
         if route["route"] in self.plugins:
-            return self.plugins[route["route"]](user_input, route, self)
+            ctx = _SchedulerContext(self, self._scheduler_ai)
+            return self.plugins[route["route"]](user_input, route, ctx)
         else:
             return self._scheduler_ai.generate_response(user_input).content
 
