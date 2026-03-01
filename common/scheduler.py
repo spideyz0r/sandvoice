@@ -126,6 +126,8 @@ class TaskScheduler:
             query = action_payload.get("query")
             if query is not None and not isinstance(query, str):
                 raise ValueError("'plugin' action 'query' must be a string or None in action_payload")
+            if isinstance(query, str) and not query.strip():
+                action_payload["query"] = ""
             refresh_only = action_payload.get("refresh_only")
             if refresh_only is not None:
                 _valid_bool_strings = ("true", "1", "yes", "y", "on", "false", "0", "no", "n", "off", "")
@@ -171,8 +173,13 @@ class TaskScheduler:
     def _first_run(self, schedule_type: str, schedule_value: str) -> str:
         if schedule_type == "once":
             # Validate and normalize to UTC ISO string so TEXT comparison is reliable.
+            # Translate trailing 'Z' to '+00:00' because fromisoformat() only accepts
+            # the 'Z' suffix on Python 3.11+.
+            normalized = schedule_value
+            if schedule_value.endswith("Z"):
+                normalized = schedule_value[:-1] + "+00:00"
             try:
-                dt = datetime.fromisoformat(schedule_value)
+                dt = datetime.fromisoformat(normalized)
             except ValueError as e:
                 raise ValueError(
                     f"Invalid ISO timestamp for 'once' schedule: {schedule_value!r}"

@@ -462,7 +462,11 @@ if __name__ == "__main__":
     def _shutdown(signum, frame):
         if sandvoice.scheduler:
             sandvoice.scheduler.close()
-        sys.exit(0)
+        if signum == signal.SIGINT:
+            # Raise KeyboardInterrupt so existing handlers (e.g. WakeWordMode) still work.
+            signal.default_int_handler(signum, frame)
+        else:
+            sys.exit(0)
 
     signal.signal(signal.SIGINT, _shutdown)
     signal.signal(signal.SIGTERM, _shutdown)

@@ -372,6 +372,27 @@ class TestTaskScheduler(unittest.TestCase):
         )
         self.assertIsNotNone(task_id)
 
+    def test_add_task_plugin_whitespace_query_normalized(self):
+        """add_task() must normalize whitespace-only 'query' to empty string."""
+        payload = {"plugin": "weather", "query": "   "}
+        self.scheduler.add_task(
+            name="ws", schedule_type="interval", schedule_value="60",
+            action_type="plugin", action_payload=payload,
+        )
+        self.assertEqual(payload["query"], "")
+
+    def test_once_schedule_z_suffix_accepted(self):
+        """add_task() must accept ISO timestamps with trailing Z for 'once' schedules."""
+        task_id = self.scheduler.add_task(
+            name="once-z", schedule_type="once",
+            schedule_value="2099-06-01T12:00:00Z",
+            action_type="speak", action_payload={"text": "hello"},
+        )
+        task = self.db.get_task(task_id)
+        self.assertIsNotNone(task)
+        # Should be stored as UTC ISO string (no trailing Z)
+        self.assertIn("+00:00", task.next_run)
+
     def test_dispatch_plugin_non_string_query_permanent_error(self):
         """Plugin task with non-string 'query' is a permanent error."""
         task_id = self.db.add_task(

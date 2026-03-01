@@ -196,7 +196,13 @@ class Config:
         self.barge_in = self.get("barge_in").lower() == "enabled"
 
         # Task Scheduler
-        self.scheduler_enabled = str(self.get("scheduler_enabled") or "disabled").lower() == "enabled"
+        raw_scheduler_enabled = self.get("scheduler_enabled")
+        if isinstance(raw_scheduler_enabled, bool):
+            self.scheduler_enabled = raw_scheduler_enabled
+        else:
+            self.scheduler_enabled = str(raw_scheduler_enabled or "disabled").strip().lower() in (
+                "enabled", "true", "yes", "1", "on"
+            )
         raw_poll = self.get("scheduler_poll_interval")
         try:
             self.scheduler_poll_interval = max(1, int(raw_poll)) if raw_poll is not None else 30

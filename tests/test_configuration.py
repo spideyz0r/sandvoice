@@ -615,5 +615,73 @@ class TestConfigurationValidation(unittest.TestCase):
         self.assertFalse(config.visual_state_indicator)
 
 
+class TestSchedulerEnabledFlag(unittest.TestCase):
+    """scheduler_enabled must accept booleans and common truthy/falsy strings."""
+
+    def setUp(self):
+        self.temp_dir = tempfile.mkdtemp()
+        self.original_home = os.environ.get('HOME')
+        os.environ['HOME'] = self.temp_dir
+        os.makedirs(os.path.join(self.temp_dir, ".sandvoice"), exist_ok=True)
+
+    def tearDown(self):
+        if self.original_home:
+            os.environ['HOME'] = self.original_home
+        else:
+            del os.environ['HOME']
+        import shutil
+        shutil.rmtree(self.temp_dir, ignore_errors=True)
+
+    def write_config(self, config_dict):
+        config_path = os.path.join(self.temp_dir, ".sandvoice", "config.yaml")
+        with open(config_path, 'w') as f:
+            yaml.dump(config_dict, f)
+
+    def test_scheduler_enabled_string_enabled(self):
+        self.write_config({"scheduler_enabled": "enabled"})
+        config = Config()
+        self.assertTrue(config.scheduler_enabled)
+
+    def test_scheduler_enabled_string_true(self):
+        self.write_config({"scheduler_enabled": "true"})
+        config = Config()
+        self.assertTrue(config.scheduler_enabled)
+
+    def test_scheduler_enabled_string_yes(self):
+        self.write_config({"scheduler_enabled": "yes"})
+        config = Config()
+        self.assertTrue(config.scheduler_enabled)
+
+    def test_scheduler_enabled_string_1(self):
+        self.write_config({"scheduler_enabled": "1"})
+        config = Config()
+        self.assertTrue(config.scheduler_enabled)
+
+    def test_scheduler_enabled_string_on(self):
+        self.write_config({"scheduler_enabled": "on"})
+        config = Config()
+        self.assertTrue(config.scheduler_enabled)
+
+    def test_scheduler_enabled_bool_true(self):
+        self.write_config({"scheduler_enabled": True})
+        config = Config()
+        self.assertTrue(config.scheduler_enabled)
+
+    def test_scheduler_enabled_bool_false(self):
+        self.write_config({"scheduler_enabled": False})
+        config = Config()
+        self.assertFalse(config.scheduler_enabled)
+
+    def test_scheduler_enabled_string_disabled(self):
+        self.write_config({"scheduler_enabled": "disabled"})
+        config = Config()
+        self.assertFalse(config.scheduler_enabled)
+
+    def test_scheduler_enabled_default_is_false(self):
+        # No override — default is "disabled"
+        config = Config()
+        self.assertFalse(config.scheduler_enabled)
+
+
 if __name__ == '__main__':
     unittest.main()
