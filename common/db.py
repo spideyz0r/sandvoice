@@ -19,7 +19,7 @@ class ScheduledTask:
     schedule_value: str
     action_type: str
     action_payload: str  # raw JSON string
-    next_run: str
+    next_run: Optional[str]
     last_run: Optional[str]
     last_result: Optional[str]
     status: str
