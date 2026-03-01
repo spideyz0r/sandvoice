@@ -1,3 +1,4 @@
+import contextlib
 import glob
 import logging
 import os
@@ -54,7 +55,7 @@ class WakeWordMode:
     Returns to IDLE after each cycle.
     """
 
-    def __init__(self, config, ai_instance, audio_instance, route_message = None, plugins=None):
+    def __init__(self, config, ai_instance, audio_instance, route_message=None, plugins=None, audio_lock=None):
         """Initialize wake word mode.
 
         Args:
@@ -66,12 +67,16 @@ class WakeWordMode:
             plugins: Optional dict of plugin route handlers (used to decide when "default route"
                 streaming is safe). If not provided, wake word mode will not attempt streaming
                 for routed requests.
+            audio_lock: Optional threading.Lock (or compatible) acquired around every
+                audio playback call to serialize mixer usage with other threads (e.g.,
+                the scheduler's TTS output). If None, no external locking is applied.
         """
         self.config = config
         self.ai = ai_instance
         self.audio = audio_instance
         self.route_message = route_message
         self.plugins = plugins
+        self._audio_lock = audio_lock
         self.state = State.IDLE
         self.running = False
 
@@ -274,7 +279,8 @@ class WakeWordMode:
 
                     if self.config.wake_confirmation_beep and self.confirmation_beep_path:
                         try:
-                            self.audio.play_audio_file(self.confirmation_beep_path)
+                            with (self._audio_lock or contextlib.nullcontext()):
+                                self.audio.play_audio_file(self.confirmation_beep_path)
                         except Exception as e:
                             if self.config.debug:
                                 logging.warning(f"Failed to play confirmation beep: {e}")
@@ -473,7 +479,8 @@ class WakeWordMode:
                                 audio_playing = bool(is_playing_fn())
 
                             if not audio_playing:
-                                self.audio.play_audio_file(self.ack_earcon_path)
+                                with (self._audio_lock or contextlib.nullcontext()):
+                                    self.audio.play_audio_file(self.ack_earcon_path)
                             elif self.config.debug:
                                 logging.info("Skipping ack earcon: audio is already playing")
                         except Exception as e:
@@ -680,7 +687,8 @@ class WakeWordMode:
         if self.config.wake_confirmation_beep and self.confirmation_beep_path:
             if os.path.exists(self.confirmation_beep_path):
                 try:
-                    self.audio.play_audio_file(self.confirmation_beep_path)
+                    with (self._audio_lock or contextlib.nullcontext()):
+                        self.audio.play_audio_file(self.confirmation_beep_path)
                 except Exception as e:
                     if self.config.debug:
                         logging.warning(f"Failed to play beep: {e}")
@@ -1256,7 +1264,11 @@ class WakeWordMode:
             player_error = [""]
 
             def player_worker():
-                success, failed_file, error = self.audio.play_audio_queue(audio_queue, stop_event=stop_event)
+                # Pass the lock so it is acquired per-file, not across the
+                # entire queue-drain loop (which blocks on queue.get() between files).
+                success, failed_file, error = self.audio.play_audio_queue(
+                    audio_queue, stop_event=stop_event, playback_lock=self._audio_lock
+                )
                 player_success[0] = bool(success)
                 if failed_file:
                     player_failed_file[0] = str(failed_file)
@@ -1416,50 +1428,51 @@ class WakeWordMode:
                     logging.info(f"Playing {len(self.tts_files)} TTS files")
 
                 # Play files with barge-in support via stop_event in play_audio_file()
-                for idx, file_path in enumerate(self.tts_files):
-                    # Play the file, passing stop_event for mid-playback interruption
-                    try:
-                        self.audio.play_audio_file(
-                            file_path,
-                            stop_event=self.barge_in_event if barge_in_enabled else None
-                        )
-                    except Exception as e:
-                        if self.config.debug:
-                            logging.error(f"Audio playback failed for file '{file_path}': {e}")
-                            # In debug mode, preserve the failed file itself for diagnostics.
-                            # The failed file will remain in the temp directory for manual inspection.
-                            # Only clean up unplayed files after it (start at idx + 1).
-                            self._cleanup_remaining_tts_files(self.tts_files[idx + 1:])
-                        else:
-                            print("Audio playback failed. Continuing with text only.")
-                            # In non-debug mode, clean up the failed file and all remaining files
-                            # by starting cleanup at the failed file (start at idx).
-                            self._cleanup_remaining_tts_files(self.tts_files[idx:])
-                        break
+                with (self._audio_lock or contextlib.nullcontext()):
+                    for idx, file_path in enumerate(self.tts_files):
+                        # Play the file, passing stop_event for mid-playback interruption
+                        try:
+                            self.audio.play_audio_file(
+                                file_path,
+                                stop_event=self.barge_in_event if barge_in_enabled else None
+                            )
+                        except Exception as e:
+                            if self.config.debug:
+                                logging.error(f"Audio playback failed for file '{file_path}': {e}")
+                                # In debug mode, preserve the failed file itself for diagnostics.
+                                # The failed file will remain in the temp directory for manual inspection.
+                                # Only clean up unplayed files after it (start at idx + 1).
+                                self._cleanup_remaining_tts_files(self.tts_files[idx + 1:])
+                            else:
+                                print("Audio playback failed. Continuing with text only.")
+                                # In non-debug mode, clean up the failed file and all remaining files
+                                # by starting cleanup at the failed file (start at idx).
+                                self._cleanup_remaining_tts_files(self.tts_files[idx:])
+                            break
 
-                    # Check for barge-in after playing file (might have interrupted mid-playback)
-                    # Note: barge_in_event may be None if Porcupine failed to initialize
-                    if barge_in_enabled and self.barge_in_event and self.barge_in_event.is_set():
-                        if self.config.debug:
-                            logging.info("Barge-in detected, interrupted during playback")
-                        # First, clean up the file we just played successfully
+                        # Check for barge-in after playing file (might have interrupted mid-playback)
+                        # Note: barge_in_event may be None if Porcupine failed to initialize
+                        if barge_in_enabled and self.barge_in_event and self.barge_in_event.is_set():
+                            if self.config.debug:
+                                logging.info("Barge-in detected, interrupted during playback")
+                            # First, clean up the file we just played successfully
+                            try:
+                                if os.path.exists(file_path):
+                                    os.remove(file_path)
+                            except OSError as e:
+                                if self.config.debug:
+                                    logging.warning(f"Failed to delete TTS file after barge-in: {e}")
+                            # Then, clean up remaining unplayed files
+                            self._cleanup_remaining_tts_files(self.tts_files[idx + 1:])
+                            break
+
+                        # Clean up the file we just played successfully
                         try:
                             if os.path.exists(file_path):
                                 os.remove(file_path)
                         except OSError as e:
                             if self.config.debug:
-                                logging.warning(f"Failed to delete TTS file after barge-in: {e}")
-                        # Then, clean up remaining unplayed files
-                        self._cleanup_remaining_tts_files(self.tts_files[idx + 1:])
-                        break
-                    
-                    # Clean up the file we just played successfully
-                    try:
-                        if os.path.exists(file_path):
-                            os.remove(file_path)
-                    except OSError as e:
-                        if self.config.debug:
-                            logging.warning(f"Failed to delete TTS file: {e}")
+                                logging.warning(f"Failed to delete TTS file: {e}")
 
             except Exception as e:
                 if self.config.debug:
@@ -1507,7 +1520,8 @@ class WakeWordMode:
             if self.config.wake_confirmation_beep and self.confirmation_beep_path:
                 if os.path.exists(self.confirmation_beep_path):
                     try:
-                        self.audio.play_audio_file(self.confirmation_beep_path)
+                        with (self._audio_lock or contextlib.nullcontext()):
+                            self.audio.play_audio_file(self.confirmation_beep_path)
                     except Exception as e:
                         if self.config.debug:
                             logging.warning(f"Failed to play beep: {e}")

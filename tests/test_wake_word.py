@@ -44,6 +44,16 @@ class TestWakeWordModeInitialization(unittest.TestCase):
         self.assertEqual(mode.ai, self.mock_ai)
         self.assertEqual(mode.audio, self.mock_audio)
 
+    def test_audio_lock_defaults_to_none(self):
+        mode = WakeWordMode(self.mock_config, self.mock_ai, self.mock_audio)
+        self.assertIsNone(mode._audio_lock)
+
+    def test_audio_lock_stored_when_provided(self):
+        import threading
+        lock = threading.Lock()
+        mode = WakeWordMode(self.mock_config, self.mock_ai, self.mock_audio, audio_lock=lock)
+        self.assertIs(mode._audio_lock, lock)
+
 
 class TestWakeWordModeInitialize(unittest.TestCase):
     def setUp(self):

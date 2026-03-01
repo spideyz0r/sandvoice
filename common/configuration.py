@@ -4,13 +4,13 @@ from common.audio_device_detection import get_optimal_channels, log_device_info
 
 class Config:
     def __init__(self):
-        self.config_file = f"{os.environ['HOME']}/.sandvoice/config.yaml"
+        self.config_file = os.path.join(os.path.expanduser("~"), ".sandvoice", "config.yaml")
         self.defaults  = {
             "channels": None,
             "bitrate": 128,
             "rate": 44100,
             "chunk": 1024,
-            "tmp_files_path": f"{os.environ['HOME']}/.sandvoice/tmp/",
+            "tmp_files_path": os.path.join(os.path.expanduser("~"), ".sandvoice", "tmp") + os.sep,
             "botname": "SandVoice",
             "timezone": "EST",
             "location": "Toronto, ON, CA",
@@ -51,7 +51,7 @@ class Config:
             "api_timeout": 10,
             "api_retry_attempts": 3,
             "enable_error_logging": "disabled",
-            "error_log_path": f"{os.environ['HOME']}/.sandvoice/error.log",
+            "error_log_path": os.path.join(os.path.expanduser("~"), ".sandvoice", "error.log"),
             "fallback_to_text_on_audio_error": "enabled",
 
             # LLM streaming (Phase 1: stream text assembly)
@@ -90,6 +90,11 @@ class Config:
             "voice_ack_earcon": "disabled",
             "voice_ack_earcon_freq": 600,
             "voice_ack_earcon_duration": 0.06,
+
+            # Task Scheduler (Plan 21)
+            "scheduler_enabled": "disabled",
+            "scheduler_poll_interval": 30,
+            "scheduler_db_path": os.path.join(os.path.expanduser("~"), ".sandvoice", "sandvoice.db"),
         }
         self.config = self.load_defaults()
         self.load_config()
@@ -189,6 +194,22 @@ class Config:
         self.visual_state_indicator = self.get("visual_state_indicator").lower() == "enabled"
         # Barge-in feature
         self.barge_in = self.get("barge_in").lower() == "enabled"
+
+        # Task Scheduler
+        raw_scheduler_enabled = self.get("scheduler_enabled")
+        if isinstance(raw_scheduler_enabled, bool):
+            self.scheduler_enabled = raw_scheduler_enabled
+        else:
+            self.scheduler_enabled = str(raw_scheduler_enabled or "disabled").strip().lower() in (
+                "enabled", "true", "yes", "1", "on"
+            )
+        raw_poll = self.get("scheduler_poll_interval")
+        try:
+            self.scheduler_poll_interval = max(1, int(raw_poll)) if raw_poll is not None else 30
+        except (TypeError, ValueError):
+            self.scheduler_poll_interval = 30
+        raw_db_path = self.get("scheduler_db_path")
+        self.scheduler_db_path = str(raw_db_path) if raw_db_path else self.defaults["scheduler_db_path"]
 
         # Voice UX
         voice_ack_earcon = self.get("voice_ack_earcon")

@@ -7,9 +7,31 @@ from common.configuration import Config
 from common.audio import Audio
 from common.ai import AI, pop_streaming_chunk
 from common.error_handling import handle_api_error
+from common.db import SchedulerDB
+from common.scheduler import TaskScheduler
 
-import argparse, importlib, os, sys
+import argparse, atexit, importlib, os, signal, sys
 import queue, threading, time
+
+class _SchedulerContext:
+    """Proxy passed to plugins when invoked from the scheduler.
+
+    Exposes the scheduler-dedicated AI instance as `.ai` so plugins don't
+    accidentally mutate the interactive conversation history.
+    All other attributes delegate to the underlying SandVoice instance.
+    """
+
+    def __init__(self, base, scheduler_ai):
+        self._base = base
+        self.ai = scheduler_ai
+
+    def route_message(self, *args, **kwargs):
+        """Route messages via the scheduler AI to avoid polluting interactive history."""
+        return self._base._scheduler_route_message(*args, **kwargs)
+
+    def __getattr__(self, name):
+        return getattr(self._base, name)
+
 
 class SandVoice:
     def __init__(self):
@@ -20,6 +42,10 @@ class SandVoice:
             os.makedirs(self.config.tmp_files_path)
         self.plugins = {}
         self.load_plugins()
+        self._ai_audio_lock = threading.Lock()
+        self._scheduler_audio = None  # lazily created on first scheduler voice task
+        self._scheduler_ai = None  # set by _init_scheduler() on success; None when disabled
+        self.scheduler = self._init_scheduler()
         if self.args.cli:
             self.config.cli_input = True
 
@@ -62,6 +88,71 @@ class SandVoice:
                     self.plugins[module_name] = module.Plugin()
                 elif hasattr(module, 'process'):
                     self.plugins[module_name] = module.process
+
+    def _init_scheduler(self):
+        if not self.config.scheduler_enabled:
+            return None
+        ai = None
+        db = None
+        try:
+            ai = AI(self.config)
+            db = SchedulerDB(self.config.scheduler_db_path)
+            scheduler = TaskScheduler(
+                db=db,
+                speak_fn=self._scheduler_speak,
+                invoke_plugin_fn=self._scheduler_invoke_plugin,
+                poll_interval_s=self.config.scheduler_poll_interval,
+            )
+            self._scheduler_ai = ai
+            return scheduler
+        except Exception as e:
+            print(f"Warning: scheduler disabled — failed to initialize: {e}")
+            if db is not None:
+                try:
+                    db.close()
+                except Exception:
+                    pass
+            self._scheduler_ai = None
+            return None
+
+    def _scheduler_speak(self, text):
+        if not text or not self.config.bot_voice:
+            return
+        tts_files = self._scheduler_ai.text_to_speech(text)
+        if not tts_files:
+            return
+        with self._ai_audio_lock:
+            if self._scheduler_audio is None:
+                self._scheduler_audio = Audio(self.config)
+            success, failed_file, error = self._scheduler_audio.play_audio_files(tts_files)
+            if not success and self.config.debug:
+                print(f"Scheduler speak: audio playback failed for '{failed_file}': {error}")
+
+    def _scheduler_invoke_plugin(self, plugin_name, query, refresh_only):
+        route = {"route": plugin_name}
+        result = self._scheduler_route_message(query or plugin_name, route)
+        if not refresh_only and self.config.bot_voice and result:
+            tts_files = self._scheduler_ai.text_to_speech(result)
+            if tts_files:
+                with self._ai_audio_lock:
+                    if self._scheduler_audio is None:
+                        self._scheduler_audio = Audio(self.config)
+                    success, failed_file, error = self._scheduler_audio.play_audio_files(tts_files)
+                    if not success and self.config.debug:
+                        print(f"Scheduler plugin: audio playback failed for '{failed_file}': {error}")
+        return result
+
+    def _scheduler_route_message(self, user_input, route):
+        """Route a scheduler-triggered message using a dedicated AI instance to avoid
+        polluting the interactive conversation history."""
+        if self.config.debug:
+            print(route)
+            print(f"Plugins: {str(self.plugins)}")
+        if route["route"] in self.plugins:
+            ctx = _SchedulerContext(self, self._scheduler_ai)
+            return self.plugins[route["route"]](user_input, route, ctx)
+        else:
+            return self._scheduler_ai.generate_response(user_input).content
 
     def route_message(self, user_input, route):
         if self.config.debug:
@@ -207,7 +298,11 @@ class SandVoice:
             player_error = [""]
 
             def player_worker():
-                success, failed_file, error = audio.play_audio_queue(audio_queue, stop_event=stop_event)
+                # Pass the lock so it is acquired per-file, not across the
+                # entire queue-drain loop (which blocks on queue.get() between files).
+                success, failed_file, error = audio.play_audio_queue(
+                    audio_queue, stop_event=stop_event, playback_lock=self._ai_audio_lock
+                )
                 player_success[0] = bool(success)
                 if failed_file:
                     player_failed_file[0] = str(failed_file)
@@ -221,81 +316,85 @@ class SandVoice:
             player_thread = threading.Thread(target=player_worker, name="stream-audio-player", daemon=True)
             tts_thread.start()
             player_thread.start()
-
-            boundary = str(getattr(self.config, "stream_tts_boundary", "sentence") or "sentence").strip().lower()
             try:
-                target_s = int(getattr(self.config, "stream_tts_first_chunk_target_s", 6) or 6)
-            except Exception:
-                target_s = 6
 
-            # Rough heuristic for English: ~35 characters/sec spoken.
-            chars_per_second = 35
-            first_min_chars = max(120, int(target_s * chars_per_second))
-            next_min_chars = 200
+                boundary = str(getattr(self.config, "stream_tts_boundary", "sentence") or "sentence").strip().lower()
+                try:
+                    target_s = int(getattr(self.config, "stream_tts_first_chunk_target_s", 6) or 6)
+                except Exception:
+                    target_s = 6
 
-            stream_print_deltas = bool(getattr(self.config, "stream_print_deltas", False))
+                # Rough heuristic for English: ~35 characters/sec spoken.
+                chars_per_second = 35
+                first_min_chars = max(120, int(target_s * chars_per_second))
+                next_min_chars = 200
 
-            buffer = ""
-            full_parts = []
-            is_first = True
+                stream_print_deltas = bool(getattr(self.config, "stream_print_deltas", False))
 
-            if self.config.debug and stream_print_deltas:
-                print(f"{self.config.botname}: ", end="", flush=True)
+                buffer = ""
+                full_parts = []
+                is_first = True
 
-            try:
-                for delta in self.ai.stream_response_deltas(user_input):
-                    full_parts.append(delta)
-                    if stop_event.is_set():
-                        # Voice path is interrupted (e.g. TTS/playback failure). Keep collecting deltas
-                        # so we can still print the final response text.
-                        continue
-
-                    # If TTS production failed, keep collecting deltas for final text output,
-                    # but stop producing new audio chunks.
-                    if production_failed_event.is_set():
-                        continue
-
-                    buffer += delta
-                    while not stop_event.is_set():
-                        min_chars = first_min_chars if is_first else next_min_chars
-                        chunk, buffer = pop_streaming_chunk(buffer, boundary=boundary, min_chars=min_chars)
-                        if chunk is None:
-                            break
-                        is_first = False
-
-                        # Enqueue chunk for TTS generation, respecting backpressure.
-                        if not _put_text_queue(chunk):
-                            stop_event.set()
-                            break
-            except Exception as e:
-                stop_event.set()
                 if self.config.debug and stream_print_deltas:
-                    # Ensure the error message starts on a new line, separate from streamed output.
-                    print()
-                print(handle_api_error(e, service_name="OpenAI GPT (streaming)"))
+                    print(f"{self.config.botname}: ", end="", flush=True)
 
-            # Flush remaining text as final chunk (best effort)
-            if (not stop_event.is_set()) and (not production_failed_event.is_set()):
-                final_chunk = buffer.strip()
-                if final_chunk:
-                    if not _put_text_queue(final_chunk):
-                        stop_event.set()
+                try:
+                    for delta in self.ai.stream_response_deltas(user_input):
+                        full_parts.append(delta)
+                        if stop_event.is_set():
+                            # Voice path is interrupted (e.g. TTS/playback failure). Keep collecting deltas
+                            # so we can still print the final response text.
+                            continue
 
-            # Signal TTS worker completion
-            # Ensure the sentinel is eventually enqueued so the TTS worker can exit.
-            # Even if stop_event is set, we still try to enqueue the sentinel to unblock.
-            sentinel_enqueued = _put_text_queue(None, allow_when_stopped=True)
-            if not sentinel_enqueued:
-                # If the queue is stuck full (e.g., hung/slow TTS worker), force an exit path.
+                        # If TTS production failed, keep collecting deltas for final text output,
+                        # but stop producing new audio chunks.
+                        if production_failed_event.is_set():
+                            continue
+
+                        buffer += delta
+                        while not stop_event.is_set():
+                            min_chars = first_min_chars if is_first else next_min_chars
+                            chunk, buffer = pop_streaming_chunk(buffer, boundary=boundary, min_chars=min_chars)
+                            if chunk is None:
+                                break
+                            is_first = False
+
+                            # Enqueue chunk for TTS generation, respecting backpressure.
+                            if not _put_text_queue(chunk):
+                                stop_event.set()
+                                break
+                except Exception as e:
+                    stop_event.set()
+                    if self.config.debug and stream_print_deltas:
+                        # Ensure the error message starts on a new line, separate from streamed output.
+                        print()
+                    print(handle_api_error(e, service_name="OpenAI GPT (streaming)"))
+
+                # Flush remaining text as final chunk (best effort)
+                if (not stop_event.is_set()) and (not production_failed_event.is_set()):
+                    final_chunk = buffer.strip()
+                    if final_chunk:
+                        if not _put_text_queue(final_chunk):
+                            stop_event.set()
+
+                # Signal TTS worker completion
+                # Ensure the sentinel is eventually enqueued so the TTS worker can exit.
+                # Even if stop_event is set, we still try to enqueue the sentinel to unblock.
+                sentinel_enqueued = _put_text_queue(None, allow_when_stopped=True)
+                if not sentinel_enqueued:
+                    # If the queue is stuck full (e.g., hung/slow TTS worker), force an exit path.
+                    stop_event.set()
+                    if self.config.debug:
+                        print("Warning: failed to enqueue streaming TTS sentinel; forcing stop_event")
+
+                # Wait for threads to finish playback.
+                tts_join_timeout = int(getattr(self.config, "stream_tts_tts_join_timeout_s", 30) or 30)
+                player_join_timeout = int(getattr(self.config, "stream_tts_player_join_timeout_s", 60) or 60)
+                tts_thread.join(timeout=tts_join_timeout)
+                player_thread.join(timeout=player_join_timeout)
+            except Exception:
                 stop_event.set()
-                if self.config.debug:
-                    print("Warning: failed to enqueue streaming TTS sentinel; forcing stop_event")
-
-            # Wait for threads to finish playback.
-            tts_join_timeout = int(getattr(self.config, "stream_tts_tts_join_timeout_s", 30) or 30)
-            player_join_timeout = int(getattr(self.config, "stream_tts_player_join_timeout_s", 60) or 60)
-            tts_thread.join(timeout=tts_join_timeout)
-            player_thread.join(timeout=player_join_timeout)
+                raise
 
             if (tts_thread.is_alive() or player_thread.is_alive()) and self.config.debug:
                 print("Warning: streaming TTS threads did not exit cleanly within timeout")
@@ -342,7 +441,8 @@ class SandVoice:
                                 "or another internal TTS issue. Skipping audio playback."
                             )
                 else:
-                    success, failed_file, error = audio.play_audio_files(tts_files)
+                    with self._ai_audio_lock:
+                        success, failed_file, error = audio.play_audio_files(tts_files)
                     if not success:
                         if self.config.debug:
                             print(f"Error during audio playback for file '{failed_file}': {error}")
@@ -356,6 +456,28 @@ class SandVoice:
 
 if __name__ == "__main__":
     sandvoice = SandVoice()
+
+    if sandvoice.scheduler:
+        sandvoice.scheduler.start()
+
+    def _shutdown(signum, frame):
+        if sandvoice.scheduler:
+            # Signal the scheduler to stop without blocking in the signal handler.
+            # The scheduler thread is a daemon; it will be cleaned up at process exit.
+            sandvoice.scheduler.stop(timeout=0)
+        if signum == signal.SIGINT:
+            # Raise KeyboardInterrupt so existing handlers (e.g. WakeWordMode) still work.
+            signal.default_int_handler(signum, frame)
+        else:
+            sys.exit(0)
+
+    signal.signal(signal.SIGINT, _shutdown)
+    signal.signal(signal.SIGTERM, _shutdown)
+
+    if sandvoice.scheduler:
+        # On normal interpreter exit (including after sys.exit()), join the
+        # scheduler thread and close the DB so in-flight writes are not cut short.
+        atexit.register(sandvoice.scheduler.close)
 
     # Wake word mode: hands-free voice activation
     if sandvoice.args.wake_word:
@@ -375,6 +497,7 @@ if __name__ == "__main__":
             audio,
             route_message=sandvoice.route_message,
             plugins=sandvoice.plugins,
+            audio_lock=sandvoice._ai_audio_lock,
         )
         wake_word_mode.run()
     # Default mode (ESC key) or CLI mode
