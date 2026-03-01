@@ -152,6 +152,10 @@ class TaskScheduler:
         return calc_next_run(schedule_type, schedule_value)
 
     def _loop(self):
+        # Run an immediate tick so tasks already due at startup are not delayed
+        # by up to poll_interval seconds.
+        if not self._stop_event.is_set():
+            self._tick()
         while not self._stop_event.wait(self._poll_interval):
             self._tick()
 

@@ -23,6 +23,7 @@ class SandVoice:
         self.plugins = {}
         self.load_plugins()
         self._ai_audio_lock = threading.Lock()
+        self._scheduler_audio = None  # lazily created on first scheduler voice task
         self.scheduler = self._init_scheduler()
         if self.args.cli:
             self.config.cli_input = True
@@ -71,35 +72,34 @@ class SandVoice:
         if not self.config.scheduler_enabled:
             return None
         db = SchedulerDB(self.config.scheduler_db_path)
-        audio = Audio(self.config)
         return TaskScheduler(
             db=db,
-            speak_fn=self._scheduler_speak(audio),
-            invoke_plugin_fn=self._scheduler_invoke_plugin(audio),
+            speak_fn=self._scheduler_speak,
+            invoke_plugin_fn=self._scheduler_invoke_plugin,
             poll_interval_s=self.config.scheduler_poll_interval,
         )
 
-    def _scheduler_speak(self, audio):
-        def speak(text):
-            if not text or not self.config.bot_voice:
-                return
-            with self._ai_audio_lock:
-                tts_files = self.ai.text_to_speech(text)
-                if tts_files:
-                    audio.play_audio_files(tts_files)
-        return speak
+    def _scheduler_speak(self, text):
+        if not text or not self.config.bot_voice:
+            return
+        with self._ai_audio_lock:
+            if self._scheduler_audio is None:
+                self._scheduler_audio = Audio(self.config)
+            tts_files = self.ai.text_to_speech(text)
+            if tts_files:
+                self._scheduler_audio.play_audio_files(tts_files)
 
-    def _scheduler_invoke_plugin(self, audio):
-        def invoke(plugin_name, query, refresh_only):
-            with self._ai_audio_lock:
-                route = {"route": plugin_name}
-                result = self.route_message(query or plugin_name, route)
-                if not refresh_only and self.config.bot_voice and result:
-                    tts_files = self.ai.text_to_speech(result)
-                    if tts_files:
-                        audio.play_audio_files(tts_files)
-            return result
-        return invoke
+    def _scheduler_invoke_plugin(self, plugin_name, query, refresh_only):
+        with self._ai_audio_lock:
+            route = {"route": plugin_name}
+            result = self.route_message(query or plugin_name, route)
+            if not refresh_only and self.config.bot_voice and result:
+                if self._scheduler_audio is None:
+                    self._scheduler_audio = Audio(self.config)
+                tts_files = self.ai.text_to_speech(result)
+                if tts_files:
+                    self._scheduler_audio.play_audio_files(tts_files)
+        return result
 
     def route_message(self, user_input, route):
         if self.config.debug:
@@ -257,6 +257,9 @@ class SandVoice:
             # Use daemon threads so unexpected main-thread exits don't hang shutdown.
             tts_thread = threading.Thread(target=tts_worker, name="stream-tts-worker", daemon=True)
             player_thread = threading.Thread(target=player_worker, name="stream-audio-player", daemon=True)
+            # Serialize with scheduler audio to prevent pygame mixer contention
+            # while streaming TTS worker and player threads are active.
+            self._ai_audio_lock.acquire()
             tts_thread.start()
             player_thread.start()
 
@@ -332,8 +335,11 @@ class SandVoice:
             # Wait for threads to finish playback.
             tts_join_timeout = int(getattr(self.config, "stream_tts_tts_join_timeout_s", 30) or 30)
             player_join_timeout = int(getattr(self.config, "stream_tts_player_join_timeout_s", 60) or 60)
-            tts_thread.join(timeout=tts_join_timeout)
-            player_thread.join(timeout=player_join_timeout)
+            try:
+                tts_thread.join(timeout=tts_join_timeout)
+                player_thread.join(timeout=player_join_timeout)
+            finally:
+                self._ai_audio_lock.release()
 
             if (tts_thread.is_alive() or player_thread.is_alive()) and self.config.debug:
                 print("Warning: streaming TTS threads did not exit cleanly within timeout")
