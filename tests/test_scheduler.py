@@ -487,6 +487,32 @@ class TestTaskScheduler(unittest.TestCase):
         self.assertIsNone(db._conn)
         import shutil; shutil.rmtree(tmp, ignore_errors=True)
 
+    def test_once_task_stays_active_on_transient_error(self):
+        """Once tasks that fail with a transient error must remain active for retry."""
+        task_id = self.db.add_task(
+            name="once-fail", schedule_type="once",
+            schedule_value="2099-01-01T00:00:00+00:00",
+            action_type="speak", action_payload={"text": "hello"},
+            next_run=self._past(),
+        )
+        # Make speak_fn raise a transient (non-permanent) error
+        self.speak_fn.side_effect = RuntimeError("TTS service unavailable")
+        self.scheduler._tick()
+        task = self.db.get_task(task_id)
+        self.assertEqual(task.status, "active",
+                         "once task must stay active after transient error")
+        self.assertIsNotNone(task.next_run)
+
+    def test_set_status_invalid_raises_value_error(self):
+        """set_status() must raise ValueError for unknown status strings."""
+        future = (datetime.now(timezone.utc) + timedelta(seconds=60)).isoformat()
+        task_id = self.db.add_task(
+            name="t", schedule_type="interval", schedule_value="60",
+            action_type="speak", action_payload={}, next_run=future,
+        )
+        with self.assertRaises(ValueError):
+            self.db.set_status(task_id, "unknown_status")
+
 
 # ── calc_next_run interval validation ──────────────────────────────────────────
 

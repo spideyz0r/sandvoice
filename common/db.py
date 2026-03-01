@@ -128,7 +128,13 @@ class SchedulerDB:
                 )
             self._conn.commit()
 
+    _VALID_STATUSES = frozenset(("active", "paused", "completed"))
+
     def set_status(self, task_id: str, status: str):
+        if status not in self._VALID_STATUSES:
+            raise ValueError(
+                f"Invalid status {status!r}; must be one of {sorted(self._VALID_STATUSES)}"
+            )
         with self._lock:
             self._conn.execute(
                 "UPDATE scheduled_tasks SET status = ? WHERE id = ?",

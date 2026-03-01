@@ -224,6 +224,7 @@ class TaskScheduler:
         logger.debug("Running task '%s' (%s)", task.name, task.id)
         result = ""
         permanent_error = False
+        transient_error = False
         try:
             result = self._dispatch(task) or ""
         except _PermanentTaskError as e:
@@ -233,6 +234,7 @@ class TaskScheduler:
         except Exception as e:
             logger.error("Task '%s' failed: %s", task.name, e)
             result = str(e)
+            transient_error = True
 
         if permanent_error:
             next_run = None
@@ -240,7 +242,18 @@ class TaskScheduler:
         else:
             try:
                 next_run = calc_next_run(task.schedule_type, task.schedule_value)
-                status = "completed" if next_run is None else "active"
+                if next_run is None and transient_error:
+                    # 'once' task failed transiently: keep it active so it can
+                    # be retried on the next scheduler tick.
+                    logger.warning(
+                        "Task '%s' (%s) is a one-shot task that failed with a "
+                        "transient error; keeping active for retry.",
+                        task.name, task.id,
+                    )
+                    next_run = task.next_run
+                    status = "active"
+                else:
+                    status = "completed" if next_run is None else "active"
             except Exception as e:
                 logger.error("Scheduler: failed to compute next run for task '%s': %s", task.id, e)
                 error_msg = f"schedule error: {e}"
