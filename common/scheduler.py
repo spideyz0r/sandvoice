@@ -123,6 +123,7 @@ class TaskScheduler:
             plugin_name = action_payload.get("plugin")
             if not isinstance(plugin_name, str) or not plugin_name.strip():
                 raise ValueError("'plugin' action requires non-empty 'plugin' in action_payload")
+            action_payload["plugin"] = plugin_name.strip()
             query = action_payload.get("query")
             if query is not None and not isinstance(query, str):
                 raise ValueError("'plugin' action 'query' must be a string or None in action_payload")
@@ -261,6 +262,7 @@ class TaskScheduler:
                 raise _PermanentTaskError(
                     "missing or empty 'plugin' in action_payload for 'plugin' task"
                 )
+            plugin_name = plugin_name.strip()
             raw_query = payload.get("query", "")
             if raw_query is None:
                 query = ""

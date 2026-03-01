@@ -602,5 +602,55 @@ class TestSandVoiceSchedulerInit(unittest.TestCase):
         self.assertEqual(result, "scheduler routed")
 
 
+class TestAddTaskPluginNameNormalization(unittest.TestCase):
+    """add_task() must strip leading/trailing whitespace from plugin name."""
+
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp()
+        self.db = SchedulerDB(os.path.join(self.tmp, "test.db"))
+        self.scheduler = TaskScheduler(
+            self.db,
+            speak_fn=MagicMock(),
+            invoke_plugin_fn=MagicMock(return_value="ok"),
+        )
+
+    def tearDown(self):
+        self.db.close()
+        import shutil
+        shutil.rmtree(self.tmp, ignore_errors=True)
+
+    def test_add_task_plugin_name_whitespace_stripped(self):
+        """add_task() must normalize plugin name by stripping whitespace."""
+        payload = {"plugin": "  weather  "}
+        self.scheduler.add_task(
+            name="ws-plugin", schedule_type="interval", schedule_value="60",
+            action_type="plugin", action_payload=payload,
+        )
+        self.assertEqual(payload["plugin"], "weather")
+
+    def test_dispatch_plugin_name_stripped_before_invoke(self):
+        """_dispatch() must strip plugin_name before calling invoke_plugin_fn."""
+        from common.db import SchedulerDB as SDB
+        tmp2 = tempfile.mkdtemp()
+        try:
+            db2 = SDB(os.path.join(tmp2, "t.db"))
+            invoke_fn = MagicMock(return_value="ok")
+            sched = TaskScheduler(db2, speak_fn=MagicMock(), invoke_plugin_fn=invoke_fn)
+            # Manually craft a task with whitespace-padded plugin name in JSON
+            task_id = db2.add_task(
+                name="pad", schedule_type="interval", schedule_value="60",
+                action_type="plugin",
+                action_payload={"plugin": "  weather  "},
+                next_run=(datetime.now(timezone.utc) - timedelta(seconds=1)).isoformat(),
+            )
+            task = db2.get_task(task_id)
+            sched._dispatch(task)
+            invoke_fn.assert_called_once_with("weather", "", False)
+            db2.close()
+        finally:
+            import shutil
+            shutil.rmtree(tmp2, ignore_errors=True)
+
+
 if __name__ == "__main__":
     unittest.main()
