@@ -92,7 +92,7 @@ class Config:
             "voice_ack_earcon_duration": 0.06,
 
             # Task Scheduler (Plan 21)
-            "scheduler_enabled": "enabled",
+            "scheduler_enabled": "disabled",
             "scheduler_poll_interval": 30,
             "scheduler_db_path": os.path.join(os.path.expanduser("~"), ".sandvoice", "sandvoice.db"),
         }
@@ -196,7 +196,7 @@ class Config:
         self.barge_in = self.get("barge_in").lower() == "enabled"
 
         # Task Scheduler
-        self.scheduler_enabled = str(self.get("scheduler_enabled") or "enabled").lower() == "enabled"
+        self.scheduler_enabled = str(self.get("scheduler_enabled") or "disabled").lower() == "enabled"
         raw_poll = self.get("scheduler_poll_interval")
         try:
             self.scheduler_poll_interval = max(1, int(raw_poll)) if raw_poll is not None else 30

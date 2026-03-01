@@ -87,22 +87,23 @@ class SandVoice:
     def _scheduler_speak(self, text):
         if not text or not self.config.bot_voice:
             return
+        tts_files = self.ai.text_to_speech(text)
+        if not tts_files:
+            return
         with self._ai_audio_lock:
             if self._scheduler_audio is None:
                 self._scheduler_audio = Audio(self.config)
-            tts_files = self.ai.text_to_speech(text)
-            if tts_files:
-                self._scheduler_audio.play_audio_files(tts_files)
+            self._scheduler_audio.play_audio_files(tts_files)
 
     def _scheduler_invoke_plugin(self, plugin_name, query, refresh_only):
-        with self._ai_audio_lock:
-            route = {"route": plugin_name}
-            result = self._scheduler_route_message(query or plugin_name, route)
-            if not refresh_only and self.config.bot_voice and result:
-                if self._scheduler_audio is None:
-                    self._scheduler_audio = Audio(self.config)
-                tts_files = self.ai.text_to_speech(result)
-                if tts_files:
+        route = {"route": plugin_name}
+        result = self._scheduler_route_message(query or plugin_name, route)
+        if not refresh_only and self.config.bot_voice and result:
+            tts_files = self.ai.text_to_speech(result)
+            if tts_files:
+                with self._ai_audio_lock:
+                    if self._scheduler_audio is None:
+                        self._scheduler_audio = Audio(self.config)
                     self._scheduler_audio.play_audio_files(tts_files)
         return result
 
