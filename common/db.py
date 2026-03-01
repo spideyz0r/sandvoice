@@ -145,4 +145,7 @@ class SchedulerDB:
         )
 
     def close(self):
-        self._conn.close()
+        with self._lock:
+            if self._conn is not None:
+                self._conn.close()
+                self._conn = None

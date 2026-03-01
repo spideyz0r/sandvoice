@@ -330,6 +330,45 @@ class TestTaskScheduler(unittest.TestCase):
         self.scheduler.close(timeout=2)
         self.assertTrue(self.scheduler._stop_event.is_set())
 
+    def test_dispatch_speak_missing_text_permanent_error(self):
+        """speak tasks with missing/empty 'text' in payload are permanent errors."""
+        task_id = self.db.add_task(
+            name="no-text", schedule_type="interval", schedule_value="60",
+            action_type="speak", action_payload={"text": "hi"},
+            next_run=self._past(),
+        )
+        bad_task = self.db.get_task(task_id)
+        object.__setattr__(bad_task, "action_payload", '{"text": ""}')
+        with patch.object(self.db, "get_due_tasks", return_value=[bad_task]):
+            self.scheduler._tick()
+        task = self.db.get_task(task_id)
+        self.assertEqual(task.status, "completed")
+
+    def test_dispatch_plugin_missing_plugin_permanent_error(self):
+        """plugin tasks with missing/empty 'plugin' in payload are permanent errors."""
+        task_id = self.db.add_task(
+            name="no-plugin", schedule_type="interval", schedule_value="60",
+            action_type="speak", action_payload={"text": "hi"},
+            next_run=self._past(),
+        )
+        bad_task = self.db.get_task(task_id)
+        object.__setattr__(bad_task, "action_type", "plugin")
+        object.__setattr__(bad_task, "action_payload", '{"query": "weather"}')
+        with patch.object(self.db, "get_due_tasks", return_value=[bad_task]):
+            self.scheduler._tick()
+        task = self.db.get_task(task_id)
+        self.assertEqual(task.status, "completed")
+
+    def test_db_close_idempotent(self):
+        """SchedulerDB.close() must be safe to call and sets conn to None."""
+        from common.db import SchedulerDB
+        import tempfile, os
+        tmp = tempfile.mkdtemp()
+        db = SchedulerDB(os.path.join(tmp, "t.db"))
+        db.close()
+        self.assertIsNone(db._conn)
+        import shutil; shutil.rmtree(tmp, ignore_errors=True)
+
 
 # ── calc_next_run interval validation ──────────────────────────────────────────
 

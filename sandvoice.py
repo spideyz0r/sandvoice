@@ -260,82 +260,82 @@ class SandVoice:
             # Serialize with scheduler audio to prevent pygame mixer contention
             # while streaming TTS worker and player threads are active.
             self._ai_audio_lock.acquire()
-            tts_thread.start()
-            player_thread.start()
-
-            boundary = str(getattr(self.config, "stream_tts_boundary", "sentence") or "sentence").strip().lower()
             try:
-                target_s = int(getattr(self.config, "stream_tts_first_chunk_target_s", 6) or 6)
-            except Exception:
-                target_s = 6
+                tts_thread.start()
+                player_thread.start()
 
-            # Rough heuristic for English: ~35 characters/sec spoken.
-            chars_per_second = 35
-            first_min_chars = max(120, int(target_s * chars_per_second))
-            next_min_chars = 200
+                boundary = str(getattr(self.config, "stream_tts_boundary", "sentence") or "sentence").strip().lower()
+                try:
+                    target_s = int(getattr(self.config, "stream_tts_first_chunk_target_s", 6) or 6)
+                except Exception:
+                    target_s = 6
 
-            stream_print_deltas = bool(getattr(self.config, "stream_print_deltas", False))
+                # Rough heuristic for English: ~35 characters/sec spoken.
+                chars_per_second = 35
+                first_min_chars = max(120, int(target_s * chars_per_second))
+                next_min_chars = 200
 
-            buffer = ""
-            full_parts = []
-            is_first = True
+                stream_print_deltas = bool(getattr(self.config, "stream_print_deltas", False))
 
-            if self.config.debug and stream_print_deltas:
-                print(f"{self.config.botname}: ", end="", flush=True)
+                buffer = ""
+                full_parts = []
+                is_first = True
 
-            try:
-                for delta in self.ai.stream_response_deltas(user_input):
-                    full_parts.append(delta)
-                    if stop_event.is_set():
-                        # Voice path is interrupted (e.g. TTS/playback failure). Keep collecting deltas
-                        # so we can still print the final response text.
-                        continue
-
-                    # If TTS production failed, keep collecting deltas for final text output,
-                    # but stop producing new audio chunks.
-                    if production_failed_event.is_set():
-                        continue
-
-                    buffer += delta
-                    while not stop_event.is_set():
-                        min_chars = first_min_chars if is_first else next_min_chars
-                        chunk, buffer = pop_streaming_chunk(buffer, boundary=boundary, min_chars=min_chars)
-                        if chunk is None:
-                            break
-                        is_first = False
-
-                        # Enqueue chunk for TTS generation, respecting backpressure.
-                        if not _put_text_queue(chunk):
-                            stop_event.set()
-                            break
-            except Exception as e:
-                stop_event.set()
                 if self.config.debug and stream_print_deltas:
-                    # Ensure the error message starts on a new line, separate from streamed output.
-                    print()
-                print(handle_api_error(e, service_name="OpenAI GPT (streaming)"))
+                    print(f"{self.config.botname}: ", end="", flush=True)
 
-            # Flush remaining text as final chunk (best effort)
-            if (not stop_event.is_set()) and (not production_failed_event.is_set()):
-                final_chunk = buffer.strip()
-                if final_chunk:
-                    if not _put_text_queue(final_chunk):
-                        stop_event.set()
+                try:
+                    for delta in self.ai.stream_response_deltas(user_input):
+                        full_parts.append(delta)
+                        if stop_event.is_set():
+                            # Voice path is interrupted (e.g. TTS/playback failure). Keep collecting deltas
+                            # so we can still print the final response text.
+                            continue
 
-            # Signal TTS worker completion
-            # Ensure the sentinel is eventually enqueued so the TTS worker can exit.
-            # Even if stop_event is set, we still try to enqueue the sentinel to unblock.
-            sentinel_enqueued = _put_text_queue(None, allow_when_stopped=True)
-            if not sentinel_enqueued:
-                # If the queue is stuck full (e.g., hung/slow TTS worker), force an exit path.
-                stop_event.set()
-                if self.config.debug:
-                    print("Warning: failed to enqueue streaming TTS sentinel; forcing stop_event")
+                        # If TTS production failed, keep collecting deltas for final text output,
+                        # but stop producing new audio chunks.
+                        if production_failed_event.is_set():
+                            continue
 
-            # Wait for threads to finish playback.
-            tts_join_timeout = int(getattr(self.config, "stream_tts_tts_join_timeout_s", 30) or 30)
-            player_join_timeout = int(getattr(self.config, "stream_tts_player_join_timeout_s", 60) or 60)
-            try:
+                        buffer += delta
+                        while not stop_event.is_set():
+                            min_chars = first_min_chars if is_first else next_min_chars
+                            chunk, buffer = pop_streaming_chunk(buffer, boundary=boundary, min_chars=min_chars)
+                            if chunk is None:
+                                break
+                            is_first = False
+
+                            # Enqueue chunk for TTS generation, respecting backpressure.
+                            if not _put_text_queue(chunk):
+                                stop_event.set()
+                                break
+                except Exception as e:
+                    stop_event.set()
+                    if self.config.debug and stream_print_deltas:
+                        # Ensure the error message starts on a new line, separate from streamed output.
+                        print()
+                    print(handle_api_error(e, service_name="OpenAI GPT (streaming)"))
+
+                # Flush remaining text as final chunk (best effort)
+                if (not stop_event.is_set()) and (not production_failed_event.is_set()):
+                    final_chunk = buffer.strip()
+                    if final_chunk:
+                        if not _put_text_queue(final_chunk):
+                            stop_event.set()
+
+                # Signal TTS worker completion
+                # Ensure the sentinel is eventually enqueued so the TTS worker can exit.
+                # Even if stop_event is set, we still try to enqueue the sentinel to unblock.
+                sentinel_enqueued = _put_text_queue(None, allow_when_stopped=True)
+                if not sentinel_enqueued:
+                    # If the queue is stuck full (e.g., hung/slow TTS worker), force an exit path.
+                    stop_event.set()
+                    if self.config.debug:
+                        print("Warning: failed to enqueue streaming TTS sentinel; forcing stop_event")
+
+                # Wait for threads to finish playback.
+                tts_join_timeout = int(getattr(self.config, "stream_tts_tts_join_timeout_s", 30) or 30)
+                player_join_timeout = int(getattr(self.config, "stream_tts_player_join_timeout_s", 60) or 60)
                 tts_thread.join(timeout=tts_join_timeout)
                 player_thread.join(timeout=player_join_timeout)
             finally:

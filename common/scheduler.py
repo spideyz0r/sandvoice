@@ -93,6 +93,14 @@ class TaskScheduler:
     def close(self, timeout: Optional[float] = 5.0):
         """Stop the scheduler thread and close the database connection."""
         self.stop(timeout=timeout)
+        thread = self._thread
+        if thread is not None and thread.is_alive():
+            logger.warning(
+                "Scheduler thread is still running after close(timeout=%s); "
+                "skipping database close to avoid races.",
+                timeout,
+            )
+            return
         self._db.close()
 
     # ── public API ─────────────────────────────────────────────────────────
@@ -208,11 +216,19 @@ class TaskScheduler:
         except json.JSONDecodeError as e:
             raise _PermanentTaskError(f"malformed action_payload JSON: {e}") from e
         if task.action_type == "speak":
-            text = payload.get("text", "")
+            text = payload.get("text")
+            if not isinstance(text, str) or not text.strip():
+                raise _PermanentTaskError(
+                    "missing or empty 'text' in action_payload for 'speak' task"
+                )
             self._speak_fn(text)
             return f"spoke: {text[:80]}"
         if task.action_type == "plugin":
-            plugin_name = payload.get("plugin", "")
+            plugin_name = payload.get("plugin")
+            if not isinstance(plugin_name, str) or not plugin_name.strip():
+                raise _PermanentTaskError(
+                    "missing or empty 'plugin' in action_payload for 'plugin' task"
+                )
             query = payload.get("query", "")
             refresh_only = bool(payload.get("refresh_only", False))
             result = self._invoke_plugin_fn(plugin_name, query, refresh_only)
