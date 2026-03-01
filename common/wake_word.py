@@ -1261,8 +1261,11 @@ class WakeWordMode:
             player_error = [""]
 
             def player_worker():
-                with (self._audio_lock or contextlib.nullcontext()):
-                    success, failed_file, error = self.audio.play_audio_queue(audio_queue, stop_event=stop_event)
+                # Pass the lock so it is acquired per-file, not across the
+                # entire queue-drain loop (which blocks on queue.get() between files).
+                success, failed_file, error = self.audio.play_audio_queue(
+                    audio_queue, stop_event=stop_event, playback_lock=self._audio_lock
+                )
                 player_success[0] = bool(success)
                 if failed_file:
                     player_failed_file[0] = str(failed_file)

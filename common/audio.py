@@ -1,5 +1,6 @@
 #import re, os, pyaudio, wave
 #from pydub import AudioSegment
+import contextlib
 import re, os, time, pyaudio, wave, lameenc, logging, queue
 from pynput import keyboard
 from ctypes import *
@@ -314,7 +315,7 @@ class Audio:
 
         return failed_file is None, failed_file, error
 
-    def play_audio_queue(self, audio_queue, stop_event=None, delete_files=True):
+    def play_audio_queue(self, audio_queue, stop_event=None, delete_files=True, playback_lock=None):
         """Play audio files from a queue until a sentinel None is received.
 
         Args:
@@ -355,7 +356,8 @@ class Audio:
 
                 delete_this_file = delete_files
                 try:
-                    self.play_audio_file(item, stop_event=stop_event)
+                    with (playback_lock or contextlib.nullcontext()):
+                        self.play_audio_file(item, stop_event=stop_event)
                 except Exception as e:
                     failed_file = item
                     error = e
