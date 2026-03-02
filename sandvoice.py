@@ -122,6 +122,9 @@ class SandVoice:
     def _register_config_tasks(self, scheduler, db):
         """Register tasks defined in config.tasks, skipping any already active/paused."""
         for task_def in self.config.tasks:
+            if not isinstance(task_def, dict):
+                logger.warning("Skipping config task — expected a mapping, got %s", type(task_def).__name__)
+                continue
             name = task_def.get("name")
             if not name:
                 logger.warning("Skipping config task with missing 'name'")

@@ -732,5 +732,84 @@ class TestAddTaskPluginNameNormalization(unittest.TestCase):
             shutil.rmtree(tmp2, ignore_errors=True)
 
 
+class TestRegisterConfigTasks(unittest.TestCase):
+    """Tests for SandVoice._register_config_tasks()."""
+
+    def _make_stub(self, tasks):
+        from sandvoice import SandVoice
+        sv = object.__new__(SandVoice)
+        sv.config = MagicMock()
+        sv.config.tasks = tasks
+        return sv
+
+    def test_valid_task_is_registered(self):
+        """A well-formed task dict must be passed to scheduler.add_task."""
+        sv = self._make_stub([{
+            "name": "t1",
+            "schedule_type": "interval",
+            "schedule_value": "60",
+            "action_type": "speak",
+            "action_payload": {"text": "hello"},
+        }])
+        scheduler = MagicMock()
+        db = MagicMock()
+        db.get_active_task_by_name.return_value = None
+        sv._register_config_tasks(scheduler, db)
+        scheduler.add_task.assert_called_once_with(
+            name="t1",
+            schedule_type="interval",
+            schedule_value="60",
+            action_type="speak",
+            action_payload={"text": "hello"},
+        )
+
+    def test_task_skipped_when_already_in_db(self):
+        """Tasks already active in the DB must not be re-registered."""
+        sv = self._make_stub([{
+            "name": "existing",
+            "schedule_type": "interval",
+            "schedule_value": "60",
+            "action_type": "speak",
+            "action_payload": {"text": "hi"},
+        }])
+        scheduler = MagicMock()
+        db = MagicMock()
+        db.get_active_task_by_name.return_value = MagicMock()  # already in DB
+        sv._register_config_tasks(scheduler, db)
+        scheduler.add_task.assert_not_called()
+
+    def test_non_dict_entry_skipped_without_crash(self):
+        """Non-mapping entries (strings, ints) must be skipped with a warning, not crash."""
+        sv = self._make_stub(["not-a-dict", 42, None])
+        scheduler = MagicMock()
+        db = MagicMock()
+        sv._register_config_tasks(scheduler, db)
+        scheduler.add_task.assert_not_called()
+        db.get_active_task_by_name.assert_not_called()
+
+    def test_missing_name_is_skipped(self):
+        """Task dicts without a 'name' key must be skipped."""
+        sv = self._make_stub([{"schedule_type": "interval", "schedule_value": "60"}])
+        scheduler = MagicMock()
+        db = MagicMock()
+        sv._register_config_tasks(scheduler, db)
+        scheduler.add_task.assert_not_called()
+
+    def test_malformed_task_does_not_crash_scheduler(self):
+        """If add_task raises, the error must be caught and subsequent tasks still run."""
+        sv = self._make_stub([
+            {"name": "bad", "schedule_type": "interval", "schedule_value": "60",
+             "action_type": "speak", "action_payload": {}},
+            {"name": "good", "schedule_type": "interval", "schedule_value": "60",
+             "action_type": "speak", "action_payload": {"text": "ok"}},
+        ])
+        scheduler = MagicMock()
+        scheduler.add_task.side_effect = [ValueError("bad config"), None]
+        db = MagicMock()
+        db.get_active_task_by_name.return_value = None
+        sv._register_config_tasks(scheduler, db)
+        self.assertEqual(scheduler.add_task.call_count, 2)
+
+
 if __name__ == "__main__":
     unittest.main()

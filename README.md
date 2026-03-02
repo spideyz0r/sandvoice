@@ -266,7 +266,7 @@ scheduler_poll_interval: 30   # how often to check for due tasks (seconds)
 Add a `tasks:` list to your config. Tasks are registered on first startup and **persist in the SQLite DB across restarts** — so they won't be duplicated when you restart SandVoice.
 
 ```yaml
-scheduler_enabled: true
+scheduler_enabled: enabled
 
 tasks:
   # Speak a reminder every day at 9 AM (cron)
