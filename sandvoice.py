@@ -10,8 +10,10 @@ from common.error_handling import handle_api_error
 from common.db import SchedulerDB
 from common.scheduler import TaskScheduler
 
-import argparse, atexit, importlib, os, signal, sys
+import argparse, atexit, importlib, logging, os, signal, sys
 import queue, threading, time
+
+logger = logging.getLogger(__name__)
 
 class _SchedulerContext:
     """Proxy passed to plugins when invoked from the scheduler.
@@ -102,11 +104,13 @@ class SandVoice:
                 speak_fn=self._scheduler_speak,
                 invoke_plugin_fn=self._scheduler_invoke_plugin,
                 poll_interval_s=self.config.scheduler_poll_interval,
+                tz=self.config.timezone,
             )
             self._scheduler_ai = ai
+            self._register_config_tasks(scheduler, db)
             return scheduler
         except Exception as e:
-            print(f"Warning: scheduler disabled — failed to initialize: {e}")
+            logger.warning("Scheduler disabled — failed to initialize: %s", e)
             if db is not None:
                 try:
                     db.close()
@@ -114,6 +118,27 @@ class SandVoice:
                     pass
             self._scheduler_ai = None
             return None
+
+    def _register_config_tasks(self, scheduler, db):
+        """Register tasks defined in config.tasks, skipping any already active/paused."""
+        for task_def in self.config.tasks:
+            name = task_def.get("name")
+            if not name:
+                logger.warning("Skipping config task with missing 'name'")
+                continue
+            if db.get_active_task_by_name(name):
+                logger.info("Skipping config task '%s' — already active in DB", name)
+                continue
+            try:
+                scheduler.add_task(
+                    name=name,
+                    schedule_type=task_def["schedule_type"],
+                    schedule_value=str(task_def["schedule_value"]),
+                    action_type=task_def["action_type"],
+                    action_payload=task_def.get("action_payload", {}),
+                )
+            except Exception as e:
+                logger.warning("Failed to register config task '%s': %s", name, e)
 
     def _scheduler_speak(self, text):
         if not text or not self.config.bot_voice:
@@ -126,7 +151,7 @@ class SandVoice:
                 self._scheduler_audio = Audio(self.config)
             success, failed_file, error = self._scheduler_audio.play_audio_files(tts_files)
             if not success and self.config.debug:
-                print(f"Scheduler speak: audio playback failed for '{failed_file}': {error}")
+                logger.error("Scheduler speak: audio playback failed for '%s': %s", failed_file, error)
 
     def _scheduler_invoke_plugin(self, plugin_name, query, refresh_only):
         route = {"route": plugin_name}
@@ -139,7 +164,7 @@ class SandVoice:
                         self._scheduler_audio = Audio(self.config)
                     success, failed_file, error = self._scheduler_audio.play_audio_files(tts_files)
                     if not success and self.config.debug:
-                        print(f"Scheduler plugin: audio playback failed for '{failed_file}': {error}")
+                        logger.error("Scheduler plugin: audio playback failed for '%s': %s", failed_file, error)
         return result
 
     def _scheduler_route_message(self, user_input, route):

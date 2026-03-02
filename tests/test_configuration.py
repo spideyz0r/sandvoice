@@ -683,5 +683,61 @@ class TestSchedulerEnabledFlag(unittest.TestCase):
         self.assertFalse(config.scheduler_enabled)
 
 
+class TestConfigTasks(unittest.TestCase):
+    """config.tasks must parse correctly from the YAML tasks: list."""
+
+    def setUp(self):
+        self.temp_dir = tempfile.mkdtemp()
+        self.original_home = os.environ.get('HOME')
+        os.environ['HOME'] = self.temp_dir
+        os.makedirs(os.path.join(self.temp_dir, '.sandvoice'), exist_ok=True)
+        self.config_path = os.path.join(self.temp_dir, '.sandvoice', 'config.yaml')
+
+    def tearDown(self):
+        if self.original_home is not None:
+            os.environ['HOME'] = self.original_home
+        import shutil
+        shutil.rmtree(self.temp_dir, ignore_errors=True)
+
+    def write_config(self, data):
+        import yaml
+        with open(self.config_path, 'w') as f:
+            yaml.dump(data, f)
+
+    def test_tasks_default_is_empty_list(self):
+        config = Config()
+        self.assertEqual(config.tasks, [])
+
+    def test_tasks_parses_list(self):
+        self.write_config({"tasks": [
+            {"name": "t1", "schedule_type": "interval", "schedule_value": "60",
+             "action_type": "speak", "action_payload": {"text": "hello"}},
+        ]})
+        config = Config()
+        self.assertEqual(len(config.tasks), 1)
+        self.assertEqual(config.tasks[0]["name"], "t1")
+
+    def test_tasks_non_list_falls_back_to_empty(self):
+        self.write_config({"tasks": "bad-value"})
+        config = Config()
+        self.assertEqual(config.tasks, [])
+
+    def test_tasks_null_falls_back_to_empty(self):
+        self.write_config({"tasks": None})
+        config = Config()
+        self.assertEqual(config.tasks, [])
+
+    def test_tasks_multiple_entries(self):
+        self.write_config({"tasks": [
+            {"name": "speak-task", "schedule_type": "cron", "schedule_value": "0 9 * * *",
+             "action_type": "speak", "action_payload": {"text": "morning"}},
+            {"name": "plugin-task", "schedule_type": "interval", "schedule_value": "3600",
+             "action_type": "plugin", "action_payload": {"plugin": "weather", "refresh_only": True}},
+        ]})
+        config = Config()
+        self.assertEqual(len(config.tasks), 2)
+        self.assertEqual(config.tasks[1]["action_payload"]["plugin"], "weather")
+
+
 if __name__ == '__main__':
     unittest.main()

@@ -139,6 +139,15 @@ class SchedulerDB:
             )
             self._conn.commit()
 
+    def get_active_task_by_name(self, name: str) -> Optional["ScheduledTask"]:
+        """Return the first active or paused task with the given name, or None."""
+        with self._lock:
+            row = self._conn.execute(
+                "SELECT * FROM scheduled_tasks WHERE name = ? AND status != 'completed' LIMIT 1",
+                (name,),
+            ).fetchone()
+        return self._row_to_task(row) if row else None
+
     def get_task(self, task_id: str) -> Optional[ScheduledTask]:
         with self._lock:
             row = self._conn.execute(

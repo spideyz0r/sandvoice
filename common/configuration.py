@@ -95,6 +95,7 @@ class Config:
             "scheduler_enabled": "disabled",
             "scheduler_poll_interval": 30,
             "scheduler_db_path": os.path.join(os.path.expanduser("~"), ".sandvoice", "sandvoice.db"),
+            "tasks": [],
         }
         self.config = self.load_defaults()
         self.load_config()
@@ -209,7 +210,9 @@ class Config:
         except (TypeError, ValueError):
             self.scheduler_poll_interval = 30
         raw_db_path = self.get("scheduler_db_path")
-        self.scheduler_db_path = str(raw_db_path) if raw_db_path else self.defaults["scheduler_db_path"]
+        self.scheduler_db_path = os.path.expanduser(str(raw_db_path)) if raw_db_path else self.defaults["scheduler_db_path"]
+        raw_tasks = self.get("tasks")
+        self.tasks = list(raw_tasks) if isinstance(raw_tasks, list) else []
 
         # Voice UX
         voice_ack_earcon = self.get("voice_ack_earcon")

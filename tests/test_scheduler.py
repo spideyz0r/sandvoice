@@ -514,6 +514,50 @@ class TestTaskScheduler(unittest.TestCase):
             self.db.set_status(task_id, "unknown_status")
 
 
+# ── SchedulerDB.get_active_task_by_name ────────────────────────────────────────
+
+class TestGetActiveTaskByName(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp()
+        self.db = SchedulerDB(os.path.join(self.tmp, "test.db"))
+        self.future = (datetime.now(timezone.utc) + timedelta(seconds=60)).isoformat()
+        self.past = (datetime.now(timezone.utc) - timedelta(seconds=60)).isoformat()
+
+    def tearDown(self):
+        self.db.close()
+        import shutil
+        shutil.rmtree(self.tmp, ignore_errors=True)
+
+    def test_returns_active_task(self):
+        task_id = self.db.add_task(
+            name="my-task", schedule_type="interval", schedule_value="60",
+            action_type="speak", action_payload={"text": "hi"}, next_run=self.future,
+        )
+        found = self.db.get_active_task_by_name("my-task")
+        self.assertIsNotNone(found)
+        self.assertEqual(found.id, task_id)
+
+    def test_returns_paused_task(self):
+        task_id = self.db.add_task(
+            name="paused-task", schedule_type="interval", schedule_value="60",
+            action_type="speak", action_payload={"text": "hi"}, next_run=self.future,
+        )
+        self.db.set_status(task_id, "paused")
+        found = self.db.get_active_task_by_name("paused-task")
+        self.assertIsNotNone(found)
+
+    def test_returns_none_for_completed_task(self):
+        task_id = self.db.add_task(
+            name="done-task", schedule_type="interval", schedule_value="60",
+            action_type="speak", action_payload={"text": "hi"}, next_run=self.past,
+        )
+        self.db.set_status(task_id, "completed")
+        self.assertIsNone(self.db.get_active_task_by_name("done-task"))
+
+    def test_returns_none_when_no_match(self):
+        self.assertIsNone(self.db.get_active_task_by_name("nonexistent"))
+
+
 # ── calc_next_run interval validation ──────────────────────────────────────────
 
 class TestCalcNextRunIntervalValidation(unittest.TestCase):
