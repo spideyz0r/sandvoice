@@ -76,11 +76,24 @@ class TaskScheduler:
     @staticmethod
     def _resolve_tz(tz_name: Optional[str]):
         """Return a ZoneInfo object for tz_name, or None if unavailable/invalid."""
-        if not tz_name or ZoneInfo is None:
+        if not tz_name:
+            return None
+        if ZoneInfo is None:
+            logger.warning(
+                "TaskScheduler: timezone %r requested but zoneinfo is unavailable "
+                "(Python < 3.9); timestamps will display in UTC.",
+                tz_name,
+            )
             return None
         try:
             return ZoneInfo(tz_name)
-        except Exception:
+        except Exception as exc:
+            logger.warning(
+                "TaskScheduler: timezone %r could not be resolved (%s); "
+                "timestamps will display in UTC.",
+                tz_name,
+                exc,
+            )
             return None
 
     def _fmt_time(self, iso_utc: Optional[str]) -> str:

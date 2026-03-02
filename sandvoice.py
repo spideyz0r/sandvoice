@@ -126,11 +126,18 @@ class SandVoice:
                 logger.warning("Skipping config task — expected a mapping, got %s", type(task_def).__name__)
                 continue
             name = task_def.get("name")
+            if not isinstance(name, str):
+                logger.warning(
+                    "Skipping config task with invalid 'name' type %s (expected non-empty string)",
+                    type(name).__name__,
+                )
+                continue
+            name = name.strip()
             if not name:
-                logger.warning("Skipping config task with missing 'name'")
+                logger.warning("Skipping config task with missing or empty 'name'")
                 continue
             if db.get_active_task_by_name(name):
-                logger.info("Skipping config task '%s' — already active in DB", name)
+                logger.info("Skipping config task '%s' — already active or paused in DB", name)
                 continue
             try:
                 scheduler.add_task(

@@ -810,6 +810,55 @@ class TestRegisterConfigTasks(unittest.TestCase):
         sv._register_config_tasks(scheduler, db)
         self.assertEqual(scheduler.add_task.call_count, 2)
 
+    def test_non_string_name_is_skipped(self):
+        """Task dicts with a non-string 'name' (e.g. int) must be skipped."""
+        sv = self._make_stub([{"name": 42, "schedule_type": "interval",
+                               "schedule_value": "60", "action_type": "speak",
+                               "action_payload": {"text": "hi"}}])
+        scheduler = MagicMock()
+        db = MagicMock()
+        sv._register_config_tasks(scheduler, db)
+        scheduler.add_task.assert_not_called()
+        db.get_active_task_by_name.assert_not_called()
+
+    def test_name_whitespace_stripped_before_dedup(self):
+        """Whitespace in 'name' must be stripped; the stripped name is used for dedup."""
+        sv = self._make_stub([{
+            "name": "  my-task  ",
+            "schedule_type": "interval",
+            "schedule_value": "60",
+            "action_type": "speak",
+            "action_payload": {"text": "hi"},
+        }])
+        scheduler = MagicMock()
+        db = MagicMock()
+        db.get_active_task_by_name.return_value = None
+        sv._register_config_tasks(scheduler, db)
+        db.get_active_task_by_name.assert_called_once_with("my-task")
+        scheduler.add_task.assert_called_once()
+        self.assertEqual(scheduler.add_task.call_args.kwargs["name"], "my-task")
+
+
+class TestResolveTz(unittest.TestCase):
+    """Tests for TaskScheduler._resolve_tz() warning paths."""
+
+    def test_none_tz_returns_none_silently(self):
+        self.assertIsNone(TaskScheduler._resolve_tz(None))
+
+    def test_empty_tz_returns_none_silently(self):
+        self.assertIsNone(TaskScheduler._resolve_tz(""))
+
+    def test_invalid_tz_returns_none_and_warns(self):
+        with self.assertLogs("common.scheduler", level="WARNING") as cm:
+            result = TaskScheduler._resolve_tz("Not/AValid_Timezone")
+        self.assertIsNone(result)
+        self.assertTrue(any("could not be resolved" in line for line in cm.output))
+
+    def test_valid_tz_returns_zoneinfo(self):
+        from zoneinfo import ZoneInfo
+        result = TaskScheduler._resolve_tz("America/Toronto")
+        self.assertIsInstance(result, ZoneInfo)
+
 
 if __name__ == "__main__":
     unittest.main()
