@@ -257,7 +257,7 @@ SandVoice has a built-in task scheduler that can run actions in the background â
 In `~/.sandvoice/config.yaml`:
 
 ```yaml
-scheduler_enabled: true
+scheduler_enabled: enabled
 scheduler_poll_interval: 30   # how often to check for due tasks (seconds)
 ```
 

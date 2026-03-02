@@ -696,6 +696,8 @@ class TestConfigTasks(unittest.TestCase):
     def tearDown(self):
         if self.original_home is not None:
             os.environ['HOME'] = self.original_home
+        else:
+            del os.environ['HOME']
         import shutil
         shutil.rmtree(self.temp_dir, ignore_errors=True)
 

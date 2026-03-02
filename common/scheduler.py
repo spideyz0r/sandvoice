@@ -251,7 +251,7 @@ class TaskScheduler:
             self._run(task)
 
     def _run(self, task: ScheduledTask):
-        logger.info("Running task '%s' (%s) at %s", task.name, task.action_type, self._fmt_time(datetime.now(timezone.utc).isoformat()))
+        logger.info("Running task '%s' (%s) at %s [action=%s]", task.name, task.id, self._fmt_time(datetime.now(timezone.utc).isoformat()), task.action_type)
         result = ""
         permanent_error = False
         transient_error = False
