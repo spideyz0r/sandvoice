@@ -514,6 +514,50 @@ class TestTaskScheduler(unittest.TestCase):
             self.db.set_status(task_id, "unknown_status")
 
 
+# ── SchedulerDB.get_active_or_paused_task_by_name ──────────────────────────────
+
+class TestGetActiveOrPausedTaskByName(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp()
+        self.db = SchedulerDB(os.path.join(self.tmp, "test.db"))
+        self.future = (datetime.now(timezone.utc) + timedelta(seconds=60)).isoformat()
+        self.past = (datetime.now(timezone.utc) - timedelta(seconds=60)).isoformat()
+
+    def tearDown(self):
+        self.db.close()
+        import shutil
+        shutil.rmtree(self.tmp, ignore_errors=True)
+
+    def test_returns_active_task(self):
+        task_id = self.db.add_task(
+            name="my-task", schedule_type="interval", schedule_value="60",
+            action_type="speak", action_payload={"text": "hi"}, next_run=self.future,
+        )
+        found = self.db.get_active_or_paused_task_by_name("my-task")
+        self.assertIsNotNone(found)
+        self.assertEqual(found.id, task_id)
+
+    def test_returns_paused_task(self):
+        task_id = self.db.add_task(
+            name="paused-task", schedule_type="interval", schedule_value="60",
+            action_type="speak", action_payload={"text": "hi"}, next_run=self.future,
+        )
+        self.db.set_status(task_id, "paused")
+        found = self.db.get_active_or_paused_task_by_name("paused-task")
+        self.assertIsNotNone(found)
+
+    def test_returns_none_for_completed_task(self):
+        task_id = self.db.add_task(
+            name="done-task", schedule_type="interval", schedule_value="60",
+            action_type="speak", action_payload={"text": "hi"}, next_run=self.past,
+        )
+        self.db.set_status(task_id, "completed")
+        self.assertIsNone(self.db.get_active_or_paused_task_by_name("done-task"))
+
+    def test_returns_none_when_no_match(self):
+        self.assertIsNone(self.db.get_active_or_paused_task_by_name("nonexistent"))
+
+
 # ── calc_next_run interval validation ──────────────────────────────────────────
 
 class TestCalcNextRunIntervalValidation(unittest.TestCase):
@@ -686,6 +730,166 @@ class TestAddTaskPluginNameNormalization(unittest.TestCase):
         finally:
             import shutil
             shutil.rmtree(tmp2, ignore_errors=True)
+
+
+class TestRegisterConfigTasks(unittest.TestCase):
+    """Tests for SandVoice._register_config_tasks()."""
+
+    def _make_stub(self, tasks):
+        from sandvoice import SandVoice
+        sv = object.__new__(SandVoice)
+        sv.config = MagicMock()
+        sv.config.tasks = tasks
+        return sv
+
+    def test_valid_task_is_registered(self):
+        """A well-formed task dict must be passed to scheduler.add_task."""
+        sv = self._make_stub([{
+            "name": "t1",
+            "schedule_type": "interval",
+            "schedule_value": "60",
+            "action_type": "speak",
+            "action_payload": {"text": "hello"},
+        }])
+        scheduler = MagicMock()
+        db = MagicMock()
+        db.get_active_or_paused_task_by_name.return_value = None
+        sv._register_config_tasks(scheduler, db)
+        scheduler.add_task.assert_called_once_with(
+            name="t1",
+            schedule_type="interval",
+            schedule_value="60",
+            action_type="speak",
+            action_payload={"text": "hello"},
+        )
+
+    def test_task_skipped_when_already_in_db(self):
+        """Tasks already active in the DB must not be re-registered."""
+        sv = self._make_stub([{
+            "name": "existing",
+            "schedule_type": "interval",
+            "schedule_value": "60",
+            "action_type": "speak",
+            "action_payload": {"text": "hi"},
+        }])
+        scheduler = MagicMock()
+        db = MagicMock()
+        db.get_active_or_paused_task_by_name.return_value = MagicMock()  # already in DB
+        sv._register_config_tasks(scheduler, db)
+        scheduler.add_task.assert_not_called()
+
+    def test_non_dict_entry_skipped_without_crash(self):
+        """Non-mapping entries (strings, ints) must be skipped with a warning, not crash."""
+        sv = self._make_stub(["not-a-dict", 42, None])
+        scheduler = MagicMock()
+        db = MagicMock()
+        sv._register_config_tasks(scheduler, db)
+        scheduler.add_task.assert_not_called()
+        db.get_active_or_paused_task_by_name.assert_not_called()
+
+    def test_missing_name_is_skipped(self):
+        """Task dicts without a 'name' key must be skipped."""
+        sv = self._make_stub([{"schedule_type": "interval", "schedule_value": "60"}])
+        scheduler = MagicMock()
+        db = MagicMock()
+        sv._register_config_tasks(scheduler, db)
+        scheduler.add_task.assert_not_called()
+
+    def test_malformed_task_does_not_crash_scheduler(self):
+        """If add_task raises, the error must be caught and subsequent tasks still run."""
+        sv = self._make_stub([
+            {"name": "bad", "schedule_type": "interval", "schedule_value": "60",
+             "action_type": "speak", "action_payload": {}},
+            {"name": "good", "schedule_type": "interval", "schedule_value": "60",
+             "action_type": "speak", "action_payload": {"text": "ok"}},
+        ])
+        scheduler = MagicMock()
+        scheduler.add_task.side_effect = [ValueError("bad config"), None]
+        db = MagicMock()
+        db.get_active_or_paused_task_by_name.return_value = None
+        sv._register_config_tasks(scheduler, db)
+        self.assertEqual(scheduler.add_task.call_count, 2)
+
+    def test_non_string_name_is_skipped(self):
+        """Task dicts with a non-string 'name' (e.g. int) must be skipped."""
+        sv = self._make_stub([{"name": 42, "schedule_type": "interval",
+                               "schedule_value": "60", "action_type": "speak",
+                               "action_payload": {"text": "hi"}}])
+        scheduler = MagicMock()
+        db = MagicMock()
+        sv._register_config_tasks(scheduler, db)
+        scheduler.add_task.assert_not_called()
+        db.get_active_or_paused_task_by_name.assert_not_called()
+
+    def test_null_action_payload_normalised_to_empty_dict(self):
+        """action_payload: null in YAML must be treated as {} not passed as None."""
+        sv = self._make_stub([{
+            "name": "nullpayload",
+            "schedule_type": "interval",
+            "schedule_value": "60",
+            "action_type": "speak",
+            "action_payload": None,  # YAML null
+        }])
+        scheduler = MagicMock()
+        db = MagicMock()
+        db.get_active_or_paused_task_by_name.return_value = None
+        sv._register_config_tasks(scheduler, db)
+        scheduler.add_task.assert_called_once()
+        self.assertEqual(scheduler.add_task.call_args.kwargs["action_payload"], {})
+
+    def test_non_dict_action_payload_normalised_to_empty_dict(self):
+        """Non-dict action_payload (e.g. a list) must warn and default to {}."""
+        sv = self._make_stub([{
+            "name": "listpayload",
+            "schedule_type": "interval",
+            "schedule_value": "60",
+            "action_type": "speak",
+            "action_payload": ["not", "a", "dict"],
+        }])
+        scheduler = MagicMock()
+        db = MagicMock()
+        db.get_active_or_paused_task_by_name.return_value = None
+        sv._register_config_tasks(scheduler, db)
+        scheduler.add_task.assert_called_once()
+        self.assertEqual(scheduler.add_task.call_args.kwargs["action_payload"], {})
+
+    def test_name_whitespace_stripped_before_dedup(self):
+        """Whitespace in 'name' must be stripped; the stripped name is used for dedup."""
+        sv = self._make_stub([{
+            "name": "  my-task  ",
+            "schedule_type": "interval",
+            "schedule_value": "60",
+            "action_type": "speak",
+            "action_payload": {"text": "hi"},
+        }])
+        scheduler = MagicMock()
+        db = MagicMock()
+        db.get_active_or_paused_task_by_name.return_value = None
+        sv._register_config_tasks(scheduler, db)
+        db.get_active_or_paused_task_by_name.assert_called_once_with("my-task")
+        scheduler.add_task.assert_called_once()
+        self.assertEqual(scheduler.add_task.call_args.kwargs["name"], "my-task")
+
+
+class TestResolveTz(unittest.TestCase):
+    """Tests for TaskScheduler._resolve_tz() warning paths."""
+
+    def test_none_tz_returns_none_silently(self):
+        self.assertIsNone(TaskScheduler._resolve_tz(None))
+
+    def test_empty_tz_returns_none_silently(self):
+        self.assertIsNone(TaskScheduler._resolve_tz(""))
+
+    def test_invalid_tz_returns_none_and_warns(self):
+        with self.assertLogs("common.scheduler", level="WARNING") as cm:
+            result = TaskScheduler._resolve_tz("Not/AValid_Timezone")
+        self.assertIsNone(result)
+        self.assertTrue(any("could not be resolved" in line for line in cm.output))
+
+    def test_valid_tz_returns_zoneinfo(self):
+        from zoneinfo import ZoneInfo
+        result = TaskScheduler._resolve_tz("America/Toronto")
+        self.assertIsInstance(result, ZoneInfo)
 
 
 if __name__ == "__main__":

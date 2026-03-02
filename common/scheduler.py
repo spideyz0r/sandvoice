@@ -4,6 +4,11 @@ import threading
 from datetime import datetime, timedelta, timezone
 from typing import Callable, Optional
 
+try:
+    from zoneinfo import ZoneInfo
+except ImportError:
+    ZoneInfo = None  # Python < 3.9 fallback; times will print in UTC
+
 from common.db import SchedulerDB, ScheduledTask
 
 logger = logging.getLogger(__name__)
@@ -58,13 +63,50 @@ class TaskScheduler:
         speak_fn: Callable[[str], None],
         invoke_plugin_fn: Callable[[str, str, bool], Optional[str]],
         poll_interval_s: int = 30,
+        tz: Optional[str] = None,
     ):
         self._db = db
         self._speak_fn = speak_fn
         self._invoke_plugin_fn = invoke_plugin_fn
         self._poll_interval = poll_interval_s
+        self._tz = self._resolve_tz(tz)
         self._stop_event = threading.Event()
         self._thread: Optional[threading.Thread] = None
+
+    @staticmethod
+    def _resolve_tz(tz_name: Optional[str]):
+        """Return a ZoneInfo object for tz_name, or None if unavailable/invalid."""
+        if not tz_name:
+            return None
+        if ZoneInfo is None:
+            logger.warning(
+                "TaskScheduler: timezone %r requested but zoneinfo is unavailable "
+                "(Python < 3.9); timestamps will display in UTC.",
+                tz_name,
+            )
+            return None
+        try:
+            return ZoneInfo(tz_name)
+        except Exception as exc:
+            logger.warning(
+                "TaskScheduler: timezone %r could not be resolved (%s); "
+                "timestamps will display in UTC.",
+                tz_name,
+                exc,
+            )
+            return None
+
+    def _fmt_time(self, iso_utc: Optional[str]) -> str:
+        """Format a UTC ISO string as local time (HH:MM:SS TZ), falling back to UTC."""
+        if not iso_utc:
+            return "—"
+        try:
+            dt = datetime.fromisoformat(iso_utc)
+            if self._tz:
+                dt = dt.astimezone(self._tz)
+            return dt.strftime("%H:%M:%S %Z")
+        except Exception:
+            return iso_utc
 
     # ── lifecycle ──────────────────────────────────────────────────────────
 
@@ -77,7 +119,7 @@ class TaskScheduler:
             target=self._loop, name="sandvoice-scheduler", daemon=True
         )
         self._thread.start()
-        logger.info("Task scheduler started (poll_interval=%ds)", self._poll_interval)
+        logger.info("Scheduler started at %s (poll_interval=%ds)", self._fmt_time(datetime.now(timezone.utc).isoformat()), self._poll_interval)
 
     def stop(self, timeout: Optional[float] = None):
         """Signal the scheduler to stop and wait for the worker thread to exit.
@@ -163,7 +205,8 @@ class TaskScheduler:
             action_payload=action_payload,
             next_run=first_run,
         )
-        logger.info("Task registered: '%s' (%s) next_run=%s", name, task_id, first_run)
+        logger.info("Task registered: '%s' (%s) | %s:%s | action=%s | next_run=%s",
+                    name, task_id, schedule_type, schedule_value, action_type, self._fmt_time(first_run))
         return task_id
 
     def pause_task(self, task_id: str):
@@ -221,14 +264,14 @@ class TaskScheduler:
             self._run(task)
 
     def _run(self, task: ScheduledTask):
-        logger.debug("Running task '%s' (%s)", task.name, task.id)
+        logger.debug("Running task '%s' (%s) at %s [action=%s]", task.name, task.id, self._fmt_time(datetime.now(timezone.utc).isoformat()), task.action_type)
         result = ""
         permanent_error = False
         transient_error = False
         try:
             result = self._dispatch(task) or ""
         except _PermanentTaskError as e:
-            logger.error("Task '%s' has a permanent configuration error: %s", task.name, e)
+            logger.error("Task '%s' permanent error: %s", task.name, e)
             result = str(e)
             permanent_error = True
         except Exception as e:
@@ -246,14 +289,16 @@ class TaskScheduler:
                     # 'once' task failed transiently: keep it active so it can
                     # be retried on the next scheduler tick.
                     logger.warning(
-                        "Task '%s' (%s) is a one-shot task that failed with a "
-                        "transient error; keeping active for retry.",
-                        task.name, task.id,
+                        "Task '%s' (%s) transient error — will retry at %s",
+                        task.name, task.id, self._fmt_time(task.next_run),
                     )
                     next_run = task.next_run
                     status = "active"
                 else:
                     status = "completed" if next_run is None else "active"
+                    if result:
+                        logger.info("Task '%s' done", task.name)
+                        logger.debug("Task '%s' result: %s", task.name, result[:120])
             except Exception as e:
                 logger.error("Scheduler: failed to compute next run for task '%s': %s", task.id, e)
                 error_msg = f"schedule error: {e}"

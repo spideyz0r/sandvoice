@@ -236,5 +236,115 @@ All configuration keys are loaded from `common/configuration.py` defaults and ca
 - `voice_ack_earcon_freq`: earcon frequency (Hz, integer)
 - `voice_ack_earcon_duration`: earcon duration (seconds)
 
+- `scheduler_enabled`: `enabled`/`disabled`; enables the background task scheduler
+- `scheduler_poll_interval`: seconds between scheduler ticks (default `30`)
+- `scheduler_db_path`: path to the SQLite database used to persist tasks (default `~/.sandvoice/sandvoice.db`)
+
+---
+
+## Scheduled Tasks
+
+SandVoice has a built-in task scheduler that can run actions in the background — speaking a reminder or triggering a plugin — without any user interaction. It supports three scheduling approaches:
+
+| `schedule_type` | `schedule_value` | When it runs |
+|---|---|---|
+| `interval` | seconds as a string, e.g. `"3600"` | repeatedly, every N seconds |
+| `cron` | standard cron expression, e.g. `"0 9 * * *"` | at specific times/days (like crontab) |
+| `once` | ISO 8601 timestamp, e.g. `"2026-03-02T21:00:00-05:00"` | exactly once at that date/time |
+
+### Enabling the scheduler
+
+In `~/.sandvoice/config.yaml`:
+
+```yaml
+scheduler_enabled: enabled
+scheduler_poll_interval: 30   # how often to check for due tasks (seconds)
+```
+
+### Defining tasks
+
+Add a `tasks:` list to your config. Tasks are registered on first startup and **persist in the SQLite DB across restarts** — so they won't be duplicated when you restart SandVoice.
+
+```yaml
+scheduler_enabled: enabled
+
+tasks:
+  # Speak a reminder every day at 9 AM (cron)
+  - name: morning-reminder
+    schedule_type: cron
+    schedule_value: "0 9 * * *"
+    action_type: speak
+    action_payload:
+      text: "Good morning! Don't forget to check your calendar."
+
+  # Fetch weather via plugin every hour (interval)
+  - name: hourly-weather
+    schedule_type: interval
+    schedule_value: "3600"
+    action_type: plugin
+    action_payload:
+      plugin: weather
+      query: weather
+      refresh_only: false     # false = speak the result; true = silent refresh
+
+  # One-shot reminder at a specific date and time (once)
+  - name: meeting-reminder
+    schedule_type: once
+    schedule_value: "2026-03-02T21:00:00-05:00"   # EST offset; also accepts UTC (+00:00 or Z)
+    action_type: speak
+    action_payload:
+      text: "Your meeting starts in 15 minutes."
+```
+
+### Cron expression quick reference
+
+```
+┌─ minute  (0-59)
+│ ┌─ hour   (0-23)
+│ │ ┌─ day of month (1-31)
+│ │ │ ┌─ month (1-12)
+│ │ │ │ ┌─ day of week (0-6, 0=Sunday)
+│ │ │ │ │
+0 9 * * *        every day at 09:00
+0 9 * * 1-5      weekdays at 09:00
+*/15 * * * *     every 15 minutes
+0 8,18 * * *     08:00 and 18:00 every day
+0 0 * * 0        every Sunday at midnight
+```
+
+### Task fields
+
+| Field | Required | Description |
+|---|---|---|
+| `name` | ✅ | Unique name — used to prevent duplicates on restart |
+| `schedule_type` | ✅ | `cron`, `interval`, or `once` |
+| `schedule_value` | ✅ | See table above |
+| `action_type` | ✅ | `speak` or `plugin` |
+| `action_payload` | ✅ | Parameters for the action (see below) |
+
+### action_payload
+
+**`speak`** — synthesise and play text via TTS:
+```yaml
+action_payload:
+  text: "Your reminder text here."
+```
+
+**`plugin`** — invoke a SandVoice plugin:
+```yaml
+action_payload:
+  plugin: weather          # plugin name (matches route name)
+  query: "weather today"   # optional query string passed to the plugin
+  refresh_only: false      # true = silent background refresh, false = speak the result
+```
+
+### Notes
+
+- Tasks with the same `name` that are already **active** or **paused** in the DB are skipped on startup — no duplicates on restart.
+- To re-register a task after changing its config (e.g. new schedule or payload), delete `~/.sandvoice/sandvoice.db` and restart. The DB will be recreated automatically.
+- `once` tasks that fail with a transient error (e.g. network timeout) are retried on the next scheduler tick. Permanent config errors (bad JSON, missing fields) mark the task completed immediately so they don't loop.
+- All timestamps are stored and compared in UTC internally. Times display in your configured `timezone` in the logs.
+- The scheduler runs in a background daemon thread and shuts down cleanly on exit.
+
 
 Enjoy the experience!
