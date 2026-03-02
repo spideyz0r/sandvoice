@@ -514,9 +514,9 @@ class TestTaskScheduler(unittest.TestCase):
             self.db.set_status(task_id, "unknown_status")
 
 
-# ── SchedulerDB.get_active_task_by_name ────────────────────────────────────────
+# ── SchedulerDB.get_active_or_paused_task_by_name ──────────────────────────────
 
-class TestGetActiveTaskByName(unittest.TestCase):
+class TestGetActiveOrPausedTaskByName(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.mkdtemp()
         self.db = SchedulerDB(os.path.join(self.tmp, "test.db"))
@@ -533,7 +533,7 @@ class TestGetActiveTaskByName(unittest.TestCase):
             name="my-task", schedule_type="interval", schedule_value="60",
             action_type="speak", action_payload={"text": "hi"}, next_run=self.future,
         )
-        found = self.db.get_active_task_by_name("my-task")
+        found = self.db.get_active_or_paused_task_by_name("my-task")
         self.assertIsNotNone(found)
         self.assertEqual(found.id, task_id)
 
@@ -543,7 +543,7 @@ class TestGetActiveTaskByName(unittest.TestCase):
             action_type="speak", action_payload={"text": "hi"}, next_run=self.future,
         )
         self.db.set_status(task_id, "paused")
-        found = self.db.get_active_task_by_name("paused-task")
+        found = self.db.get_active_or_paused_task_by_name("paused-task")
         self.assertIsNotNone(found)
 
     def test_returns_none_for_completed_task(self):
@@ -552,10 +552,10 @@ class TestGetActiveTaskByName(unittest.TestCase):
             action_type="speak", action_payload={"text": "hi"}, next_run=self.past,
         )
         self.db.set_status(task_id, "completed")
-        self.assertIsNone(self.db.get_active_task_by_name("done-task"))
+        self.assertIsNone(self.db.get_active_or_paused_task_by_name("done-task"))
 
     def test_returns_none_when_no_match(self):
-        self.assertIsNone(self.db.get_active_task_by_name("nonexistent"))
+        self.assertIsNone(self.db.get_active_or_paused_task_by_name("nonexistent"))
 
 
 # ── calc_next_run interval validation ──────────────────────────────────────────
@@ -753,7 +753,7 @@ class TestRegisterConfigTasks(unittest.TestCase):
         }])
         scheduler = MagicMock()
         db = MagicMock()
-        db.get_active_task_by_name.return_value = None
+        db.get_active_or_paused_task_by_name.return_value = None
         sv._register_config_tasks(scheduler, db)
         scheduler.add_task.assert_called_once_with(
             name="t1",
@@ -774,7 +774,7 @@ class TestRegisterConfigTasks(unittest.TestCase):
         }])
         scheduler = MagicMock()
         db = MagicMock()
-        db.get_active_task_by_name.return_value = MagicMock()  # already in DB
+        db.get_active_or_paused_task_by_name.return_value = MagicMock()  # already in DB
         sv._register_config_tasks(scheduler, db)
         scheduler.add_task.assert_not_called()
 
@@ -785,7 +785,7 @@ class TestRegisterConfigTasks(unittest.TestCase):
         db = MagicMock()
         sv._register_config_tasks(scheduler, db)
         scheduler.add_task.assert_not_called()
-        db.get_active_task_by_name.assert_not_called()
+        db.get_active_or_paused_task_by_name.assert_not_called()
 
     def test_missing_name_is_skipped(self):
         """Task dicts without a 'name' key must be skipped."""
@@ -806,7 +806,7 @@ class TestRegisterConfigTasks(unittest.TestCase):
         scheduler = MagicMock()
         scheduler.add_task.side_effect = [ValueError("bad config"), None]
         db = MagicMock()
-        db.get_active_task_by_name.return_value = None
+        db.get_active_or_paused_task_by_name.return_value = None
         sv._register_config_tasks(scheduler, db)
         self.assertEqual(scheduler.add_task.call_count, 2)
 
@@ -819,7 +819,7 @@ class TestRegisterConfigTasks(unittest.TestCase):
         db = MagicMock()
         sv._register_config_tasks(scheduler, db)
         scheduler.add_task.assert_not_called()
-        db.get_active_task_by_name.assert_not_called()
+        db.get_active_or_paused_task_by_name.assert_not_called()
 
     def test_name_whitespace_stripped_before_dedup(self):
         """Whitespace in 'name' must be stripped; the stripped name is used for dedup."""
@@ -832,9 +832,9 @@ class TestRegisterConfigTasks(unittest.TestCase):
         }])
         scheduler = MagicMock()
         db = MagicMock()
-        db.get_active_task_by_name.return_value = None
+        db.get_active_or_paused_task_by_name.return_value = None
         sv._register_config_tasks(scheduler, db)
-        db.get_active_task_by_name.assert_called_once_with("my-task")
+        db.get_active_or_paused_task_by_name.assert_called_once_with("my-task")
         scheduler.add_task.assert_called_once()
         self.assertEqual(scheduler.add_task.call_args.kwargs["name"], "my-task")
 

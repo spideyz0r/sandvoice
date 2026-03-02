@@ -136,7 +136,7 @@ class SandVoice:
             if not name:
                 logger.warning("Skipping config task with missing or empty 'name'")
                 continue
-            if db.get_active_task_by_name(name):
+            if db.get_active_or_paused_task_by_name(name):
                 logger.info("Skipping config task '%s' — already active or paused in DB", name)
                 continue
             try:

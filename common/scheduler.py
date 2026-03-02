@@ -264,7 +264,7 @@ class TaskScheduler:
             self._run(task)
 
     def _run(self, task: ScheduledTask):
-        logger.info("Running task '%s' (%s) at %s [action=%s]", task.name, task.id, self._fmt_time(datetime.now(timezone.utc).isoformat()), task.action_type)
+        logger.debug("Running task '%s' (%s) at %s [action=%s]", task.name, task.id, self._fmt_time(datetime.now(timezone.utc).isoformat()), task.action_type)
         result = ""
         permanent_error = False
         transient_error = False
@@ -297,7 +297,8 @@ class TaskScheduler:
                 else:
                     status = "completed" if next_run is None else "active"
                     if result:
-                        logger.info("Task '%s' done: %s", task.name, result[:120])
+                        logger.info("Task '%s' done", task.name)
+                        logger.debug("Task '%s' result: %s", task.name, result[:120])
             except Exception as e:
                 logger.error("Scheduler: failed to compute next run for task '%s': %s", task.id, e)
                 error_msg = f"schedule error: {e}"
