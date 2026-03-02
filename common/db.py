@@ -57,6 +57,10 @@ class SchedulerDB:
                 CREATE INDEX IF NOT EXISTS idx_scheduled_tasks_status_next_run
                 ON scheduled_tasks (status, next_run)
             """)
+            self._conn.execute("""
+                CREATE INDEX IF NOT EXISTS idx_scheduled_tasks_name_status
+                ON scheduled_tasks (name, status)
+            """)
             self._conn.commit()
 
     def add_task(
@@ -138,6 +142,15 @@ class SchedulerDB:
                 (status, task_id),
             )
             self._conn.commit()
+
+    def get_active_or_paused_task_by_name(self, name: str) -> Optional["ScheduledTask"]:
+        """Return the first active or paused task with the given name, or None."""
+        with self._lock:
+            row = self._conn.execute(
+                "SELECT * FROM scheduled_tasks WHERE name = ? AND status IN ('active','paused') LIMIT 1",
+                (name,),
+            ).fetchone()
+        return self._row_to_task(row) if row else None
 
     def get_task(self, task_id: str) -> Optional[ScheduledTask]:
         with self._lock:
