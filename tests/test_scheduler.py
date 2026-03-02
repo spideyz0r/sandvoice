@@ -821,6 +821,38 @@ class TestRegisterConfigTasks(unittest.TestCase):
         scheduler.add_task.assert_not_called()
         db.get_active_or_paused_task_by_name.assert_not_called()
 
+    def test_null_action_payload_normalised_to_empty_dict(self):
+        """action_payload: null in YAML must be treated as {} not passed as None."""
+        sv = self._make_stub([{
+            "name": "nullpayload",
+            "schedule_type": "interval",
+            "schedule_value": "60",
+            "action_type": "speak",
+            "action_payload": None,  # YAML null
+        }])
+        scheduler = MagicMock()
+        db = MagicMock()
+        db.get_active_or_paused_task_by_name.return_value = None
+        sv._register_config_tasks(scheduler, db)
+        scheduler.add_task.assert_called_once()
+        self.assertEqual(scheduler.add_task.call_args.kwargs["action_payload"], {})
+
+    def test_non_dict_action_payload_normalised_to_empty_dict(self):
+        """Non-dict action_payload (e.g. a list) must warn and default to {}."""
+        sv = self._make_stub([{
+            "name": "listpayload",
+            "schedule_type": "interval",
+            "schedule_value": "60",
+            "action_type": "speak",
+            "action_payload": ["not", "a", "dict"],
+        }])
+        scheduler = MagicMock()
+        db = MagicMock()
+        db.get_active_or_paused_task_by_name.return_value = None
+        sv._register_config_tasks(scheduler, db)
+        scheduler.add_task.assert_called_once()
+        self.assertEqual(scheduler.add_task.call_args.kwargs["action_payload"], {})
+
     def test_name_whitespace_stripped_before_dedup(self):
         """Whitespace in 'name' must be stripped; the stripped name is used for dedup."""
         sv = self._make_stub([{

@@ -140,12 +140,22 @@ class SandVoice:
                 logger.info("Skipping config task '%s' — already active or paused in DB", name)
                 continue
             try:
+                action_payload = task_def.get("action_payload", {})
+                if action_payload is None:
+                    action_payload = {}
+                elif not isinstance(action_payload, dict):
+                    logger.warning(
+                        "Config task '%s' has non-mapping 'action_payload' of type %s; defaulting to {}",
+                        name,
+                        type(action_payload).__name__,
+                    )
+                    action_payload = {}
                 scheduler.add_task(
                     name=name,
                     schedule_type=task_def["schedule_type"],
                     schedule_value=str(task_def["schedule_value"]),
                     action_type=task_def["action_type"],
-                    action_payload=task_def.get("action_payload", {}),
+                    action_payload=action_payload,
                 )
             except Exception as e:
                 logger.warning("Failed to register config task '%s': %s", name, e)
