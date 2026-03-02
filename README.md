@@ -340,10 +340,10 @@ action_payload:
 
 ### Notes
 
-- Tasks with the same `name` that are already **active** or **paused** in the DB are skipped on startup — no duplicates on restart.
-- To re-register a task after changing its config (e.g. new schedule or payload), delete `~/.sandvoice/sandvoice.db` and restart. The DB will be recreated automatically.
+- Tasks with the same `name` that are already **active** or **paused** in the DB are skipped on startup. **Completed** tasks (including fired `once` tasks) are not deduped — they will be re-registered on the next restart if they remain in your config, and will run again.
+- To re-register an **active** or **paused** task after changing its config (e.g. new schedule or payload), delete `~/.sandvoice/sandvoice.db` and restart. The DB will be recreated automatically. Completed tasks pick up config changes on the next restart automatically.
 - `once` tasks that fail with a transient error (e.g. network timeout) are retried on the next scheduler tick. Permanent config errors (bad JSON, missing fields) mark the task completed immediately so they don't loop.
-- All timestamps are stored and compared in UTC internally. Times display in your configured `timezone` in the logs.
+- All timestamps are stored and compared in UTC internally. Log timestamps are displayed using your configured `timezone`, which should be an IANA timezone name (e.g. `America/New_York`) for correct offsets and DST handling. If the timezone cannot be resolved, the scheduler logs a warning and falls back to UTC.
 - The scheduler runs in a background daemon thread and shuts down cleanly on exit.
 
 
