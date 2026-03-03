@@ -240,6 +240,10 @@ All configuration keys are loaded from `common/configuration.py` defaults and ca
 - `scheduler_poll_interval`: seconds between scheduler ticks (default `30`)
 - `scheduler_db_path`: path to the SQLite database used to persist tasks (default `~/.sandvoice/sandvoice.db`)
 
+- `cache_enabled`: `enabled`/`disabled`; enables the background weather cache (default `disabled`)
+- `cache_weather_ttl_s`: seconds before a cached weather entry is considered stale (default `10800` — 3 hours)
+- `cache_weather_max_stale_s`: seconds after which a stale cache entry is completely expired and will not be served (default `21600` — 6 hours)
+
 ---
 
 ## Scheduled Tasks
@@ -345,6 +349,52 @@ action_payload:
 - `once` tasks that fail with a transient error (e.g. network timeout) are retried on the next scheduler tick. Permanent config errors (bad JSON, missing fields) mark the task completed immediately so they don't loop.
 - All timestamps are stored and compared in UTC internally. Log timestamps are displayed using your configured `timezone`, which should be an IANA timezone name (e.g. `America/New_York`) for correct offsets and DST handling. If the timezone cannot be resolved, the scheduler logs a warning and falls back to UTC.
 - The scheduler runs in a background daemon thread and shuts down cleanly on exit.
+
+---
+
+## Background Cache
+
+SandVoice can cache weather responses in SQLite so that repeated queries are answered instantly without making a live API call. The cache is refreshed silently in the background on a configurable schedule.
+
+### Enabling the cache
+
+In `~/.sandvoice/config.yaml`:
+
+```yaml
+cache_enabled: enabled
+cache_weather_ttl_s: 10800    # treat entries as fresh for 3 hours
+cache_weather_max_stale_s: 21600  # serve stale entries for up to 6 hours
+```
+
+### How it works
+
+1. When you ask for the weather, SandVoice checks the cache first.
+   - **Fresh** (age ≤ `cache_weather_ttl_s`): returned immediately, no API call.
+   - **Stale but valid** (TTL < age ≤ `cache_weather_max_stale_s`): returned from cache while a background refresh can update it.
+   - **Expired** (age > `cache_weather_max_stale_s`): live API call is made and the cache is updated.
+2. The cache is stored in the same SQLite file as the scheduler (`scheduler_db_path`).
+3. Cache entries persist across restarts.
+
+### Scheduled background refresh
+
+Pair the cache with the scheduler to pre-populate or refresh the cache silently before you ask:
+
+```yaml
+cache_enabled: enabled
+scheduler_enabled: enabled
+
+tasks:
+  - name: weather-cache-refresh
+    schedule_type: interval
+    schedule_value: "10800"   # refresh every 3 hours
+    action_type: plugin
+    action_payload:
+      plugin: weather
+      query: weather
+      refresh_only: true      # silent refresh — does not speak the result
+```
+
+With `refresh_only: true` the scheduler fetches fresh weather data and updates the cache without playing any audio. Your next voice query will get an instant cached response.
 
 
 Enjoy the experience!

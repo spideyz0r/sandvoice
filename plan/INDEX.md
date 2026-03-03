@@ -115,6 +115,7 @@ plan/
 **Description**: Add configurable pauses between TTS chunks to make speech feel less rushed.
 
 ### Priority 20: Background Cache for Frequent Voice Queries
+**Status**: 🚧 In Progress
 **Document**: [backlog/20-background-cache-frequent-voice-queries.md](./backlog/20-background-cache-frequent-voice-queries.md)
 **Description**: Opt-in background refresh of weather/crypto/common info to enable instant spoken answers with freshness hints.
 
