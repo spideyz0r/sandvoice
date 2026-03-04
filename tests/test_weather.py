@@ -270,6 +270,13 @@ class TestWeatherPluginDebugPaths(unittest.TestCase):
         result = process("weather", {}, s)
         self.assertIn("Unable to fetch", result)
 
+    def test_value_error_refresh_only_returns_none(self):
+        os.environ.pop('OPENWEATHERMAP_API_KEY', None)
+        s = _make_sandvoice(cache=None)
+        from plugins.weather import process
+        result = process("weather", {"refresh_only": True}, s)
+        self.assertIsNone(result)
+
     @patch('plugins.weather.OpenWeatherReader')
     def test_generic_exception_returns_error(self, MockReader):
         MockReader.side_effect = RuntimeError("unexpected error")
@@ -277,6 +284,14 @@ class TestWeatherPluginDebugPaths(unittest.TestCase):
         from plugins.weather import process
         result = process("weather", {}, s)
         self.assertIn("Unable to fetch", result)
+
+    @patch('plugins.weather.OpenWeatherReader')
+    def test_generic_exception_refresh_only_returns_none(self, MockReader):
+        MockReader.side_effect = RuntimeError("unexpected error")
+        s = _make_sandvoice(cache=None)
+        from plugins.weather import process
+        result = process("weather", {"refresh_only": True}, s)
+        self.assertIsNone(result)
 
 
 class TestOpenWeatherReader(unittest.TestCase):

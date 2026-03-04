@@ -109,8 +109,12 @@ def process(user_input, route, s):
     except ValueError as e:
         if s.config.debug:
             logger.error("Weather plugin configuration error: %s", e)
+        if route.get('refresh_only', False):
+            return None
         return "Unable to fetch weather information. Please check your configuration."
     except Exception as e:
         if s.config.debug:
             logger.error("Weather plugin error: %s", e)
+        if route.get('refresh_only', False):
+            return None
         return "Unable to fetch weather information. Please try again later."

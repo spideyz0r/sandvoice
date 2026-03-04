@@ -36,8 +36,12 @@ class VoiceCache:
         self._conn = sqlite3.connect(db_path, check_same_thread=False, timeout=_SQLITE_BUSY_TIMEOUT_S)
         # WAL mode reduces reader/writer blocking when sharing the DB file with
         # SchedulerDB; busy_timeout is an additional per-connection safeguard.
-        self._conn.execute("PRAGMA journal_mode=WAL")
-        self._conn.execute(f"PRAGMA busy_timeout={_SQLITE_BUSY_TIMEOUT_MS}")
+        # Best-effort: WAL is unavailable on some filesystems (e.g. NFS).
+        try:
+            self._conn.execute("PRAGMA journal_mode=WAL")
+            self._conn.execute(f"PRAGMA busy_timeout={_SQLITE_BUSY_TIMEOUT_MS}")
+        except sqlite3.OperationalError as e:
+            logger.warning("SQLite WAL/busy_timeout pragma unavailable, using defaults: %s", e)
         self._conn.row_factory = sqlite3.Row
         self._lock = threading.Lock()
         self._init_schema()
