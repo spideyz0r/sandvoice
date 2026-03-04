@@ -8,6 +8,9 @@ from typing import Optional
 
 logger = logging.getLogger(__name__)
 
+_SQLITE_BUSY_TIMEOUT_S = 5
+_SQLITE_BUSY_TIMEOUT_MS = _SQLITE_BUSY_TIMEOUT_S * 1000
+
 
 @dataclass
 class CacheEntry:
@@ -30,11 +33,11 @@ class VoiceCache:
         dir_name = os.path.dirname(db_path)
         if dir_name:
             os.makedirs(dir_name, exist_ok=True)
-        self._conn = sqlite3.connect(db_path, check_same_thread=False, timeout=5)
+        self._conn = sqlite3.connect(db_path, check_same_thread=False, timeout=_SQLITE_BUSY_TIMEOUT_S)
         # WAL mode reduces reader/writer blocking when sharing the DB file with
         # SchedulerDB; busy_timeout is an additional per-connection safeguard.
         self._conn.execute("PRAGMA journal_mode=WAL")
-        self._conn.execute("PRAGMA busy_timeout=5000")
+        self._conn.execute(f"PRAGMA busy_timeout={_SQLITE_BUSY_TIMEOUT_MS}")
         self._conn.row_factory = sqlite3.Row
         self._lock = threading.Lock()
         self._init_schema()

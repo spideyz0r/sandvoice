@@ -7,6 +7,9 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Optional
 
+_SQLITE_BUSY_TIMEOUT_S = 5
+_SQLITE_BUSY_TIMEOUT_MS = _SQLITE_BUSY_TIMEOUT_S * 1000
+
 
 @dataclass
 class ScheduledTask:
@@ -28,11 +31,11 @@ class SchedulerDB:
         dir_name = os.path.dirname(db_path)
         if dir_name:
             os.makedirs(dir_name, exist_ok=True)
-        self._conn = sqlite3.connect(db_path, check_same_thread=False, timeout=5)
+        self._conn = sqlite3.connect(db_path, check_same_thread=False, timeout=_SQLITE_BUSY_TIMEOUT_S)
         # Match VoiceCache pragmas so both connections on the shared DB file
         # benefit from WAL concurrency and the same busy-wait ceiling.
         self._conn.execute("PRAGMA journal_mode=WAL")
-        self._conn.execute("PRAGMA busy_timeout=5000")
+        self._conn.execute(f"PRAGMA busy_timeout={_SQLITE_BUSY_TIMEOUT_MS}")
         self._conn.row_factory = sqlite3.Row
         self._lock = threading.Lock()
         self._init_schema()
