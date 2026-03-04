@@ -4,8 +4,6 @@ import os
 
 import requests
 
-from common.error_handling import handle_api_error
-
 logger = logging.getLogger(__name__)
 
 
@@ -29,12 +27,14 @@ class OpenWeatherReader:
             # not formatting the output, since the model can understand that
             return response.json()
         except requests.exceptions.RequestException as e:
-            error_msg = handle_api_error(e, service_name="OpenWeatherMap")
-            logger.error("Weather API error: %s", e)
-            logger.debug(error_msg)
+            status = getattr(getattr(e, 'response', None), 'status_code', None)
+            if status is not None:
+                logger.error("Weather API error: %s status=%d", type(e).__name__, status)
+            else:
+                logger.error("Weather API error: %s", type(e).__name__)
             return {"error": "Unable to fetch weather data"}
         except Exception as e:
-            logger.error("Weather error: %s", e)
+            logger.error("Weather error: %s", type(e).__name__)
             return {"error": "Weather service unavailable"}
 
 
