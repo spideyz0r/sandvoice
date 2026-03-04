@@ -77,7 +77,17 @@ class VoiceCache:
 
     def set(self, key: str, value: str, ttl_s: int, max_stale_s: int):
         """Insert or update a cache entry."""
-        now = datetime.now(timezone.utc).isoformat()
+        self._upsert(key, value, ttl_s, max_stale_s, datetime.now(timezone.utc).isoformat())
+        logger.debug("Cache set: key=%r age=0s ttl=%ds", key, ttl_s)
+
+    def set_with_timestamp(self, key: str, value: str, ttl_s: int, max_stale_s: int, updated_at: str):
+        """Insert or update a cache entry with an explicit ISO 8601 UTC timestamp.
+
+        Useful for seeding test data or importing entries at a known age.
+        """
+        self._upsert(key, value, ttl_s, max_stale_s, updated_at)
+
+    def _upsert(self, key: str, value: str, ttl_s: int, max_stale_s: int, updated_at: str):
         with self._lock:
             self._conn.execute(
                 """
@@ -89,10 +99,9 @@ class VoiceCache:
                     ttl_s       = excluded.ttl_s,
                     max_stale_s = excluded.max_stale_s
                 """,
-                (key, value, now, ttl_s, max_stale_s),
+                (key, value, updated_at, ttl_s, max_stale_s),
             )
             self._conn.commit()
-        logger.debug("Cache set: key=%r age=0s ttl=%ds", key, ttl_s)
 
     def age_s(self, entry: CacheEntry) -> float:
         """Return the age of an entry in seconds."""

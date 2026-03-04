@@ -158,18 +158,11 @@ class TestWeatherPluginWithCache(unittest.TestCase):
 
     @patch('plugins.weather.OpenWeatherReader')
     def test_expired_cache_falls_through_to_api(self, MockReader):
-        from datetime import timedelta, timezone
-        from datetime import datetime as dt
-        old_ts = (dt.now(timezone.utc) - timedelta(hours=10)).isoformat()
-        # Manually insert expired entry
-        self.cache.set("weather:London:metric", json.dumps(_WEATHER_DATA), ttl_s=1, max_stale_s=2)
-        # Patch the entry's updated_at to be 10 hours ago
-        self.cache._conn.execute(
-            "UPDATE cache_entries SET updated_at = ? WHERE key = ?",
-            (old_ts, "weather:London:metric"),
+        old_ts = (datetime.now(timezone.utc) - timedelta(hours=10)).isoformat()
+        self.cache.set_with_timestamp(
+            "weather:London:metric", json.dumps(_WEATHER_DATA), ttl_s=1, max_stale_s=2,
+            updated_at=old_ts,
         )
-        self.cache._conn.commit()
-
         MockReader.return_value.get_current_weather.return_value = _WEATHER_DATA
         s = _make_sandvoice(cache=self.cache)
         from plugins.weather import process
@@ -180,13 +173,11 @@ class TestWeatherPluginWithCache(unittest.TestCase):
     @patch('plugins.weather.OpenWeatherReader')
     def test_stale_but_valid_cache_hit(self, MockReader):
         # Insert entry that is expired (past TTL) but within max_stale
-        self.cache.set("weather:London:metric", json.dumps(_WEATHER_DATA), ttl_s=1, max_stale_s=21600)
         old_ts = (datetime.now(timezone.utc) - timedelta(hours=2)).isoformat()
-        self.cache._conn.execute(
-            "UPDATE cache_entries SET updated_at = ? WHERE key = ?",
-            (old_ts, "weather:London:metric"),
+        self.cache.set_with_timestamp(
+            "weather:London:metric", json.dumps(_WEATHER_DATA), ttl_s=1, max_stale_s=21600,
+            updated_at=old_ts,
         )
-        self.cache._conn.commit()
         s = _make_sandvoice(cache=self.cache)
         from plugins.weather import process
         result = process("weather", {}, s)
@@ -196,12 +187,11 @@ class TestWeatherPluginWithCache(unittest.TestCase):
 
     @patch('plugins.weather.OpenWeatherReader')
     def test_corrupt_cache_entry_falls_back_to_live(self, MockReader):
-        # Store invalid JSON in the cache entry
-        self.cache._conn.execute(
-            "INSERT INTO cache_entries (key, value, updated_at, ttl_s, max_stale_s) VALUES (?,?,?,?,?)",
-            ("weather:London:metric", "NOT_JSON", datetime.now(timezone.utc).isoformat(), 10800, 21600),
+        # Store invalid JSON via the public API
+        self.cache.set_with_timestamp(
+            "weather:London:metric", "NOT_JSON", ttl_s=10800, max_stale_s=21600,
+            updated_at=datetime.now(timezone.utc).isoformat(),
         )
-        self.cache._conn.commit()
         MockReader.return_value.get_current_weather.return_value = _WEATHER_DATA
         s = _make_sandvoice(cache=self.cache)
         from plugins.weather import process

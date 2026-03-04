@@ -49,6 +49,14 @@ class TestVoiceCache(unittest.TestCase):
         self.assertEqual(entry.value, "new")
         self.assertEqual(entry.ttl_s, 999)
 
+    def test_set_with_timestamp_stores_explicit_time(self):
+        old_ts = (datetime.now(timezone.utc) - timedelta(hours=5)).isoformat()
+        self.cache.set_with_timestamp("k1", "v", ttl_s=3600, max_stale_s=7200, updated_at=old_ts)
+        entry = self.cache.get("k1")
+        self.assertIsNotNone(entry)
+        self.assertEqual(entry.updated_at, old_ts)
+        self.assertGreater(self.cache.age_s(entry), 4 * 3600)
+
     def test_updated_at_is_iso8601_utc(self):
         self.cache.set("k1", "v", ttl_s=60, max_stale_s=120)
         entry = self.cache.get("k1")
