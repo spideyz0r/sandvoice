@@ -61,8 +61,10 @@ class VoiceCache:
             self._conn.commit()
 
     def get(self, key: str) -> Optional[CacheEntry]:
-        """Return the cache entry for key, or None if not found."""
+        """Return the cache entry for key, or None if not found or if the cache is closed."""
         with self._lock:
+            if self._conn is None:
+                return None
             row = self._conn.execute(
                 "SELECT * FROM cache_entries WHERE key = ?", (key,)
             ).fetchone()
@@ -90,6 +92,9 @@ class VoiceCache:
 
     def _upsert(self, key: str, value: str, ttl_s: int, max_stale_s: int, updated_at: str):
         with self._lock:
+            if self._conn is None:
+                logger.warning("Cache write skipped: cache is closed (key=%r)", key)
+                return
             self._conn.execute(
                 """
                 INSERT INTO cache_entries (key, value, updated_at, ttl_s, max_stale_s)
@@ -105,8 +110,21 @@ class VoiceCache:
             self._conn.commit()
 
     def age_s(self, entry: CacheEntry) -> float:
-        """Return the age of an entry in seconds."""
-        updated = datetime.fromisoformat(entry.updated_at)
+        """Return the age of an entry in seconds.
+
+        Returns ``float('inf')`` if ``updated_at`` cannot be parsed, so
+        callers treat the entry as infinitely old (never fresh/servable).
+        """
+        updated_str = entry.updated_at
+        try:
+            if isinstance(updated_str, str) and updated_str.endswith("Z"):
+                updated_str = updated_str[:-1] + "+00:00"
+            updated = datetime.fromisoformat(updated_str)
+            if updated.tzinfo is None:
+                updated = updated.replace(tzinfo=timezone.utc)
+        except (TypeError, ValueError):
+            logger.warning("Invalid updated_at for cache entry %r: %r", entry.key, entry.updated_at)
+            return float("inf")
         return (datetime.now(timezone.utc) - updated).total_seconds()
 
     def is_fresh(self, entry: CacheEntry) -> bool:

@@ -136,3 +136,41 @@ class TestVoiceCache(unittest.TestCase):
         self.assertEqual(task.name, "t1")
         self.assertIsNotNone(entry)
         db.close()
+
+    # ── age_s robustness ─────────────────────────────────────────────────────
+
+    def test_age_s_handles_z_suffix(self):
+        """age_s must parse 'Z'-suffixed timestamps without raising."""
+        entry = CacheEntry(
+            key="k", value="v",
+            updated_at=(datetime.now(timezone.utc) - timedelta(hours=1)).strftime("%Y-%m-%dT%H:%M:%SZ"),
+            ttl_s=3600, max_stale_s=7200,
+        )
+        age = self.cache.age_s(entry)
+        self.assertGreater(age, 0)
+        self.assertLess(age, 7200)
+
+    def test_age_s_treats_invalid_timestamp_as_inf(self):
+        """age_s must return float('inf') for unparseable updated_at."""
+        entry = CacheEntry(key="k", value="v", updated_at="not-a-date", ttl_s=3600, max_stale_s=7200)
+        self.assertEqual(self.cache.age_s(entry), float("inf"))
+
+    def test_age_s_treats_naive_datetime_as_utc(self):
+        """age_s must treat naive timestamps as UTC, not raise."""
+        naive_ts = (datetime.now(timezone.utc) - timedelta(hours=2)).strftime("%Y-%m-%dT%H:%M:%S")
+        entry = CacheEntry(key="k", value="v", updated_at=naive_ts, ttl_s=3600, max_stale_s=7200)
+        age = self.cache.age_s(entry)
+        self.assertGreater(age, 0)
+        self.assertLess(age, 10800)
+
+    # ── closed-cache guards ───────────────────────────────────────────────────
+
+    def test_get_after_close_returns_none(self):
+        self.cache.set("k", "v", ttl_s=60, max_stale_s=120)
+        self.cache.close()
+        self.assertIsNone(self.cache.get("k"))
+
+    def test_set_after_close_does_not_raise(self):
+        self.cache.close()
+        # Should log a warning and return without crashing
+        self.cache.set("k", "v", ttl_s=60, max_stale_s=120)

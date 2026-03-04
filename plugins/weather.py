@@ -34,7 +34,10 @@ class OpenWeatherReader:
                 logger.error("Weather API error: %s", type(e).__name__)
             return {"error": "Unable to fetch weather data"}
         except Exception as e:
-            logger.error("Weather error: %s", type(e).__name__)
+            logger.error(
+                "Weather error: %s: %s", type(e).__name__, e,
+                exc_info=logger.isEnabledFor(logging.DEBUG),
+            )
             return {"error": "Weather service unavailable"}
 
 
