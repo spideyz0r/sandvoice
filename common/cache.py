@@ -15,7 +15,7 @@ _SQLITE_BUSY_TIMEOUT_MS = _SQLITE_BUSY_TIMEOUT_S * 1000
 @dataclass
 class CacheEntry:
     key: str
-    value: str          # JSON string
+    value: str          # text/JSON payload
     updated_at: str     # ISO 8601 UTC
     ttl_s: int
     max_stale_s: int
@@ -25,8 +25,9 @@ class VoiceCache:
     """SQLite-backed cache for plugin responses.
 
     Stores small text/JSON payloads keyed by a plugin-defined string.
-    Thread-safe. Multiple connections to the same file are safe because
-    cache writes are infrequent (scheduled every few hours).
+    Thread-safe. Safe for sharing the same database file across multiple
+    connections; SQLite WAL mode and busy_timeout mitigate contention
+    under concurrent use.
     """
 
     def __init__(self, db_path: str):

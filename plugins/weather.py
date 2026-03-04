@@ -13,7 +13,7 @@ class OpenWeatherReader:
     def __init__(self, location, unit="metric", timeout=10):
         if not os.environ.get('OPENWEATHERMAP_API_KEY'):
             error_msg = "Missing OPENWEATHERMAP_API_KEY environment variable"
-            print(f"Error: {error_msg}")
+            logger.error(error_msg)
             raise ValueError(error_msg)
         self.api_key = os.environ['OPENWEATHERMAP_API_KEY']
         self.location = location
@@ -31,16 +31,17 @@ class OpenWeatherReader:
         except requests.exceptions.RequestException as e:
             error_msg = handle_api_error(e, service_name="OpenWeatherMap")
             logger.error("Weather API error: %s", e)
-            print(error_msg)
+            logger.debug(error_msg)
             return {"error": "Unable to fetch weather data"}
         except Exception as e:
             logger.error("Weather error: %s", e)
-            print(f"Error: Weather service error: {e}")
             return {"error": "Weather service unavailable"}
 
 
 def _cache_key(location, unit):
-    return f"weather:{location}:{unit}"
+    # JSON-encode the pair to avoid collisions when location contains ':'.
+    encoded = json.dumps([location, unit], separators=(",", ":"))
+    return f"weather:{encoded}"
 
 
 def process(user_input, route, s):
