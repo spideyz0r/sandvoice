@@ -211,6 +211,18 @@ class TestWeatherPluginWithCache(unittest.TestCase):
         self.assertEqual(result, "It is 20°C in London.")
 
     @patch('plugins.weather.OpenWeatherReader')
+    def test_cache_read_failure_falls_back_to_live(self, MockReader):
+        MockReader.return_value.get_current_weather.return_value = _WEATHER_DATA
+        s = _make_sandvoice(cache=self.cache)
+        # Simulate a DB read error (e.g. locked)
+        with patch.object(self.cache, 'get', side_effect=Exception("DB locked")):
+            from plugins.weather import process
+            result = process("weather", {}, s)
+        # Should still return a response via live fetch
+        MockReader.assert_called_once()
+        self.assertEqual(result, "It is 20°C in London.")
+
+    @patch('plugins.weather.OpenWeatherReader')
     def test_cache_write_failure_still_returns_response(self, MockReader):
         MockReader.return_value.get_current_weather.return_value = _WEATHER_DATA
         s = _make_sandvoice(cache=self.cache)

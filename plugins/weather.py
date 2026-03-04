@@ -62,21 +62,24 @@ def process(user_input, route, s):
 
         # Try serving from cache when not a background refresh
         if not refresh_only and cache is not None:
-            entry = cache.get(cache_key)
-            if entry is not None and cache.can_serve(entry):
-                if cache.is_fresh(entry):
-                    logger.debug("Weather cache hit (fresh): key=%r", cache_key)
-                else:
-                    logger.debug("Weather cache hit (stale-but-valid): key=%r", cache_key)
-                try:
-                    current_weather = json.loads(entry.value)
-                    response = s.ai.generate_response(
-                        user_input,
-                        f"You can answer questions about weather. This is the information of the weather the user asked: {str(current_weather)}\n",
-                    )
-                    return response.content
-                except (json.JSONDecodeError, TypeError) as e:
-                    logger.warning("Corrupt weather cache entry for key=%r, fetching live data: %s", cache_key, e)
+            try:
+                entry = cache.get(cache_key)
+                if entry is not None and cache.can_serve(entry):
+                    if cache.is_fresh(entry):
+                        logger.debug("Weather cache hit (fresh): key=%r", cache_key)
+                    else:
+                        logger.debug("Weather cache hit (stale-but-valid): key=%r", cache_key)
+                    try:
+                        current_weather = json.loads(entry.value)
+                        response = s.ai.generate_response(
+                            user_input,
+                            f"You can answer questions about weather. This is the information of the weather the user asked: {str(current_weather)}\n",
+                        )
+                        return response.content
+                    except (json.JSONDecodeError, TypeError) as e:
+                        logger.warning("Corrupt weather cache entry for key=%r, fetching live data: %s", cache_key, e)
+            except Exception as e:
+                logger.warning("Weather cache read failed for key=%r, fetching live data: %s", cache_key, e)
 
         # Fetch live data
         weather = OpenWeatherReader(location, unit, s.config.api_timeout)

@@ -31,6 +31,10 @@ class VoiceCache:
         if dir_name:
             os.makedirs(dir_name, exist_ok=True)
         self._conn = sqlite3.connect(db_path, check_same_thread=False, timeout=5)
+        # WAL mode reduces reader/writer blocking when sharing the DB file with
+        # SchedulerDB; busy_timeout is an additional per-connection safeguard.
+        self._conn.execute("PRAGMA journal_mode=WAL")
+        self._conn.execute("PRAGMA busy_timeout=5000")
         self._conn.row_factory = sqlite3.Row
         self._lock = threading.Lock()
         self._init_schema()
@@ -98,4 +102,6 @@ class VoiceCache:
 
     def close(self):
         with self._lock:
-            self._conn.close()
+            if self._conn is not None:
+                self._conn.close()
+                self._conn = None

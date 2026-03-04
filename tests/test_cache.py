@@ -106,9 +106,10 @@ class TestVoiceCache(unittest.TestCase):
     # ── close ────────────────────────────────────────────────────────────────
 
     def test_close_is_idempotent(self):
-        # Should not raise even if called twice
+        # Should not raise even if called twice; _conn must be None after first close
         self.cache.close()
-        self.cache.close()
+        self.assertIsNone(self.cache._conn)
+        self.cache.close()  # second call must also be safe
 
     # ── shared DB with SchedulerDB ────────────────────────────────────────────
 
