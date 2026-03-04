@@ -615,8 +615,8 @@ class TestConfigurationValidation(unittest.TestCase):
         self.assertFalse(config.visual_state_indicator)
 
 
-class TestSchedulerEnabledFlag(unittest.TestCase):
-    """scheduler_enabled must accept booleans and common truthy/falsy strings."""
+class _TempHomeBase(unittest.TestCase):
+    """Shared base: create a temporary HOME with a .sandvoice directory."""
 
     def setUp(self):
         self.temp_dir = tempfile.mkdtemp()
@@ -636,6 +636,10 @@ class TestSchedulerEnabledFlag(unittest.TestCase):
         config_path = os.path.join(self.temp_dir, ".sandvoice", "config.yaml")
         with open(config_path, 'w') as f:
             yaml.dump(config_dict, f)
+
+
+class TestSchedulerEnabledFlag(_TempHomeBase):
+    """scheduler_enabled must accept booleans and common truthy/falsy strings."""
 
     def test_scheduler_enabled_string_enabled(self):
         self.write_config({"scheduler_enabled": "enabled"})
@@ -741,27 +745,8 @@ class TestConfigTasks(unittest.TestCase):
         self.assertEqual(config.tasks[1]["action_payload"]["plugin"], "weather")
 
 
-class TestCacheConfig(unittest.TestCase):
+class TestCacheConfig(_TempHomeBase):
     """cache_enabled, cache_weather_ttl_s, cache_weather_max_stale_s defaults and clamping."""
-
-    def setUp(self):
-        self.temp_dir = tempfile.mkdtemp()
-        self.original_home = os.environ.get('HOME')
-        os.environ['HOME'] = self.temp_dir
-        os.makedirs(os.path.join(self.temp_dir, ".sandvoice"), exist_ok=True)
-
-    def tearDown(self):
-        if self.original_home:
-            os.environ['HOME'] = self.original_home
-        else:
-            del os.environ['HOME']
-        import shutil
-        shutil.rmtree(self.temp_dir, ignore_errors=True)
-
-    def write_config(self, config_dict):
-        config_path = os.path.join(self.temp_dir, ".sandvoice", "config.yaml")
-        with open(config_path, 'w') as f:
-            yaml.dump(config_dict, f)
 
     def test_cache_disabled_by_default(self):
         self.write_config({})
