@@ -233,6 +233,14 @@ class Config:
             self.cache_weather_max_stale_s = max(1, int(self.get("cache_weather_max_stale_s")))
         except (TypeError, ValueError):
             self.cache_weather_max_stale_s = self.defaults["cache_weather_max_stale_s"]
+        if self.cache_weather_max_stale_s < self.cache_weather_ttl_s:
+            logging.warning(
+                "cache_weather_max_stale_s (%d) is less than cache_weather_ttl_s (%d); "
+                "clamping max_stale to ttl value.",
+                self.cache_weather_max_stale_s,
+                self.cache_weather_ttl_s,
+            )
+            self.cache_weather_max_stale_s = self.cache_weather_ttl_s
 
         # Voice UX
         voice_ack_earcon = self.get("voice_ack_earcon")

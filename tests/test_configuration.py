@@ -741,5 +741,69 @@ class TestConfigTasks(unittest.TestCase):
         self.assertEqual(config.tasks[1]["action_payload"]["plugin"], "weather")
 
 
+class TestCacheConfig(unittest.TestCase):
+    """cache_enabled, cache_weather_ttl_s, cache_weather_max_stale_s defaults and clamping."""
+
+    def setUp(self):
+        self.temp_dir = tempfile.mkdtemp()
+        self.original_home = os.environ.get('HOME')
+        os.environ['HOME'] = self.temp_dir
+        os.makedirs(os.path.join(self.temp_dir, ".sandvoice"), exist_ok=True)
+
+    def tearDown(self):
+        if self.original_home:
+            os.environ['HOME'] = self.original_home
+        else:
+            del os.environ['HOME']
+        import shutil
+        shutil.rmtree(self.temp_dir, ignore_errors=True)
+
+    def write_config(self, config_dict):
+        config_path = os.path.join(self.temp_dir, ".sandvoice", "config.yaml")
+        with open(config_path, 'w') as f:
+            yaml.dump(config_dict, f)
+
+    def test_cache_disabled_by_default(self):
+        self.write_config({})
+        config = Config()
+        self.assertFalse(config.cache_enabled)
+
+    def test_cache_enabled_string(self):
+        self.write_config({"cache_enabled": "enabled"})
+        config = Config()
+        self.assertTrue(config.cache_enabled)
+
+    def test_cache_enabled_bool_true(self):
+        self.write_config({"cache_enabled": True})
+        config = Config()
+        self.assertTrue(config.cache_enabled)
+
+    def test_cache_weather_ttl_default(self):
+        self.write_config({})
+        config = Config()
+        self.assertEqual(config.cache_weather_ttl_s, 10800)
+
+    def test_cache_weather_max_stale_default(self):
+        self.write_config({})
+        config = Config()
+        self.assertEqual(config.cache_weather_max_stale_s, 21600)
+
+    def test_cache_max_stale_clamped_to_ttl_when_smaller(self):
+        # max_stale < ttl → should be clamped to ttl
+        self.write_config({"cache_weather_ttl_s": 7200, "cache_weather_max_stale_s": 3600})
+        config = Config()
+        self.assertEqual(config.cache_weather_max_stale_s, config.cache_weather_ttl_s)
+
+    def test_cache_max_stale_equals_ttl_is_valid(self):
+        self.write_config({"cache_weather_ttl_s": 3600, "cache_weather_max_stale_s": 3600})
+        config = Config()
+        self.assertEqual(config.cache_weather_max_stale_s, 3600)
+
+    def test_cache_ttl_invalid_falls_back_to_default(self):
+        self.write_config({"cache_weather_ttl_s": "bad"})
+        config = Config()
+        self.assertEqual(config.cache_weather_ttl_s, 10800)
+
+
 if __name__ == '__main__':
     unittest.main()

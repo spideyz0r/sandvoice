@@ -26,7 +26,7 @@ class OpenWeatherReader:
             url = f"{self.base_url}q={self.location}&appid={self.api_key}&units={self.unit}"
             response = requests.get(url, timeout=self.timeout)
             response.raise_for_status()
-            # not formating the output, since the model can understand that
+            # not formatting the output, since the model can understand that
             return response.json()
         except requests.exceptions.RequestException as e:
             error_msg = handle_api_error(e, service_name="OpenWeatherMap")
@@ -68,12 +68,15 @@ def process(user_input, route, s):
                     logger.debug("Weather cache hit (fresh): key=%r", cache_key)
                 else:
                     logger.debug("Weather cache hit (stale-but-valid): key=%r", cache_key)
-                current_weather = json.loads(entry.value)
-                response = s.ai.generate_response(
-                    user_input,
-                    f"You can answer questions about weather. This is the information of the weather the user asked: {str(current_weather)}\n",
-                )
-                return response.content
+                try:
+                    current_weather = json.loads(entry.value)
+                    response = s.ai.generate_response(
+                        user_input,
+                        f"You can answer questions about weather. This is the information of the weather the user asked: {str(current_weather)}\n",
+                    )
+                    return response.content
+                except (json.JSONDecodeError, TypeError) as e:
+                    logger.warning("Corrupt weather cache entry for key=%r, fetching live data: %s", cache_key, e)
 
         # Fetch live data
         weather = OpenWeatherReader(location, unit, s.config.api_timeout)
@@ -81,13 +84,16 @@ def process(user_input, route, s):
 
         # Update cache if fetch was successful and cache is available
         if cache is not None and "error" not in current_weather:
-            cache.set(
-                cache_key,
-                json.dumps(current_weather),
-                ttl_s=s.config.cache_weather_ttl_s,
-                max_stale_s=s.config.cache_weather_max_stale_s,
-            )
-            logger.debug("Weather cache updated: key=%r", cache_key)
+            try:
+                cache.set(
+                    cache_key,
+                    json.dumps(current_weather),
+                    ttl_s=s.config.cache_weather_ttl_s,
+                    max_stale_s=s.config.cache_weather_max_stale_s,
+                )
+                logger.debug("Weather cache updated: key=%r", cache_key)
+            except Exception as e:
+                logger.warning("Weather cache write failed for key=%r: %s", cache_key, e)
 
         if refresh_only:
             return None

@@ -194,6 +194,33 @@ class TestWeatherPluginWithCache(unittest.TestCase):
         MockReader.assert_not_called()
         self.assertEqual(result, "It is 20°C in London.")
 
+    @patch('plugins.weather.OpenWeatherReader')
+    def test_corrupt_cache_entry_falls_back_to_live(self, MockReader):
+        # Store invalid JSON in the cache entry
+        self.cache._conn.execute(
+            "INSERT INTO cache_entries (key, value, updated_at, ttl_s, max_stale_s) VALUES (?,?,?,?,?)",
+            ("weather:London:metric", "NOT_JSON", datetime.now(timezone.utc).isoformat(), 10800, 21600),
+        )
+        self.cache._conn.commit()
+        MockReader.return_value.get_current_weather.return_value = _WEATHER_DATA
+        s = _make_sandvoice(cache=self.cache)
+        from plugins.weather import process
+        result = process("weather", {}, s)
+        # Should fall through to live fetch despite corrupt cache
+        MockReader.assert_called_once()
+        self.assertEqual(result, "It is 20°C in London.")
+
+    @patch('plugins.weather.OpenWeatherReader')
+    def test_cache_write_failure_still_returns_response(self, MockReader):
+        MockReader.return_value.get_current_weather.return_value = _WEATHER_DATA
+        s = _make_sandvoice(cache=self.cache)
+        # Simulate a DB write error
+        with patch.object(self.cache, 'set', side_effect=Exception("DB locked")):
+            from plugins.weather import process
+            result = process("weather", {}, s)
+        # Response should still be returned despite cache write failure
+        self.assertEqual(result, "It is 20°C in London.")
+
 
 class TestWeatherPluginDebugPaths(unittest.TestCase):
     """Cover debug-only code paths and exception branches."""
