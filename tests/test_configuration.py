@@ -789,6 +789,14 @@ class TestCacheConfig(_TempHomeBase):
         config = Config()
         self.assertEqual(config.cache_weather_ttl_s, 10800)
 
+    def test_cache_enabled_truthy_variants(self):
+        """All truthy strings accepted by scheduler_enabled must also work for cache_enabled."""
+        for value in ("true", "yes", "1", "on"):
+            with self.subTest(value=value):
+                self.write_config({"cache_enabled": value})
+                config = Config()
+                self.assertTrue(config.cache_enabled, msg=f"cache_enabled={value!r} should be truthy")
+
 
 if __name__ == '__main__':
     unittest.main()

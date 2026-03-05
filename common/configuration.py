@@ -224,7 +224,9 @@ class Config:
         if isinstance(raw_cache_enabled, bool):
             self.cache_enabled = raw_cache_enabled
         else:
-            self.cache_enabled = str(raw_cache_enabled or "disabled").strip().lower() == "enabled"
+            self.cache_enabled = str(raw_cache_enabled or "disabled").strip().lower() in (
+                "enabled", "true", "yes", "1", "on"
+            )
         try:
             self.cache_weather_ttl_s = max(1, int(self.get("cache_weather_ttl_s")))
         except (TypeError, ValueError):

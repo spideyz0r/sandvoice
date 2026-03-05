@@ -6,10 +6,9 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Optional
 
-logger = logging.getLogger(__name__)
+from common.db import _SQLITE_BUSY_TIMEOUT_MS, _SQLITE_BUSY_TIMEOUT_S
 
-_SQLITE_BUSY_TIMEOUT_S = 5
-_SQLITE_BUSY_TIMEOUT_MS = _SQLITE_BUSY_TIMEOUT_S * 1000
+logger = logging.getLogger(__name__)
 
 
 @dataclass

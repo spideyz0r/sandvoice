@@ -533,13 +533,15 @@ if __name__ == "__main__":
     signal.signal(signal.SIGINT, _shutdown)
     signal.signal(signal.SIGTERM, _shutdown)
 
+    # atexit handlers run LIFO: register cache first so it closes last,
+    # after the scheduler thread has already stopped.
+    if sandvoice.cache:
+        atexit.register(sandvoice.cache.close)
+
     if sandvoice.scheduler:
         # On normal interpreter exit (including after sys.exit()), join the
         # scheduler thread and close the DB so in-flight writes are not cut short.
         atexit.register(sandvoice.scheduler.close)
-
-    if sandvoice.cache:
-        atexit.register(sandvoice.cache.close)
 
     # Wake word mode: hands-free voice activation
     if sandvoice.args.wake_word:
