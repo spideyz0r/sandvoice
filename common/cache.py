@@ -1,0 +1,141 @@
+import logging
+import os
+import sqlite3
+import threading
+from dataclasses import dataclass
+from datetime import datetime, timezone
+from typing import Optional
+
+from common.db import _SQLITE_BUSY_TIMEOUT_MS, _SQLITE_BUSY_TIMEOUT_S
+
+logger = logging.getLogger(__name__)
+
+
+@dataclass
+class CacheEntry:
+    key: str
+    value: str          # text/JSON payload
+    updated_at: str     # ISO 8601 UTC
+    ttl_s: int
+    max_stale_s: int
+
+
+class VoiceCache:
+    """SQLite-backed cache for plugin responses.
+
+    Stores small text/JSON payloads keyed by a plugin-defined string.
+    Thread-safe. Safe for sharing the same database file across multiple
+    connections; SQLite WAL mode and busy_timeout mitigate contention
+    under concurrent use.
+    """
+
+    def __init__(self, db_path: str):
+        dir_name = os.path.dirname(db_path)
+        if dir_name:
+            os.makedirs(dir_name, exist_ok=True)
+        self._conn = sqlite3.connect(db_path, check_same_thread=False, timeout=_SQLITE_BUSY_TIMEOUT_S)
+        # WAL mode reduces reader/writer blocking when sharing the DB file with
+        # SchedulerDB; busy_timeout is an additional per-connection safeguard.
+        # Best-effort: WAL is unavailable on some filesystems (e.g. NFS).
+        try:
+            self._conn.execute("PRAGMA journal_mode=WAL")
+            self._conn.execute(f"PRAGMA busy_timeout={_SQLITE_BUSY_TIMEOUT_MS}")
+        except sqlite3.OperationalError as e:
+            logger.warning("SQLite WAL/busy_timeout pragma unavailable, using defaults: %s", e)
+        self._conn.row_factory = sqlite3.Row
+        self._lock = threading.Lock()
+        self._init_schema()
+
+    def _init_schema(self):
+        with self._lock:
+            self._conn.execute("""
+                CREATE TABLE IF NOT EXISTS cache_entries (
+                    key         TEXT PRIMARY KEY,
+                    value       TEXT NOT NULL,
+                    updated_at  TEXT NOT NULL,
+                    ttl_s       INTEGER NOT NULL,
+                    max_stale_s INTEGER NOT NULL
+                )
+            """)
+            self._conn.commit()
+
+    def get(self, key: str) -> Optional[CacheEntry]:
+        """Return the cache entry for key, or None if not found or if the cache is closed."""
+        with self._lock:
+            if self._conn is None:
+                return None
+            row = self._conn.execute(
+                "SELECT * FROM cache_entries WHERE key = ?", (key,)
+            ).fetchone()
+        if row is None:
+            return None
+        return CacheEntry(
+            key=row["key"],
+            value=row["value"],
+            updated_at=row["updated_at"],
+            ttl_s=row["ttl_s"],
+            max_stale_s=row["max_stale_s"],
+        )
+
+    def set(self, key: str, value: str, ttl_s: int, max_stale_s: int):
+        """Insert or update a cache entry."""
+        self._upsert(key, value, ttl_s, max_stale_s, datetime.now(timezone.utc).isoformat())
+        logger.debug("Cache set: key=%r age=0s ttl=%ds", key, ttl_s)
+
+    def set_with_timestamp(self, key: str, value: str, ttl_s: int, max_stale_s: int, updated_at: str):
+        """Insert or update a cache entry with an explicit ISO 8601 UTC timestamp.
+
+        Useful for seeding test data or importing entries at a known age.
+        """
+        self._upsert(key, value, ttl_s, max_stale_s, updated_at)
+
+    def _upsert(self, key: str, value: str, ttl_s: int, max_stale_s: int, updated_at: str):
+        with self._lock:
+            if self._conn is None:
+                logger.warning("Cache write skipped: cache is closed (key=%r)", key)
+                return
+            self._conn.execute(
+                """
+                INSERT INTO cache_entries (key, value, updated_at, ttl_s, max_stale_s)
+                VALUES (?, ?, ?, ?, ?)
+                ON CONFLICT(key) DO UPDATE SET
+                    value       = excluded.value,
+                    updated_at  = excluded.updated_at,
+                    ttl_s       = excluded.ttl_s,
+                    max_stale_s = excluded.max_stale_s
+                """,
+                (key, value, updated_at, ttl_s, max_stale_s),
+            )
+            self._conn.commit()
+
+    def age_s(self, entry: CacheEntry) -> float:
+        """Return the age of an entry in seconds.
+
+        Returns ``float('inf')`` if ``updated_at`` cannot be parsed, so
+        callers treat the entry as infinitely old (never fresh/servable).
+        """
+        updated_str = entry.updated_at
+        try:
+            if isinstance(updated_str, str) and updated_str.endswith("Z"):
+                updated_str = updated_str[:-1] + "+00:00"
+            updated = datetime.fromisoformat(updated_str)
+            if updated.tzinfo is None:
+                updated = updated.replace(tzinfo=timezone.utc)
+        except (TypeError, ValueError):
+            logger.warning("Invalid updated_at for cache entry %r: %r", entry.key, entry.updated_at)
+            return float("inf")
+        return (datetime.now(timezone.utc) - updated).total_seconds()
+
+    def is_fresh(self, entry: CacheEntry) -> bool:
+        """True if the entry is within its TTL."""
+        return self.age_s(entry) <= entry.ttl_s
+
+    def can_serve(self, entry: CacheEntry) -> bool:
+        """True if the entry can be served (within max_stale)."""
+        return self.age_s(entry) <= entry.max_stale_s
+
+    def close(self):
+        with self._lock:
+            if self._conn is not None:
+                self._conn.close()
+                self._conn = None

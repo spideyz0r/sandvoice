@@ -7,6 +7,7 @@ from common.configuration import Config
 from common.audio import Audio
 from common.ai import AI, pop_streaming_chunk
 from common.error_handling import handle_api_error
+from common.cache import VoiceCache
 from common.db import SchedulerDB
 from common.scheduler import TaskScheduler
 
@@ -47,6 +48,7 @@ class SandVoice:
         self._ai_audio_lock = threading.Lock()
         self._scheduler_audio = None  # lazily created on first scheduler voice task
         self._scheduler_ai = None  # set by _init_scheduler() on success; None when disabled
+        self.cache = self._init_cache()
         self.scheduler = self._init_scheduler()
         if self.args.cli:
             self.config.cli_input = True
@@ -90,6 +92,18 @@ class SandVoice:
                     self.plugins[module_name] = module.Plugin()
                 elif hasattr(module, 'process'):
                     self.plugins[module_name] = module.process
+
+    def _init_cache(self):
+        """Initialise VoiceCache if cache_enabled, using the same DB file as the scheduler."""
+        if not self.config.cache_enabled:
+            return None
+        try:
+            cache = VoiceCache(self.config.scheduler_db_path)
+            logger.info("Voice cache enabled (db=%s)", self.config.scheduler_db_path)
+            return cache
+        except Exception as e:
+            logger.warning("Voice cache disabled — failed to initialise: %s", e)
+            return None
 
     def _init_scheduler(self):
         if not self.config.scheduler_enabled:
@@ -174,7 +188,7 @@ class SandVoice:
                 logger.error("Scheduler speak: audio playback failed for '%s': %s", failed_file, error)
 
     def _scheduler_invoke_plugin(self, plugin_name, query, refresh_only):
-        route = {"route": plugin_name}
+        route = {"route": plugin_name, "refresh_only": refresh_only}
         result = self._scheduler_route_message(query or plugin_name, route)
         if not refresh_only and self.config.bot_voice and result:
             tts_files = self._scheduler_ai.text_to_speech(result)
@@ -518,6 +532,11 @@ if __name__ == "__main__":
 
     signal.signal(signal.SIGINT, _shutdown)
     signal.signal(signal.SIGTERM, _shutdown)
+
+    # atexit handlers run LIFO: register cache first so it closes last,
+    # after the scheduler thread has already stopped.
+    if sandvoice.cache:
+        atexit.register(sandvoice.cache.close)
 
     if sandvoice.scheduler:
         # On normal interpreter exit (including after sys.exit()), join the

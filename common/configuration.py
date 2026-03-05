@@ -91,6 +91,11 @@ class Config:
             "voice_ack_earcon_freq": 600,
             "voice_ack_earcon_duration": 0.06,
 
+            # Background Cache (Plan 20)
+            "cache_enabled": "disabled",
+            "cache_weather_ttl_s": 10800,    # 3 hours — refresh window
+            "cache_weather_max_stale_s": 21600,  # 6 hours — hard expiry
+
             # Task Scheduler (Plan 21)
             "scheduler_enabled": "disabled",
             "scheduler_poll_interval": 30,
@@ -213,6 +218,31 @@ class Config:
         self.scheduler_db_path = os.path.expanduser(str(raw_db_path)) if raw_db_path else self.defaults["scheduler_db_path"]
         raw_tasks = self.get("tasks")
         self.tasks = list(raw_tasks) if isinstance(raw_tasks, list) else []
+
+        # Background Cache (Plan 20)
+        raw_cache_enabled = self.get("cache_enabled")
+        if isinstance(raw_cache_enabled, bool):
+            self.cache_enabled = raw_cache_enabled
+        else:
+            self.cache_enabled = str(raw_cache_enabled or "disabled").strip().lower() in (
+                "enabled", "true", "yes", "1", "on"
+            )
+        try:
+            self.cache_weather_ttl_s = max(1, int(self.get("cache_weather_ttl_s")))
+        except (TypeError, ValueError):
+            self.cache_weather_ttl_s = self.defaults["cache_weather_ttl_s"]
+        try:
+            self.cache_weather_max_stale_s = max(1, int(self.get("cache_weather_max_stale_s")))
+        except (TypeError, ValueError):
+            self.cache_weather_max_stale_s = self.defaults["cache_weather_max_stale_s"]
+        if self.cache_weather_max_stale_s < self.cache_weather_ttl_s:
+            logging.warning(
+                "cache_weather_max_stale_s (%d) is less than cache_weather_ttl_s (%d); "
+                "clamping max_stale to ttl value.",
+                self.cache_weather_max_stale_s,
+                self.cache_weather_ttl_s,
+            )
+            self.cache_weather_max_stale_s = self.cache_weather_ttl_s
 
         # Voice UX
         voice_ack_earcon = self.get("voice_ack_earcon")
