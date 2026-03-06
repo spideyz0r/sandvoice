@@ -102,13 +102,14 @@ class TestWeatherPluginWithCache(unittest.TestCase):
     @patch('plugins.weather.OpenWeatherReader')
     def test_fresh_cache_hit_skips_api(self, MockReader):
         self.cache.set(
-            _CACHE_KEY, json.dumps(_WEATHER_DATA),
+            _CACHE_KEY, "It is 20°C in London.",
             ttl_s=10800, max_stale_s=21600,
         )
         s = _make_sandvoice(cache=self.cache)
         from plugins.weather import process
         result = process("What's the weather?", {}, s)
         MockReader.assert_not_called()
+        s.ai.generate_response.assert_not_called()
         self.assertEqual(result, "It is 20°C in London.")
 
     @patch('plugins.weather.OpenWeatherReader')
@@ -120,13 +121,13 @@ class TestWeatherPluginWithCache(unittest.TestCase):
         MockReader.assert_called_once()
         entry = self.cache.get(_CACHE_KEY)
         self.assertIsNotNone(entry)
-        self.assertEqual(json.loads(entry.value), _WEATHER_DATA)
+        self.assertEqual(entry.value, "It is 20°C in London.")
 
     @patch('plugins.weather.OpenWeatherReader')
     def test_refresh_only_bypasses_cache_read(self, MockReader):
         # Pre-populate cache with fresh data
         self.cache.set(
-            _CACHE_KEY, json.dumps(_WEATHER_DATA),
+            _CACHE_KEY, "It is 20°C in London.",
             ttl_s=10800, max_stale_s=21600,
         )
         MockReader.return_value.get_current_weather.return_value = {
@@ -142,14 +143,13 @@ class TestWeatherPluginWithCache(unittest.TestCase):
 
     @patch('plugins.weather.OpenWeatherReader')
     def test_refresh_only_updates_cache(self, MockReader):
-        fresh_data = {"main": {"temp": 25}, "weather": [{"description": "sunny"}]}
-        MockReader.return_value.get_current_weather.return_value = fresh_data
+        MockReader.return_value.get_current_weather.return_value = _WEATHER_DATA
         s = _make_sandvoice(cache=self.cache)
         from plugins.weather import process
         process("weather", {"refresh_only": True}, s)
         entry = self.cache.get(_CACHE_KEY)
         self.assertIsNotNone(entry)
-        self.assertEqual(json.loads(entry.value), fresh_data)
+        self.assertEqual(entry.value, "It is 20°C in London.")
 
     @patch('plugins.weather.OpenWeatherReader')
     def test_api_error_does_not_cache(self, MockReader):
@@ -157,13 +157,14 @@ class TestWeatherPluginWithCache(unittest.TestCase):
         s = _make_sandvoice(cache=self.cache)
         from plugins.weather import process
         process("weather", {}, s)
+        s.ai.generate_response.assert_called_once()
         self.assertIsNone(self.cache.get(_CACHE_KEY))
 
     @patch('plugins.weather.OpenWeatherReader')
     def test_expired_cache_falls_through_to_api(self, MockReader):
         old_ts = (datetime.now(timezone.utc) - timedelta(hours=10)).isoformat()
         self.cache.set_with_timestamp(
-            _CACHE_KEY, json.dumps(_WEATHER_DATA), ttl_s=1, max_stale_s=2,
+            _CACHE_KEY, "It is 20°C in London.", ttl_s=1, max_stale_s=2,
             updated_at=old_ts,
         )
         MockReader.return_value.get_current_weather.return_value = _WEATHER_DATA
@@ -178,29 +179,15 @@ class TestWeatherPluginWithCache(unittest.TestCase):
         # Insert entry that is expired (past TTL) but within max_stale
         old_ts = (datetime.now(timezone.utc) - timedelta(hours=2)).isoformat()
         self.cache.set_with_timestamp(
-            _CACHE_KEY, json.dumps(_WEATHER_DATA), ttl_s=1, max_stale_s=21600,
+            _CACHE_KEY, "It is 20°C in London.", ttl_s=1, max_stale_s=21600,
             updated_at=old_ts,
         )
         s = _make_sandvoice(cache=self.cache)
         from plugins.weather import process
         result = process("weather", {}, s)
-        # API should NOT be called — stale entry is still serviceable
+        # API and LLM should NOT be called — stale entry is still serviceable
         MockReader.assert_not_called()
-        self.assertEqual(result, "It is 20°C in London.")
-
-    @patch('plugins.weather.OpenWeatherReader')
-    def test_corrupt_cache_entry_falls_back_to_live(self, MockReader):
-        # Store invalid JSON via the public API
-        self.cache.set_with_timestamp(
-            _CACHE_KEY, "NOT_JSON", ttl_s=10800, max_stale_s=21600,
-            updated_at=datetime.now(timezone.utc).isoformat(),
-        )
-        MockReader.return_value.get_current_weather.return_value = _WEATHER_DATA
-        s = _make_sandvoice(cache=self.cache)
-        from plugins.weather import process
-        result = process("weather", {}, s)
-        # Should fall through to live fetch despite corrupt cache
-        MockReader.assert_called_once()
+        s.ai.generate_response.assert_not_called()
         self.assertEqual(result, "It is 20°C in London.")
 
     @patch('plugins.weather.OpenWeatherReader')
@@ -225,6 +212,24 @@ class TestWeatherPluginWithCache(unittest.TestCase):
             result = process("weather", {}, s)
         # Response should still be returned despite cache write failure
         self.assertEqual(result, "It is 20°C in London.")
+
+    @patch('plugins.weather.OpenWeatherReader')
+    def test_legacy_json_cache_entry_falls_back_to_live(self, MockReader):
+        # Seed cache with old-format raw weather JSON (pre-migration payload)
+        self.cache.set(
+            _CACHE_KEY, json.dumps(_WEATHER_DATA),
+            ttl_s=10800, max_stale_s=21600,
+        )
+        MockReader.return_value.get_current_weather.return_value = _WEATHER_DATA
+        s = _make_sandvoice(cache=self.cache)
+        from plugins.weather import process
+        result = process("weather", {}, s)
+        # Should fall through to live fetch, not return raw JSON
+        MockReader.assert_called_once()
+        self.assertEqual(result, "It is 20°C in London.")
+        # Cache should now contain the response text, not raw JSON
+        entry = self.cache.get(_CACHE_KEY)
+        self.assertEqual(entry.value, "It is 20°C in London.")
 
 
 class TestWeatherPluginDebugPaths(unittest.TestCase):

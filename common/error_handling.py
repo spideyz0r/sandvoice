@@ -24,7 +24,7 @@ def setup_error_logging(config):
         return
 
     # Set logging level based on debug mode
-    log_level = logging.INFO if debug else logging.ERROR
+    log_level = logging.DEBUG if debug else logging.ERROR
 
     # Configure root logger level only when adding SandVoice handlers
     logger = logging.getLogger()
