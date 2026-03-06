@@ -1,3 +1,4 @@
+import json
 import os
 import shutil
 import tempfile
@@ -211,6 +212,24 @@ class TestWeatherPluginWithCache(unittest.TestCase):
             result = process("weather", {}, s)
         # Response should still be returned despite cache write failure
         self.assertEqual(result, "It is 20°C in London.")
+
+    @patch('plugins.weather.OpenWeatherReader')
+    def test_legacy_json_cache_entry_falls_back_to_live(self, MockReader):
+        # Seed cache with old-format raw weather JSON (pre-migration payload)
+        self.cache.set(
+            _CACHE_KEY, json.dumps(_WEATHER_DATA),
+            ttl_s=10800, max_stale_s=21600,
+        )
+        MockReader.return_value.get_current_weather.return_value = _WEATHER_DATA
+        s = _make_sandvoice(cache=self.cache)
+        from plugins.weather import process
+        result = process("weather", {}, s)
+        # Should fall through to live fetch, not return raw JSON
+        MockReader.assert_called_once()
+        self.assertEqual(result, "It is 20°C in London.")
+        # Cache should now contain the response text, not raw JSON
+        entry = self.cache.get(_CACHE_KEY)
+        self.assertEqual(entry.value, "It is 20°C in London.")
 
 
 class TestWeatherPluginDebugPaths(unittest.TestCase):
