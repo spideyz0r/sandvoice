@@ -73,15 +73,7 @@ def process(user_input, route, s):
                         logger.debug("Weather cache hit (fresh): key=%r", cache_key)
                     else:
                         logger.debug("Weather cache hit (stale-but-valid): key=%r", cache_key)
-                    try:
-                        current_weather = json.loads(entry.value)
-                        response = s.ai.generate_response(
-                            user_input,
-                            f"You can answer questions about weather. This is the information of the weather the user asked: {str(current_weather)}\n",
-                        )
-                        return response.content
-                    except (json.JSONDecodeError, TypeError) as e:
-                        logger.warning("Corrupt weather cache entry for key=%r, fetching live data: %s", cache_key, e)
+                    return entry.value
             except Exception as e:
                 logger.warning("Weather cache read failed for key=%r, fetching live data: %s", cache_key, e)
 
@@ -89,22 +81,34 @@ def process(user_input, route, s):
         weather = OpenWeatherReader(location, unit, s.config.api_timeout)
         current_weather = weather.get_current_weather()
 
-        # Update cache if fetch was successful and cache is available
-        if cache is not None and "error" not in current_weather:
-            try:
-                cache.set(
-                    cache_key,
-                    json.dumps(current_weather),
-                    ttl_s=s.config.cache_weather_ttl_s,
-                    max_stale_s=s.config.cache_weather_max_stale_s,
-                )
-                logger.debug("Weather cache updated: key=%r", cache_key)
-            except Exception as e:
-                logger.warning("Weather cache write failed for key=%r: %s", cache_key, e)
+        response_text = None
+        if "error" not in current_weather:
+            response = s.ai.generate_response(
+                user_input,
+                f"You can answer questions about weather. This is the information of the weather the user asked: {str(current_weather)}\n",
+            )
+            response_text = response.content
+
+            # Cache the full response text so future hits skip the LLM call entirely
+            if cache is not None:
+                try:
+                    cache.set(
+                        cache_key,
+                        response_text,
+                        ttl_s=s.config.cache_weather_ttl_s,
+                        max_stale_s=s.config.cache_weather_max_stale_s,
+                    )
+                    logger.debug("Weather cache updated: key=%r", cache_key)
+                except Exception as e:
+                    logger.warning("Weather cache write failed for key=%r: %s", cache_key, e)
 
         if refresh_only:
             return None
 
+        if response_text is not None:
+            return response_text
+
+        # Fetch returned an error dict — generate a response without caching
         response = s.ai.generate_response(
             user_input,
             f"You can answer questions about weather. This is the information of the weather the user asked: {str(current_weather)}\n",
