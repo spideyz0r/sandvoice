@@ -143,6 +143,10 @@ plan/
 **Document**: [backlog/26-config-audit-simplification.md](./backlog/26-config-audit-simplification.md)
 **Description**: Audit all ~50 config keys, remove already-deprecated keys (linux_warnings), hardcode internal implementation knobs, and subsume stream_print_deltas into debug. Targets ~30-40% reduction in user-facing config surface with no behavior change.
 
+### Priority 27: Scheduled Tasks File and Lifecycle Management
+**Document**: [backlog/27-tasks-file-and-lifecycle.md](./backlog/27-tasks-file-and-lifecycle.md)
+**Description**: Move scheduled task definitions to a dedicated `~/.sandvoice/tasks.yaml` file and make it the sole source of truth — tasks removed from the file are automatically deleted from the DB on startup. `tasks.yaml` replaces the `tasks:` key in `config.yaml` with no backwards compatibility.
+
 ### Future Enhancements
 **Document**: [backlog/FUTURE.md](./backlog/FUTURE.md)
 **Description**: Long-term feature ideas including API Cost Management, Conversation History Management, Code Deduplication, Timers & Reminders, Music Control, Smart Home Integration, Calendar Integration, Todo List Management, Multi-User Support, and Conversation Memory.
