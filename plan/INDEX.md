@@ -160,7 +160,7 @@ plan/
 
 ## Development Workflow
 
-1. Each feature gets a feature branch: feature/<feature-name>
+1. Each feature gets a feature branch: `feature/<feature-name>`
 2. Create PR to main with clear description
 3. Code review (including Copilot PR reviews)
 4. Merge to main after approval
