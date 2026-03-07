@@ -8,7 +8,7 @@
 
 ## Overview
 
-Move scheduled task definitions out of `config.yaml` into a dedicated `~/.sandvoice/tasks.yaml` file, and make the config the authoritative source of truth for the DB — tasks removed from the file are automatically removed from the DB on startup.
+Move scheduled task definitions out of `config.yaml` into a dedicated `~/.sandvoice/tasks.yaml` file, making that tasks file (referenced from `config.yaml` via `tasks_file_path`) the authoritative source of truth for the DB — tasks removed from the file are automatically removed from the DB on startup.
 
 ---
 

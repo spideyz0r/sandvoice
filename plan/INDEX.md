@@ -139,13 +139,13 @@ plan/
 **Document**: [backlog/25-terminal-ui.md](./backlog/25-terminal-ui.md)
 **Description**: Replace flat emoji-based terminal output with a high-end CLI UI: ANSI colors, animated waiting dots, in-place status line updates, inline timing per phase, and clear conversation/status separation. Pure ANSI — no external dependencies, Pi-compatible.
 
-### Priority 27: Scheduled Tasks File and Lifecycle Management
-**Document**: [backlog/27-tasks-file-and-lifecycle.md](./backlog/27-tasks-file-and-lifecycle.md)
-**Description**: Move scheduled task definitions to a dedicated `~/.sandvoice/tasks.yaml` file and make it the source of truth — tasks removed from the file are automatically deleted from the DB on startup. Includes backwards compatibility with the existing `tasks:` key in config.yaml.
-
 ### Priority 26: Configuration Audit and Simplification
 **Document**: [backlog/26-config-audit-simplification.md](./backlog/26-config-audit-simplification.md)
 **Description**: Audit all ~50 config keys, remove already-deprecated keys (linux_warnings), hardcode internal implementation knobs, and subsume stream_print_deltas into debug. Targets ~30-40% reduction in user-facing config surface with no behavior change.
+
+### Priority 27: Scheduled Tasks File and Lifecycle Management
+**Document**: [backlog/27-tasks-file-and-lifecycle.md](./backlog/27-tasks-file-and-lifecycle.md)
+**Description**: Move scheduled task definitions to a dedicated `~/.sandvoice/tasks.yaml` file and make it the source of truth — tasks removed from the file are automatically deleted from the DB on startup. Includes backwards compatibility with the existing `tasks:` key in config.yaml.
 
 ### Future Enhancements
 **Document**: [backlog/FUTURE.md](./backlog/FUTURE.md)
