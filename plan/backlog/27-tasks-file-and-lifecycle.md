@@ -49,7 +49,7 @@ This was discovered in practice: the `scheduler-test` task kept firing after bei
 ```
 
 - Loaded on startup by `Config` class
-- If the file does not exist, no tasks are registered.
+- If the file does not exist, no new tasks are loaded from it and the DB sync is skipped — existing scheduled tasks in the DB continue to run.
 - Path configurable via `tasks_file_path` in `config.yaml` (default: `~/.sandvoice/tasks.yaml`)
 
 ### 2. Tasks-file-as-source-of-truth sync on startup
@@ -112,6 +112,6 @@ Follow the 4-step config pattern from `docs/PATTERNS.md`:
 - [ ] Tasks removed from `tasks.yaml` are deleted from DB on next startup
 - [ ] Tasks in DB but not in file are cleaned up automatically
 - [ ] `tasks_file_path` is configurable
-- [ ] If `tasks.yaml` does not exist, startup proceeds normally with no tasks
+- [ ] If `tasks.yaml` does not exist, startup proceeds normally; the DB sync is skipped and existing scheduled tasks continue to run
 - [ ] >80% test coverage on new code
 - [ ] README documents the new file format and migration path
