@@ -43,6 +43,10 @@ plan/
 **Document**: [completed/07-hacker-news-api-only.md](./completed/07-hacker-news-api-only.md)
 **Description**: Hacker News plugin uses only free Firebase API fields (no external HTML fetch/parsing), preserving the podcast-style output while improving reliability and cost.
 
+### Priority 8: Streaming Responses and TTS
+**Document**: [completed/08-streaming-responses-and-tts.md](./completed/08-streaming-responses-and-tts.md)
+**Description**: Stream LLM responses to stdout for lower perceived latency; pipeline streaming text into chunked TTS for earlier voice playback.
+
 ### Priority 9: Barge-In (Stop TTS on Wake Word)
 **Document**: [completed/09-barge-in-stop-tts-on-wake-word.md](./completed/09-barge-in-stop-tts-on-wake-word.md)
 **Description**: Allow users to interrupt SandVoice speech by saying the wake word, stopping TTS immediately and transitioning into command listening.
@@ -50,6 +54,10 @@ plan/
 ### Priority 16: Voice Ack Earcon
 **Document**: [completed/16-voice-ack-earcon.md](./completed/16-voice-ack-earcon.md)
 **Description**: Play a short ack earcon once per request (after recording, before processing) to reduce perceived latency in voice mode.
+
+### Priority 21: Task Scheduler
+**Document**: [completed/21-task-scheduler.md](./completed/21-task-scheduler.md)
+**Description**: Lightweight SQLite-backed in-process scheduler supporting cron, interval, and one-shot tasks. Powers Plan 20 periodic cache refresh and future timers/reminders.
 
 ---
 
@@ -70,6 +78,11 @@ plan/
 **Pending:**
 - ⏸️ Phase 6: Raspberry Pi Testing (CPU usage, compatibility validation)
 
+### Priority 20: Background Cache for Frequent Voice Queries
+**Document**: [in-progress/20-background-cache-frequent-voice-queries.md](./in-progress/20-background-cache-frequent-voice-queries.md)
+**Status**: Weather plugin fully integrated (caches full response text, legacy JSON migration, background refresh). More plugins TBD.
+**Description**: Opt-in background refresh of weather/crypto/common info to enable instant spoken answers with freshness hints.
+
 ---
 
 ## Backlog 📋
@@ -78,21 +91,17 @@ plan/
 **Document**: [backlog/05-raspberry-pi-compatibility.md](./backlog/05-raspberry-pi-compatibility.md)
 **Description**: Full compatibility testing and documentation for Raspberry Pi 3B deployment. Setup process, dependencies, and performance validation.
 
-### Priority 8: Streaming Responses (And Optional Streaming TTS)
-**Document**: [completed/08-streaming-responses-and-tts.md](./completed/08-streaming-responses-and-tts.md)
-**Description**: Stream LLM responses to stdout for lower perceived latency; optional follow-up to pipeline streaming text into chunked TTS for earlier voice playback.
-
 ### Priority 10: Speech-to-Text Task and Language
 **Document**: [backlog/10-speech-to-text-task-and-language.md](./backlog/10-speech-to-text-task-and-language.md)
 **Description**: Make Whisper behavior configurable (transcribe vs translate) and allow explicit language hints for better accuracy.
 
 ### Priority 11: Plugin Route Name Normalization
 **Document**: [backlog/11-plugin-route-name-normalization.md](./backlog/11-plugin-route-name-normalization.md)
-**Description**: Standardize plugin module naming (underscore) while supporting hyphenated route names (e.g., `hacker-news`) via normalization/aliases.
+**Description**: Standardize plugin module naming (underscore) while supporting hyphenated route names (e.g., hacker-news) via normalization/aliases.
 
 ### Priority 12: Route Definitions Default Route Alignment
 **Document**: [backlog/12-route-definitions-default-route-alignment.md](./backlog/12-route-definitions-default-route-alignment.md)
-**Description**: Fix `default-rote` typo and align default route naming across `routes.yaml` and routing fallbacks.
+**Description**: Fix default-rote typo and align default route naming across routes.yaml and routing fallbacks.
 
 ### Priority 13: VAD Robustness - Timeout and Tuning
 **Document**: [backlog/13-vad-robustness-timeout-tuning.md](./backlog/13-vad-robustness-timeout-tuning.md)
@@ -114,32 +123,29 @@ plan/
 **Document**: [backlog/18-tts-micro-pauses-and-pacing.md](./backlog/18-tts-micro-pauses-and-pacing.md)
 **Description**: Add configurable pauses between TTS chunks to make speech feel less rushed.
 
-### Priority 20: Background Cache for Frequent Voice Queries
-**Status**: 🚧 In Progress
-**Document**: [backlog/20-background-cache-frequent-voice-queries.md](./backlog/20-background-cache-frequent-voice-queries.md)
-**Description**: Opt-in background refresh of weather/crypto/common info to enable instant spoken answers with freshness hints.
-
-### Priority 21: Task Scheduler
-**Document**: [backlog/21-task-scheduler.md](./backlog/21-task-scheduler.md)
-**Description**: Lightweight SQLite-backed in-process scheduler supporting cron, interval, and one-shot tasks. Prerequisite for Plan 20 periodic refresh and future Timers & Reminders.
-
 ### Priority 22: Plugin Manifest System
 **Document**: [backlog/22-plugin-manifest-system.md](./backlog/22-plugin-manifest-system.md)
-**Description**: Self-contained plugin folders with `plugin.yaml` manifests that self-register routes, config defaults, and env var requirements — eliminating manual edits to `routes.yaml` when adding or removing plugins.
+**Description**: Self-contained plugin folders with plugin.yaml manifests that self-register routes, config defaults, and env var requirements — eliminating manual edits to routes.yaml when adding or removing plugins.
+
+### Priority 23: Request Timing Summary Log
+**Document**: [backlog/23-request-timing-summary-log.md](./backlog/23-request-timing-summary-log.md)
+**Description**: Emit a single INFO line per request summarising transcription, routing, plugin, and TTS timing plus cache status. Enables clean benchmarking without debug: enabled.
+
+### Priority 24: Wake Word Refactor
+**Document**: [backlog/24-wake-word-refactor.md](./backlog/24-wake-word-refactor.md)
+**Description**: Structural cleanup of common/wake_word.py: fix logging pattern violation, extract _respond_streaming() and _respond_pregenerated_tts() from the 310-line _state_responding(), lift _CompositeStopEvent to module level, and deduplicate the barge-in polling pattern in _state_processing.
+
+### Priority 25: Terminal UI
+**Document**: [backlog/25-terminal-ui.md](./backlog/25-terminal-ui.md)
+**Description**: Replace flat emoji-based terminal output with a high-end CLI UI: ANSI colors, animated waiting dots, in-place status line updates, inline timing per phase, and clear conversation/status separation. Pure ANSI — no external dependencies, Pi-compatible.
+
+### Priority 26: Configuration Audit and Simplification
+**Document**: [backlog/26-config-audit-simplification.md](./backlog/26-config-audit-simplification.md)
+**Description**: Audit all ~50 config keys, remove already-deprecated keys (linux_warnings), hardcode internal implementation knobs, and subsume stream_print_deltas into debug. Targets ~30-40% reduction in user-facing config surface with no behavior change.
 
 ### Future Enhancements
 **Document**: [backlog/FUTURE.md](./backlog/FUTURE.md)
-**Description**: Long-term feature ideas including:
-- API Cost Management
-- Conversation History Management
-- Code Deduplication
-- Timers & Reminders
-- Music Control
-- Smart Home Integration
-- Calendar Integration
-- Todo List Management
-- Multi-User Support
-- Conversation Memory
+**Description**: Long-term feature ideas including API Cost Management, Conversation History Management, Code Deduplication, Timers & Reminders, Music Control, Smart Home Integration, Calendar Integration, Todo List Management, Multi-User Support, and Conversation Memory.
 
 ---
 
@@ -154,7 +160,7 @@ plan/
 
 ## Development Workflow
 
-1. Each feature gets a feature branch: `feature/<feature-name>`
+1. Each feature gets a feature branch: feature/<feature-name>
 2. Create PR to main with clear description
 3. Code review (including Copilot PR reviews)
 4. Merge to main after approval
@@ -169,4 +175,4 @@ plan/
 - Code style should remain simple and readable
 - Test coverage target: >80% for all new code
 - Document configuration changes in each feature plan
-- Custom wake word documentation available in `docs/CUSTOM_WAKE_WORDS.md`
+- Custom wake word documentation available in docs/CUSTOM_WAKE_WORDS.md
