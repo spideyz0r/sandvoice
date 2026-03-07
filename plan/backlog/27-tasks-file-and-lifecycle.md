@@ -49,12 +49,12 @@ This was discovered in practice: the `scheduler-test` task kept firing after bei
 ```
 
 - Loaded on startup by `Config` class
-- If the file does not exist, no tasks are registered (no tasks will be registered)
+- If the file does not exist, no tasks are registered.
 - Path configurable via `tasks_file_path` in `config.yaml` (default: `~/.sandvoice/tasks.yaml`)
 
-### 2. Config-as-source-of-truth sync on startup
+### 2. Tasks-file-as-source-of-truth sync on startup
 
-On startup, after loading `tasks.yaml`, the scheduler syncs the DB:
+On startup, after loading `tasks.yaml`, the scheduler syncs the DB. If the file does not exist, the sync is skipped entirely — the DB is left untouched.
 
 ```
 tasks_in_file = {t.name for t in loaded_tasks}
@@ -95,8 +95,6 @@ Follow the 4-step config pattern from `docs/PATTERNS.md`:
 | `tests/test_configuration.py` | Test `tasks_file_path` default and custom value |
 | `tests/test_scheduler.py` | Test `sync_tasks`: new tasks registered, removed tasks deleted, existing tasks untouched |
 | `README.md` | Document `tasks_file_path` and `tasks.yaml` format |
-
----
 
 ---
 

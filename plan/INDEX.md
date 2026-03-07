@@ -145,7 +145,7 @@ plan/
 
 ### Priority 27: Scheduled Tasks File and Lifecycle Management
 **Document**: [backlog/27-tasks-file-and-lifecycle.md](./backlog/27-tasks-file-and-lifecycle.md)
-**Description**: Move scheduled task definitions to a dedicated `~/.sandvoice/tasks.yaml` file and make it the source of truth — tasks removed from the file are automatically deleted from the DB on startup. Includes backwards compatibility with the existing `tasks:` key in config.yaml.
+**Description**: Move scheduled task definitions to a dedicated `~/.sandvoice/tasks.yaml` file and make it the sole source of truth — tasks removed from the file are automatically deleted from the DB on startup. `tasks.yaml` replaces the `tasks:` key in `config.yaml` with no backwards compatibility.
 
 ### Future Enhancements
 **Document**: [backlog/FUTURE.md](./backlog/FUTURE.md)
