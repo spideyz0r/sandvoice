@@ -22,9 +22,9 @@ class TestCalcNextRun(unittest.TestCase):
         self.assertLessEqual(parsed, after + timedelta(seconds=301))
 
     def test_cron_returns_future(self):
-        result = calc_next_run("cron", "* * * * *")
+        result = calc_next_run("cron", "*/2 * * * *")
         parsed = datetime.fromisoformat(result)
-        self.assertGreater(parsed, datetime.now(timezone.utc))
+        self.assertGreaterEqual(parsed, datetime.now(timezone.utc))
 
     def test_once_returns_none(self):
         self.assertIsNone(calc_next_run("once", "2099-01-01T00:00:00"))

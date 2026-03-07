@@ -1,6 +1,6 @@
 # Voice UX: Background Cache for Frequent Queries
 
-**Status**: 📋 Backlog
+**Status**: 🚧 In Progress
 **Priority**: 20
 **Platforms**: macOS M1, Raspberry Pi 3B
 
