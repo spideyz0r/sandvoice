@@ -49,7 +49,7 @@ This was discovered in practice: the `scheduler-test` task kept firing after bei
 ```
 
 - Loaded on startup by `Config` class
-- If the file does not exist, no tasks are registered (same as today with empty `tasks:`)
+- If the file does not exist, no tasks are registered (no tasks will be registered)
 - Path configurable via `tasks_file_path` in `config.yaml` (default: `~/.sandvoice/tasks.yaml`)
 
 ### 2. Config-as-source-of-truth sync on startup
@@ -66,10 +66,6 @@ to_skip     = tasks_in_file & tasks_in_db        # existing → leave alone
 ```
 
 Tasks removed from `tasks.yaml` are **deleted from the DB** on next startup. No manual sqlite3 needed.
-
-### 3. Backwards compatibility
-
-The existing `tasks:` key in `config.yaml` continues to work. If both `tasks.yaml` and `config.yaml tasks:` are present, `tasks.yaml` takes precedence with a warning logged. This allows a smooth migration path.
 
 ---
 
@@ -102,14 +98,6 @@ Follow the 4-step config pattern from `docs/PATTERNS.md`:
 
 ---
 
-## Migration Guide (for README)
-
-Users currently using `tasks:` in `config.yaml`:
-
-1. Create `~/.sandvoice/tasks.yaml` with the same task definitions
-2. Remove the `tasks:` block from `config.yaml`
-3. Restart SandVoice — tasks will be synced automatically
-
 ---
 
 ## Out of Scope
@@ -125,7 +113,6 @@ Users currently using `tasks:` in `config.yaml`:
 - [ ] Tasks defined in `~/.sandvoice/tasks.yaml` are registered on startup
 - [ ] Tasks removed from `tasks.yaml` are deleted from DB on next startup
 - [ ] Tasks in DB but not in file are cleaned up automatically
-- [ ] Existing `tasks:` key in `config.yaml` still works (backwards compat)
 - [ ] `tasks_file_path` is configurable
 - [ ] If `tasks.yaml` does not exist, startup proceeds normally with no tasks
 - [ ] >80% test coverage on new code
