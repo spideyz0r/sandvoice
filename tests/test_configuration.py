@@ -798,27 +798,8 @@ class TestCacheConfig(_TempHomeBase):
                 self.assertTrue(config.cache_enabled, msg=f"cache_enabled={value!r} should be truthy")
 
 
-class TestLogLevel(unittest.TestCase):
+class TestLogLevel(_TempHomeBase):
     """Tests for log_level config key and config.debug property (Plan 28)."""
-
-    def setUp(self):
-        self.temp_dir = tempfile.mkdtemp()
-        self.original_home = os.environ.get('HOME')
-        os.environ['HOME'] = self.temp_dir
-        os.makedirs(os.path.join(self.temp_dir, ".sandvoice"), exist_ok=True)
-
-    def tearDown(self):
-        if self.original_home:
-            os.environ['HOME'] = self.original_home
-        else:
-            del os.environ['HOME']
-        import shutil
-        shutil.rmtree(self.temp_dir, ignore_errors=True)
-
-    def write_config(self, config_dict):
-        config_path = os.path.join(self.temp_dir, ".sandvoice", "config.yaml")
-        with open(config_path, 'w') as f:
-            yaml.dump(config_dict, f)
 
     def test_log_level_default_is_warning(self):
         """Default log_level is 'warning'."""

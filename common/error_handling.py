@@ -6,6 +6,12 @@ from functools import wraps
 
 logger = logging.getLogger(__name__)
 
+_LOG_LEVELS = {
+    "debug":   logging.DEBUG,
+    "info":    logging.INFO,
+    "warning": logging.WARNING,
+}
+
 
 def setup_error_logging(config):
     """
@@ -17,11 +23,6 @@ def setup_error_logging(config):
     Args:
         config: Configuration object with log_level, enable_error_logging, error_log_path
     """
-    _LOG_LEVELS = {
-        "debug":   logging.DEBUG,
-        "info":    logging.INFO,
-        "warning": logging.WARNING,
-    }
     level = _LOG_LEVELS.get(getattr(config, "log_level", "warning"), logging.WARNING)
 
     root = logging.getLogger()
