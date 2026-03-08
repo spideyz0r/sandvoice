@@ -3,7 +3,11 @@
 **Status**: 📋 Backlog
 **Priority**: 23
 **Platforms**: macOS M1, Raspberry Pi 3B
-**Depends on**: Plan 28 (Logging Level Refactor) — INFO level must be visible before this plan is useful
+---
+
+## Dependencies
+
+- **Plan 28 (Logging Level Refactor)** — INFO level must be visible before this plan is useful. Merge Plan 28 first.
 
 ---
 
@@ -15,7 +19,7 @@ Emit a single `logger.info()` line at the end of each request cycle summarising 
 
 ## Problem Statement
 
-Currently all timing information is scattered across HTTP debug headers (`openai-processing-ms`) and individual DEBUG-level log lines. To benchmark a request you must enable `log_level: debug` (floods the terminal), then manually correlate timestamps and calculate deltas by hand.
+Currently all timing information is scattered across HTTP debug headers (`openai-processing-ms`) and individual DEBUG-level log lines. To benchmark a request you must enable `debug: enabled` (floods the terminal), then manually correlate timestamps and calculate deltas by hand.
 
 There is no clean, always-visible summary of what happened in a request.
 

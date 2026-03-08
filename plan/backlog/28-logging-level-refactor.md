@@ -63,20 +63,25 @@ def setup_error_logging(config):
     }.get(getattr(config, "log_level", "warning"), logging.WARNING)
 
     root = logging.getLogger()
-    if any(getattr(h, "_sandvoice_console", False) for h in root.handlers):
-        return  # already configured
     root.setLevel(level)
-    handler = logging.StreamHandler()
-    handler.setLevel(level)
-    handler.setFormatter(logging.Formatter(
+
+    # Find existing console handler or create one (idempotent + level-update safe)
+    console = next((h for h in root.handlers if getattr(h, "_sandvoice_console", False)), None)
+    if console is None:
+        console = logging.StreamHandler()
+        console._sandvoice_console = True
+        root.addHandler(console)
+    console.setLevel(level)
+    console.setFormatter(logging.Formatter(
         "%(asctime)s.%(msecs)03d %(levelname)s %(name)s: %(message)s",
         datefmt="%H:%M:%S",
     ))
-    handler._sandvoice_console = True
-    root.addHandler(handler)
+
+    # File handler (enable_error_logging / error_log_path) — unchanged from today
+    _setup_file_handler_if_configured(config, root)
 ```
 
-No separate path for error-only mode. No conditional handler installation. ~60 lines → ~20 lines.
+Always installs the console handler; re-calling with a different level updates it in place. File logging path left intact. ~60 lines → ~25 lines.
 
 ### 3. Remove all `if self.config.debug: logger.*()` guards
 
