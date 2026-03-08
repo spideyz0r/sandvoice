@@ -36,8 +36,7 @@ This was discovered in practice: the `scheduler-test` task kept firing after bei
   action_type: plugin
   action_payload:
     plugin: weather
-    location: Stoney Creek, Ontario, Canada
-    unit: metric
+    query: ""
     refresh_only: true
 
 - name: morning-news
@@ -65,7 +64,7 @@ to_remove   = tasks_in_db - tasks_in_file        # removed → delete
 to_skip     = tasks_in_file & tasks_in_db        # existing → leave alone
 ```
 
-Tasks removed from `tasks.yaml` are **deleted from the DB** on next startup. No manual sqlite3 needed.
+Tasks removed from `tasks.yaml` are **deleted from the DB** on next startup. No manual `sqlite3` needed.
 
 ---
 
@@ -77,7 +76,7 @@ Add one new key to `config.yaml`:
 tasks_file_path: ~/.sandvoice/tasks.yaml   # default
 ```
 
-Follow the 4-step config pattern from `docs/PATTERNS.md`:
+Follow the standard 4-step config pattern:
 1. Add to `defaults` dict
 2. Add property in `load_config()` with `os.path.expanduser()`
 3. Add validation (path must be a string)
