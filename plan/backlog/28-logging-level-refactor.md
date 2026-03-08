@@ -26,7 +26,18 @@ if self.config.debug:
     logger.debug("Scheduler tick: %d due tasks", len(due))
 ```
 
-This is redundant. The logging framework already skips formatting and emission for levels below the configured threshold. The guards add noise, increase nesting depth, and make it hard to see what's actually being logged.
+These guards are redundant when log calls use lazy `%s` formatting — the logging framework skips both formatting and emission below the configured threshold. However, any guarded call that currently uses an f-string or builds the message eagerly **must be converted to lazy formatting** before the guard is removed, otherwise the string construction cost remains. This conversion is part of the work.
+
+```python
+# Wrong — eager f-string, removing the guard adds overhead
+if self.config.debug:
+    logger.debug(f"Tick: {len(due)} due tasks")
+
+# Right — lazy formatting, guard is genuinely redundant
+logger.debug("Tick: %d due tasks", len(due))
+```
+
+The guards also add noise, increase nesting depth, and make it hard to see what's being logged.
 
 ---
 
@@ -36,9 +47,12 @@ This is redundant. The logging framework already skips formatting and emission f
 
 ```yaml
 log_level: warning   # default — quiet, only warnings and errors
-log_level: info      # milestones: timing summaries, task completions, startup events
-log_level: debug     # everything — for development
+                     # allowed values: warning | info | debug
 ```
+
+- `warning` — default; silent unless something is wrong
+- `info` — milestones: timing summaries, task completions, startup events
+- `debug` — everything; for development
 
 Migration in `load_config()`: if the old `debug: enabled` is present and `log_level` is absent, treat it as `log_level: debug`. `debug: disabled` becomes `log_level: warning`.
 
@@ -144,11 +158,11 @@ Old `debug: enabled` in existing configs continues to work via migration in `loa
 |---|---|
 | `common/configuration.py` | Add `log_level` key; `config.debug` property; migrate `debug:` |
 | `common/error_handling.py` | Simplify `setup_error_logging()` — always install handler |
-| `common/wake_word.py` | Remove ~100 `if self.config.debug: logger.*()` guards |
-| `common/audio.py` | Remove ~40 guards |
-| `common/ai.py` | Remove ~25 guards |
-| `plugins/weather.py`, `plugins/news.py`, `plugins/hacker-news.py` | Remove guards |
-| `sandvoice.py` | Remove logger guards; keep behavioural guards |
+| `common/wake_word.py` | Remove ~100 guards; convert f-string log calls to `%s` lazy formatting |
+| `common/audio.py` | Remove ~40 guards; convert f-string log calls |
+| `common/ai.py` | Remove ~25 guards; convert f-string log calls |
+| `plugins/weather.py`, `plugins/news.py`, `plugins/hacker-news.py` | Remove guards; convert f-string log calls |
+| `sandvoice.py` | Remove logger guards; keep behavioural guards; convert f-string log calls |
 | `tests/test_configuration.py` | Test `log_level` default, custom value, migration from `debug:` |
 | `tests/test_error_handling.py` | Test handler always installed; test level mapping |
 | `README.md` | Document `log_level`; note `debug: enabled` is deprecated |
@@ -172,6 +186,7 @@ Old `debug: enabled` in existing configs continues to work via migration in `loa
 - [ ] Old `debug: enabled` in config still works with a deprecation notice
 - [ ] `config.debug` property returns `True` when `log_level: debug`
 - [ ] All `if self.config.debug: logger.*()` guards removed from production code
+- [ ] All log calls use lazy `%s` formatting (no f-strings in logger calls)
 - [ ] `setup_error_logging()` is ≤25 lines
 - [ ] >80% test coverage on changed code
 - [ ] README documents `log_level`
