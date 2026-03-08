@@ -147,6 +147,10 @@ plan/
 **Document**: [backlog/27-tasks-file-and-lifecycle.md](./backlog/27-tasks-file-and-lifecycle.md)
 **Description**: Move scheduled task definitions to a dedicated `~/.sandvoice/tasks.yaml` file and make it the sole source of truth — tasks removed from the file are automatically deleted from the DB on startup. `tasks.yaml` replaces the `tasks:` key in `config.yaml` with no backwards compatibility.
 
+### Priority 28: Logging Level Refactor
+**Document**: [backlog/28-logging-level-refactor.md](./backlog/28-logging-level-refactor.md)
+**Description**: Replace `debug: enabled/disabled` with a standard `log_level: warning|info|debug` config key and remove ~200 scattered `if self.config.debug: logger.*()` guards — the logging framework is the filter, not the code. Prerequisite for Plan 23 (timing summary).
+
 ### Future Enhancements
 **Document**: [backlog/FUTURE.md](./backlog/FUTURE.md)
 **Description**: Long-term feature ideas including API Cost Management, Conversation History Management, Code Deduplication, Timers & Reminders, Music Control, Smart Home Integration, Calendar Integration, Todo List Management, Multi-User Support, and Conversation Memory.
