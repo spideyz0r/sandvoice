@@ -114,7 +114,7 @@ logger.debug("...")
 
 The framework filters at the configured level. Nothing else changes.
 
-**Keep** guards that control *behaviour*, not logging:
+**Keep** guards that control *behavior*, not logging:
 
 ```python
 # Keep — this controls TTS file preservation, not logging
