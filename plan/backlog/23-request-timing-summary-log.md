@@ -6,6 +6,12 @@
 
 ---
 
+## Dependencies
+
+- **Plan 28 (Logging Level Refactor)** — INFO level must be visible before this plan is useful. Merge Plan 28 first.
+
+---
+
 ## Overview
 
 Emit a single `logger.info()` line at the end of each request cycle summarising all timing, routing, and cache information. This enables clean benchmarking and performance regression detection without grepping through verbose debug output.
@@ -14,10 +20,7 @@ Emit a single `logger.info()` line at the end of each request cycle summarising 
 
 ## Problem Statement
 
-Currently all timing information is scattered across HTTP debug headers (`openai-processing-ms`) and individual DEBUG-level log lines. To benchmark a request you must:
-- Enable `debug: enabled` (floods the terminal)
-- Manually correlate timestamps across multiple log lines
-- Calculate deltas by hand
+Currently all timing information is scattered across HTTP debug headers (`openai-processing-ms`) and individual DEBUG-level log lines. To benchmark a request you must enable debug mode (`debug: enabled` today, `log_level: debug` after Plan 28), which floods the terminal with noise. Then manually correlate timestamps and calculate deltas by hand.
 
 There is no clean, always-visible summary of what happened in a request.
 
@@ -92,6 +95,6 @@ The summary line reads `s.cache.last_hit_type` after plugin execution.
 
 - [ ] Single `INFO` line emitted after every wake-word request
 - [ ] Line includes: transcribe time, route time + model + plugin name, plugin time + cache status, TTS time, total time
-- [ ] Visible at INFO level without `debug: enabled`
+- [ ] Visible at `log_level: info` (requires Plan 28)
 - [ ] Tests cover summary line emission and `last_hit_type` correctness
 - [ ] >80% coverage on new code
