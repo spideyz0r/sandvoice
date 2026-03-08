@@ -2,6 +2,9 @@ import os, yaml, logging
 from common.platform_detection import log_platform_info
 from common.audio_device_detection import get_optimal_channels, log_device_info
 
+logger = logging.getLogger(__name__)
+
+
 class Config:
     def __init__(self):
         self.config_file = os.path.join(os.path.expanduser("~"), ".sandvoice", "config.yaml")
@@ -21,6 +24,7 @@ class Config:
             # - normal: balanced detail
             # - detailed: more thorough, structured answers
             "verbosity": "brief",
+            "log_level": "warning",
             "debug": "disabled",
             "summary_words": "100",
             "search_sources": "4",
@@ -107,11 +111,13 @@ class Config:
 
     def load_defaults(self):
         if not os.path.exists(self.config_file):
+            self._raw_config = {}
             return self.defaults
         with open(self.config_file, "r") as f:
             data = yaml.safe_load(f)
+        self._raw_config = data or {}
         # combine both dicts, data overrides defaults
-        return {**self.defaults, **data}
+        return {**self.defaults, **self._raw_config}
 
     def load_config(self):
         self.channels = self.get("channels")
@@ -134,7 +140,21 @@ class Config:
         self.rss_news = self.get("rss_news")
         self.rss_news_max_items = self.get("rss_news_max_items")
         self.tmp_recording = self.tmp_files_path + "recording"
-        self.debug = self.get("debug").lower() == "enabled"
+        # log_level: warning | info | debug (default: warning)
+        # Migration: if old debug: enabled/disabled is present and log_level is absent,
+        # translate it to the equivalent log_level with a one-time deprecation notice.
+        raw_log_level = self._raw_config.get("log_level")
+        if raw_log_level is None:
+            raw_debug = self.config.get("debug", "disabled")
+            if str(raw_debug).lower() == "enabled":
+                print("WARNING: 'debug: enabled' is deprecated. Use 'log_level: debug' instead.")
+                self.log_level = "debug"
+            else:
+                self.log_level = "warning"
+        else:
+            self.log_level = str(raw_log_level).strip().lower()
+            if self.log_level not in ("warning", "info", "debug"):
+                self.log_level = "warning"
         self.bot_voice = self.get("bot_voice").lower() == "enabled"
         self.push_to_talk = self.get("push_to_talk").lower() == "enabled"
         self.linux_warnings = self.get("linux_warnings").lower() == "enabled"
@@ -236,7 +256,7 @@ class Config:
         except (TypeError, ValueError):
             self.cache_weather_max_stale_s = self.defaults["cache_weather_max_stale_s"]
         if self.cache_weather_max_stale_s < self.cache_weather_ttl_s:
-            logging.warning(
+            logger.warning(
                 "cache_weather_max_stale_s (%d) is less than cache_weather_ttl_s (%d); "
                 "clamping max_stale to ttl value.",
                 self.cache_weather_max_stale_s,
@@ -300,6 +320,11 @@ class Config:
 
         self.validate_config()
 
+    @property
+    def debug(self) -> bool:
+        """True when log_level is 'debug'. Read-only; set log_level instead."""
+        return self.log_level == "debug"
+
     def validate_config(self):
         """Validate configuration values and raise errors for invalid settings."""
         errors = []
@@ -332,6 +357,9 @@ class Config:
 
         if self.verbosity not in ["brief", "normal", "detailed"]:
             errors.append("verbosity must be 'brief', 'normal', or 'detailed'")
+
+        if self.log_level not in ("warning", "info", "debug"):
+            errors.append("log_level must be 'warning', 'info', or 'debug'")
 
         if not self.location or not isinstance(self.location, str):
             errors.append("location must be a non-empty string")
@@ -412,7 +440,7 @@ class Config:
         # Report all errors
         if errors:
             error_msg = "Configuration validation failed:\n" + "\n".join(f"  - {err}" for err in errors)
-            logging.error(error_msg)
+            logger.error(error_msg)
             raise ValueError(error_msg)
 
     def get(self, key):

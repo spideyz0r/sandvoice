@@ -4,71 +4,71 @@ import os
 import json
 from functools import wraps
 
+logger = logging.getLogger(__name__)
+
 
 def setup_error_logging(config):
     """
-    Set up error logging based on configuration.
+    Configure SandVoice logging handlers based on log_level and file logging settings.
 
-    Configures logging handlers for SandVoice debug output and error logging.
-    Only adds new handlers if they don't already exist (idempotent).
+    Always installs a console handler (find-or-create, idempotent). Re-calling with
+    a different log_level updates the handler level in place.
 
     Args:
-        config: Configuration object with logging settings
+        config: Configuration object with log_level, enable_error_logging, error_log_path
     """
-    # Use getattr with defaults for compatibility with minimal config mocks
-    debug = getattr(config, 'debug', False)
-    enable_error_logging = getattr(config, 'enable_error_logging', False)
+    _LOG_LEVELS = {
+        "debug":   logging.DEBUG,
+        "info":    logging.INFO,
+        "warning": logging.WARNING,
+    }
+    level = _LOG_LEVELS.get(getattr(config, "log_level", "warning"), logging.WARNING)
 
-    # Only proceed if we need to add handlers
-    if not debug and not enable_error_logging:
+    root = logging.getLogger()
+    root.setLevel(level)
+
+    # Find existing console handler or create one (idempotent, level-update safe)
+    console = next((h for h in root.handlers if getattr(h, "_sandvoice_console", False)), None)
+    if console is None:
+        console = logging.StreamHandler()
+        console._sandvoice_console = True
+        root.addHandler(console)
+    console.setLevel(level)
+    console.setFormatter(logging.Formatter(
+        "%(asctime)s.%(msecs)03d %(levelname)s %(name)s: %(message)s",
+        datefmt="%H:%M:%S",
+    ))
+
+    _setup_file_handler_if_configured(config, root)
+
+
+def _setup_file_handler_if_configured(config, root):
+    """Add a file handler for error logging if enable_error_logging is set."""
+    enable_error_logging = getattr(config, "enable_error_logging", False)
+    if not enable_error_logging:
         return
 
-    # Set logging level based on debug mode
-    log_level = logging.DEBUG if debug else logging.ERROR
+    has_sandvoice_file = any(getattr(h, "_sandvoice_file", False) for h in root.handlers)
+    if has_sandvoice_file:
+        return
 
-    # Configure root logger level only when adding SandVoice handlers
-    logger = logging.getLogger()
-    logger.setLevel(log_level)
+    error_log_path = getattr(config, "error_log_path", "")
+    if not error_log_path:
+        logger.error("enable_error_logging is True but error_log_path is not set")
+        return
 
-    # Check if we already have SandVoice handlers to avoid duplicates
-    has_sandvoice_console = any(
-        getattr(h, '_sandvoice_console', False) for h in logger.handlers
-    )
-    has_sandvoice_file = any(
-        getattr(h, '_sandvoice_file', False) for h in logger.handlers
-    )
+    log_path = os.path.expanduser(error_log_path)
+    log_dir = os.path.dirname(log_path)
+    if log_dir and not os.path.exists(log_dir):
+        os.makedirs(log_dir)
 
-    # Add console handler when debug is enabled (if not already present)
-    if debug and not has_sandvoice_console:
-        console_handler = logging.StreamHandler()
-        console_handler.setLevel(log_level)
-        console_formatter = logging.Formatter(
-            '%(asctime)s.%(msecs)03d %(levelname)s: %(message)s',
-            datefmt='%H:%M:%S'
-        )
-        console_handler.setFormatter(console_formatter)
-        console_handler._sandvoice_console = True  # Mark as ours
-        logger.addHandler(console_handler)
-
-    # Add file handler if error logging is enabled (if not already present)
-    if enable_error_logging and not has_sandvoice_file:
-        error_log_path = getattr(config, 'error_log_path', '')
-        if not error_log_path:
-            logging.error("enable_error_logging is True but error_log_path is not set")
-            return
-        log_path = os.path.expanduser(error_log_path)
-        log_dir = os.path.dirname(log_path)
-
-        # Create log directory if it doesn't exist
-        if log_dir and not os.path.exists(log_dir):
-            os.makedirs(log_dir)
-
-        file_handler = logging.FileHandler(log_path)
-        file_handler.setLevel(logging.ERROR)
-        file_formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-        file_handler.setFormatter(file_formatter)
-        file_handler._sandvoice_file = True  # Mark as ours
-        logger.addHandler(file_handler)
+    file_handler = logging.FileHandler(log_path)
+    file_handler.setLevel(logging.ERROR)
+    file_handler.setFormatter(logging.Formatter(
+        "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+    ))
+    file_handler._sandvoice_file = True
+    root.addHandler(file_handler)
 
 
 def retry_with_backoff(max_attempts=3, initial_delay=1):
@@ -110,13 +110,7 @@ def retry_with_backoff(max_attempts=3, initial_delay=1):
                     raise
                 except Exception as e:
                     last_exception = e
-
-                    # Log the error if debug is enabled
-                    if args:
-                        config = getattr(args[0], 'config', None)
-                        debug_enabled = getattr(config, 'debug', False) if config is not None else False
-                        if debug_enabled:
-                            logging.error(f"Attempt {attempt + 1}/{attempts} failed for {func.__name__}: {e}")
+                    logger.debug("Attempt %d/%d failed for %s: %s", attempt + 1, attempts, getattr(func, "__name__", repr(func)), e)
 
                     # Don't sleep after the last attempt
                     if attempt < attempts - 1:

@@ -213,56 +213,99 @@ class TestHandleFileError(unittest.TestCase):
 
 
 class TestSetupErrorLogging(unittest.TestCase):
-    def test_logging_enabled(self):
-        """Test error logging setup when enabled"""
+    def setUp(self):
+        """Clear root logger handlers before each test to avoid cross-test pollution."""
+        root = logging.getLogger()
+        root.handlers.clear()
+
+    def tearDown(self):
+        """Remove any handlers added during the test."""
+        root = logging.getLogger()
+        for h in list(root.handlers):
+            root.removeHandler(h)
+
+    def _make_config(self, log_level="warning", enable_error_logging=False, error_log_path=""):
+        cfg = Mock()
+        cfg.log_level = log_level
+        cfg.enable_error_logging = enable_error_logging
+        cfg.error_log_path = error_log_path
+        return cfg
+
+    def test_console_handler_always_installed(self):
+        """Console handler is installed regardless of log level or file logging setting."""
+        cfg = self._make_config(log_level="warning")
+        setup_error_logging(cfg)
+        root = logging.getLogger()
+        console_handlers = [h for h in root.handlers if getattr(h, "_sandvoice_console", False)]
+        self.assertEqual(len(console_handlers), 1)
+
+    def test_log_level_warning_maps_correctly(self):
+        """log_level='warning' sets root logger to WARNING."""
+        cfg = self._make_config(log_level="warning")
+        setup_error_logging(cfg)
+        self.assertEqual(logging.getLogger().level, logging.WARNING)
+
+    def test_log_level_info_maps_correctly(self):
+        """log_level='info' sets root logger to INFO."""
+        cfg = self._make_config(log_level="info")
+        setup_error_logging(cfg)
+        self.assertEqual(logging.getLogger().level, logging.INFO)
+
+    def test_log_level_debug_maps_correctly(self):
+        """log_level='debug' sets root logger to DEBUG."""
+        cfg = self._make_config(log_level="debug")
+        setup_error_logging(cfg)
+        self.assertEqual(logging.getLogger().level, logging.DEBUG)
+
+    def test_idempotent_second_call_does_not_add_duplicate_console_handler(self):
+        """Calling setup_error_logging twice does not install a second console handler."""
+        cfg = self._make_config(log_level="warning")
+        setup_error_logging(cfg)
+        setup_error_logging(cfg)
+        root = logging.getLogger()
+        console_handlers = [h for h in root.handlers if getattr(h, "_sandvoice_console", False)]
+        self.assertEqual(len(console_handlers), 1)
+
+    def test_level_update_on_reconfigure(self):
+        """Calling setup_error_logging again with a different level updates the handler level."""
+        cfg_warn = self._make_config(log_level="warning")
+        cfg_debug = self._make_config(log_level="debug")
+        setup_error_logging(cfg_warn)
+        setup_error_logging(cfg_debug)
+        root = logging.getLogger()
+        console = next(h for h in root.handlers if getattr(h, "_sandvoice_console", False))
+        self.assertEqual(console.level, logging.DEBUG)
+
+    def test_file_logging_enabled(self):
+        """File handler is created when enable_error_logging is True."""
         with tempfile.TemporaryDirectory() as tmpdir:
             log_path = os.path.join(tmpdir, "test.log")
+            cfg = self._make_config(enable_error_logging=True, error_log_path=log_path)
+            setup_error_logging(cfg)
 
-            # Create mock config
-            mock_config = Mock()
-            mock_config.enable_error_logging = True
-            mock_config.error_log_path = log_path
-
-            # Clear existing handlers to avoid conflicts
-            logger = logging.getLogger()
-            logger.handlers.clear()
-
-            setup_error_logging(mock_config)
-
-            # Write a test log message using a specific logger
-            test_logger = logging.getLogger('test')
+            test_logger = logging.getLogger("test_file")
             test_logger.error("Test error message")
+            for h in logging.getLogger().handlers:
+                h.flush()
 
-            # Force flush
-            for handler in logger.handlers:
-                handler.flush()
+            self.assertTrue(os.path.exists(log_path))
+            with open(log_path) as f:
+                self.assertIn("Test error message", f.read())
 
-            # Verify log file was created and contains the expected message
-            self.assertTrue(os.path.exists(log_path), "Log file was not created")
-            with open(log_path, 'r') as f:
-                content = f.read()
-            self.assertIn("Test error message", content)
-
-    def test_logging_disabled(self):
-        """Test error logging setup when disabled"""
-        mock_config = Mock()
-        mock_config.enable_error_logging = False
-
-        # Should not raise any errors
-        setup_error_logging(mock_config)
+    def test_file_logging_disabled_no_file_handler(self):
+        """No file handler added when enable_error_logging is False."""
+        cfg = self._make_config(enable_error_logging=False)
+        setup_error_logging(cfg)
+        root = logging.getLogger()
+        file_handlers = [h for h in root.handlers if getattr(h, "_sandvoice_file", False)]
+        self.assertEqual(len(file_handlers), 0)
 
     def test_logging_creates_directory(self):
-        """Test that logging setup creates log directory if it doesn't exist"""
+        """File logging setup creates the log directory if it doesn't exist."""
         with tempfile.TemporaryDirectory() as tmpdir:
             log_path = os.path.join(tmpdir, "subdir", "test.log")
-
-            mock_config = Mock()
-            mock_config.enable_error_logging = True
-            mock_config.error_log_path = log_path
-
-            setup_error_logging(mock_config)
-
-            # Verify directory was created
+            cfg = self._make_config(enable_error_logging=True, error_log_path=log_path)
+            setup_error_logging(cfg)
             self.assertTrue(os.path.exists(os.path.dirname(log_path)))
 
 

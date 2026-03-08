@@ -798,5 +798,89 @@ class TestCacheConfig(_TempHomeBase):
                 self.assertTrue(config.cache_enabled, msg=f"cache_enabled={value!r} should be truthy")
 
 
+class TestLogLevel(unittest.TestCase):
+    """Tests for log_level config key and config.debug property (Plan 28)."""
+
+    def setUp(self):
+        self.temp_dir = tempfile.mkdtemp()
+        self.original_home = os.environ.get('HOME')
+        os.environ['HOME'] = self.temp_dir
+        os.makedirs(os.path.join(self.temp_dir, ".sandvoice"), exist_ok=True)
+
+    def tearDown(self):
+        if self.original_home:
+            os.environ['HOME'] = self.original_home
+        else:
+            del os.environ['HOME']
+        import shutil
+        shutil.rmtree(self.temp_dir, ignore_errors=True)
+
+    def write_config(self, config_dict):
+        config_path = os.path.join(self.temp_dir, ".sandvoice", "config.yaml")
+        with open(config_path, 'w') as f:
+            yaml.dump(config_dict, f)
+
+    def test_log_level_default_is_warning(self):
+        """Default log_level is 'warning'."""
+        config = Config()
+        self.assertEqual(config.log_level, "warning")
+
+    def test_log_level_info(self):
+        """log_level: info is stored correctly."""
+        self.write_config({"log_level": "info"})
+        config = Config()
+        self.assertEqual(config.log_level, "info")
+
+    def test_log_level_debug(self):
+        """log_level: debug is stored correctly."""
+        self.write_config({"log_level": "debug"})
+        config = Config()
+        self.assertEqual(config.log_level, "debug")
+
+    def test_log_level_invalid_falls_back_to_warning(self):
+        """An unrecognised log_level value is silently normalised to 'warning'."""
+        self.write_config({"log_level": "verbose"})
+        config = Config()
+        self.assertEqual(config.log_level, "warning")
+
+    def test_debug_property_false_when_warning(self):
+        """config.debug is False when log_level is 'warning'."""
+        config = Config()
+        self.assertFalse(config.debug)
+
+    def test_debug_property_false_when_info(self):
+        """config.debug is False when log_level is 'info'."""
+        self.write_config({"log_level": "info"})
+        config = Config()
+        self.assertFalse(config.debug)
+
+    def test_debug_property_true_when_debug(self):
+        """config.debug is True when log_level is 'debug'."""
+        self.write_config({"log_level": "debug"})
+        config = Config()
+        self.assertTrue(config.debug)
+
+    def test_migrate_debug_enabled_to_log_level_debug(self):
+        """Old 'debug: enabled' migrates to log_level='debug' with a deprecation warning."""
+        self.write_config({"debug": "enabled"})
+        with patch('builtins.print') as mock_print:
+            config = Config()
+        self.assertEqual(config.log_level, "debug")
+        printed = " ".join(str(c) for c in mock_print.call_args_list)
+        self.assertIn("deprecated", printed.lower())
+
+    def test_migrate_debug_disabled_to_log_level_warning(self):
+        """Old 'debug: disabled' migrates to log_level='warning' silently."""
+        self.write_config({"debug": "disabled"})
+        config = Config()
+        self.assertEqual(config.log_level, "warning")
+
+    def test_log_level_takes_precedence_over_debug(self):
+        """Explicit log_level key overrides any debug: key in the config file."""
+        self.write_config({"debug": "enabled", "log_level": "info"})
+        config = Config()
+        self.assertEqual(config.log_level, "info")
+
+
 if __name__ == '__main__':
     unittest.main()
