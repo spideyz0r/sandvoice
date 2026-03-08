@@ -358,9 +358,6 @@ class Config:
         if self.verbosity not in ["brief", "normal", "detailed"]:
             errors.append("verbosity must be 'brief', 'normal', or 'detailed'")
 
-        if self.log_level not in ("warning", "info", "debug"):
-            errors.append("log_level must be 'warning', 'info', or 'debug'")
-
         if not self.location or not isinstance(self.location, str):
             errors.append("location must be a non-empty string")
 

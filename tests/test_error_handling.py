@@ -222,6 +222,7 @@ class TestSetupErrorLogging(unittest.TestCase):
         """Remove any handlers added during the test."""
         root = logging.getLogger()
         for h in list(root.handlers):
+            h.close()
             root.removeHandler(h)
 
     def _make_config(self, log_level="warning", enable_error_logging=False, error_log_path=""):
