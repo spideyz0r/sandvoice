@@ -129,7 +129,7 @@ plan/
 
 ### Priority 23: Request Timing Summary Log
 **Document**: [backlog/23-request-timing-summary-log.md](./backlog/23-request-timing-summary-log.md)
-**Description**: Emit a single INFO line per request summarising transcription, routing, plugin, and TTS timing plus cache status. Enables clean benchmarking without debug: enabled.
+**Description**: Emit a single INFO line per request summarising transcription, routing, plugin, and TTS timing plus cache status. Enables clean benchmarking without `log_level: debug`. Requires Plan 28.
 
 ### Priority 24: Wake Word Refactor
 **Document**: [backlog/24-wake-word-refactor.md](./backlog/24-wake-word-refactor.md)

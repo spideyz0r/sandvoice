@@ -36,7 +36,7 @@ This is redundant. The logging framework already skips formatting and emission f
 
 ```yaml
 log_level: warning   # default — quiet, only warnings and errors
-log_level: info      # milestones: timing summaries, scheduler ticks, cache hits
+log_level: info      # milestones: timing summaries, task completions, startup events
 log_level: debug     # everything — for development
 ```
 
