@@ -12,6 +12,10 @@ _LOG_LEVELS = {
     "warning": logging.WARNING,
 }
 
+_NON_RETRYABLE_EXCEPTIONS = (
+    FileNotFoundError, PermissionError, ValueError, KeyError, json.JSONDecodeError
+)
+
 
 def setup_error_logging(config):
     """
@@ -60,8 +64,8 @@ def _setup_file_handler_if_configured(config, root):
 
     log_path = os.path.expanduser(error_log_path)
     log_dir = os.path.dirname(log_path)
-    if log_dir and not os.path.exists(log_dir):
-        os.makedirs(log_dir)
+    if log_dir:
+        os.makedirs(log_dir, exist_ok=True)
 
     file_handler = logging.FileHandler(log_path)
     file_handler.setLevel(logging.ERROR)
@@ -87,9 +91,6 @@ def retry_with_backoff(max_attempts=3, initial_delay=1):
         Non-retryable exceptions (FileNotFoundError, PermissionError, ValueError)
         are raised immediately without retry.
     """
-    # Exceptions that should not be retried (non-transient errors)
-    NON_RETRYABLE_EXCEPTIONS = (FileNotFoundError, PermissionError, ValueError, KeyError, json.JSONDecodeError)
-
     def decorator(func):
         @wraps(func)
         def wrapper(*args, **kwargs):
@@ -106,8 +107,7 @@ def retry_with_backoff(max_attempts=3, initial_delay=1):
             for attempt in range(attempts):
                 try:
                     return func(*args, **kwargs)
-                except NON_RETRYABLE_EXCEPTIONS:
-                    # Don't retry non-transient errors
+                except _NON_RETRYABLE_EXCEPTIONS:
                     raise
                 except Exception as e:
                     last_exception = e

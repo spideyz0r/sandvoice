@@ -140,21 +140,7 @@ class Config:
         self.rss_news = self.get("rss_news")
         self.rss_news_max_items = self.get("rss_news_max_items")
         self.tmp_recording = self.tmp_files_path + "recording"
-        # log_level: warning | info | debug (default: warning)
-        # Migration: if old debug: enabled/disabled is present and log_level is absent,
-        # translate it to the equivalent log_level with a one-time deprecation notice.
-        raw_log_level = self._raw_config.get("log_level")
-        if raw_log_level is None:
-            raw_debug = self.config.get("debug", "disabled")
-            if str(raw_debug).lower() == "enabled":
-                print("WARNING: 'debug: enabled' is deprecated. Use 'log_level: debug' instead.")
-                self.log_level = "debug"
-            else:
-                self.log_level = "warning"
-        else:
-            self.log_level = str(raw_log_level).strip().lower()
-            if self.log_level not in ("warning", "info", "debug"):
-                self.log_level = "warning"
+        self.log_level = self._resolve_log_level()
         self.bot_voice = self.get("bot_voice").lower() == "enabled"
         self.push_to_talk = self.get("push_to_talk").lower() == "enabled"
         self.linux_warnings = self.get("linux_warnings").lower() == "enabled"
@@ -319,6 +305,19 @@ class Config:
             log_device_info(self)
 
         self.validate_config()
+
+    def _resolve_log_level(self) -> str:
+        """Return the active log_level string, migrating from legacy debug: key if needed."""
+        raw = self._raw_config.get("log_level")
+        if raw is not None:
+            level = str(raw).strip().lower()
+            return level if level in ("warning", "info", "debug") else "warning"
+
+        # Migrate from old debug: enabled/disabled
+        if str(self.config.get("debug", "disabled")).lower() == "enabled":
+            print("WARNING: 'debug: enabled' is deprecated. Use 'log_level: debug' instead.")
+            return "debug"
+        return "warning"
 
     @property
     def debug(self) -> bool:
