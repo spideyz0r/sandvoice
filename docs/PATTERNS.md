@@ -66,8 +66,8 @@ print("Warning: audio hardware not found.")
 The rule "never use `print()` for diagnostic output" applies to internal diagnostics only.
 State indicators, conversation output, and user-visible errors may use `print()` anywhere.
 
-**Plugins** follow the same logger rule if they have a class; for standalone `process()`
-functions, `logging.error()` is acceptable since plugins are simpler and have fewer log points.
+**Plugins** follow the same logger rule — module-level `logger = logging.getLogger(__name__)`,
+no bare `logging.*()` calls. Existing plugins are being updated in Plan 28 D/4.
 
 ---
 
