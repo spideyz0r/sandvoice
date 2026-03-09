@@ -265,7 +265,7 @@ class WakeWordMode:
                 keyword_index = self.porcupine.process(pcm)
 
                 if keyword_index >= 0:
-                    logger.debug("Wake word detected: '%s'", self.config.wake_phrase)
+                    logger.info("Wake word detected: '%s'", self.config.wake_phrase)
 
                     if self.config.wake_confirmation_beep and self.confirmation_beep_path:
                         try:
@@ -309,7 +309,7 @@ class WakeWordMode:
             self.audio.log_mixer_state("LISTENING state entered")
 
         if not self.config.vad_enabled:
-            logger.info("VAD is disabled via configuration; skipping VAD-based recording.")
+            logger.debug("VAD is disabled via configuration; skipping VAD-based recording.")
             self.state = State.PROCESSING
             return
 
@@ -567,8 +567,9 @@ class WakeWordMode:
                 result_holder[0] = operation()
             except Exception as e:
                 error_holder[0] = e
-                # Log exception so it's not silently swallowed on barge-in
-                logger.warning("Background %s failed: %s", operation_name, e)
+                # Log at DEBUG only — if no barge-in, the error is re-raised and
+                # logged by the outer handler; a WARNING here would duplicate it.
+                logger.debug("Background %s failed: %s", operation_name, e)
 
         thread = threading.Thread(target=run_in_background, daemon=True)
         thread.start()
@@ -1038,9 +1039,9 @@ class WakeWordMode:
                 all_tts_on_disk = [os.path.basename(f) for f in glob.glob(pattern)]
                 logger.debug("=== ENTERING RESPONDING === thread=%s tts_files=%s files_on_disk=%s",
                              threading.current_thread().name, tts_file_info, all_tts_on_disk)
-            except Exception:
-                logger.debug("=== ENTERING RESPONDING === thread=%s, TTS files: %s",
-                             threading.current_thread().name, tts_file_info)
+            except Exception as e:
+                logger.debug("=== ENTERING RESPONDING === thread=%s, TTS files: %s (disk listing failed: %s)",
+                             threading.current_thread().name, tts_file_info, e)
 
         if self.config.visual_state_indicator:
             print("🔊 Responding...")

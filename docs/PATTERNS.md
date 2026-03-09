@@ -102,14 +102,12 @@ try:
     return result
 except SpecificError as e:
     error_msg = handle_api_error(e, service_name="X")
-    if self.config.debug:
-        logger.error("Detail: %s", e)
+    logger.error("Detail: %s", e)
     print(error_msg)
     raise   # or return error_msg, depending on whether the caller handles it
 except Exception as e:
     error_msg = handle_api_error(e, service_name="X")
-    if self.config.debug:
-        logger.error("Unexpected error: %s", e)
+    logger.error("Unexpected error: %s", e)
     print(f"Error: {error_msg}")
     raise
 ```
@@ -225,12 +223,10 @@ def process(user_input, route, s):
         data = fetch_something(s.config)
         return s.ai.generate_response(user_input, str(data)).content
     except ValueError as e:
-        if s.config.debug:
-            logging.error("Plugin config error: %s", e)
+        logger.error("Plugin config error: %s", e)
         return "Unable to complete request. Please check your configuration."
     except Exception as e:
-        if s.config.debug:
-            logging.error("Plugin error: %s", e)
+        logger.error("Plugin error: %s", e)
         return "Unable to complete request. Please try again."
 ```
 
