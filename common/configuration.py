@@ -25,7 +25,6 @@ class Config:
             # - detailed: more thorough, structured answers
             "verbosity": "brief",
             "log_level": "warning",
-            "debug": "disabled",
             "summary_words": "100",
             "search_sources": "4",
             "push_to_talk": "disabled",
@@ -111,13 +110,10 @@ class Config:
 
     def load_defaults(self):
         if not os.path.exists(self.config_file):
-            self._raw_config = {}
             return self.defaults
         with open(self.config_file, "r") as f:
             data = yaml.safe_load(f)
-        self._raw_config = data or {}
-        # combine both dicts, data overrides defaults
-        return {**self.defaults, **self._raw_config}
+        return {**self.defaults, **(data or {})}
 
     def load_config(self):
         self.channels = self.get("channels")
@@ -140,7 +136,8 @@ class Config:
         self.rss_news = self.get("rss_news")
         self.rss_news_max_items = self.get("rss_news_max_items")
         self.tmp_recording = self.tmp_files_path + "recording"
-        self.log_level = self._resolve_log_level()
+        raw = str(self.get("log_level") or "warning").strip().lower()
+        self.log_level = raw if raw in ("warning", "info", "debug") else "warning"
         self.bot_voice = self.get("bot_voice").lower() == "enabled"
         self.push_to_talk = self.get("push_to_talk").lower() == "enabled"
         self.linux_warnings = self.get("linux_warnings").lower() == "enabled"
@@ -305,19 +302,6 @@ class Config:
             log_device_info(self)
 
         self.validate_config()
-
-    def _resolve_log_level(self) -> str:
-        """Return the active log_level string, migrating from legacy debug: key if needed."""
-        raw = self._raw_config.get("log_level")
-        if raw is not None:
-            level = str(raw).strip().lower()
-            return level if level in ("warning", "info", "debug") else "warning"
-
-        # Migrate from old debug: enabled/disabled
-        if str(self.config.get("debug", "disabled")).lower() == "enabled":
-            print("WARNING: 'debug: enabled' is deprecated. Use 'log_level: debug' instead.")
-            return "debug"
-        return "warning"
 
     @property
     def debug(self) -> bool:

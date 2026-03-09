@@ -841,27 +841,5 @@ class TestLogLevel(_TempHomeBase):
         config = Config()
         self.assertTrue(config.debug)
 
-    def test_migrate_debug_enabled_to_log_level_debug(self):
-        """Old 'debug: enabled' migrates to log_level='debug' with a deprecation warning."""
-        self.write_config({"debug": "enabled"})
-        with patch('builtins.print') as mock_print:
-            config = Config()
-        self.assertEqual(config.log_level, "debug")
-        printed = " ".join(str(c) for c in mock_print.call_args_list)
-        self.assertIn("deprecated", printed.lower())
-
-    def test_migrate_debug_disabled_to_log_level_warning(self):
-        """Old 'debug: disabled' migrates to log_level='warning' silently."""
-        self.write_config({"debug": "disabled"})
-        config = Config()
-        self.assertEqual(config.log_level, "warning")
-
-    def test_log_level_takes_precedence_over_debug(self):
-        """Explicit log_level key overrides any debug: key in the config file."""
-        self.write_config({"debug": "enabled", "log_level": "info"})
-        config = Config()
-        self.assertEqual(config.log_level, "info")
-
-
 if __name__ == '__main__':
     unittest.main()
