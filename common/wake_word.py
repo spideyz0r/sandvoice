@@ -702,13 +702,13 @@ class WakeWordMode:
             else:
                 user_input = self.ai.transcribe_and_translate(audio_file_path=audio_path)
 
-            logger.info("Transcription: %s", user_input)
+            logger.debug("Transcription: %s", user_input)
 
             print(f"You: {user_input}")
 
             # Check for barge-in before starting response generation
             if barge_in_thread and self._check_barge_in_interrupt():
-                logger.info("Barge-in detected after transcription, before response generation")
+                logger.debug("Barge-in detected after transcription, before response generation")
                 self._handle_immediate_barge_in(barge_in_thread)
                 return
 
@@ -727,7 +727,7 @@ class WakeWordMode:
                 else:
                     route = self.ai.define_route(user_input)
 
-                logger.info("Route: %s", route)
+                logger.debug("Route: %s", route)
 
                 stream_default_route = (
                     _is_enabled_flag(getattr(self.config, "bot_voice", False)) and
@@ -800,13 +800,13 @@ class WakeWordMode:
 
                 self.response_text = response.content if hasattr(response, 'content') else str(response)
 
-            logger.info("Response: %s", self.response_text)
+            logger.debug("Response: %s", self.response_text)
 
             print(f"{self.config.botname}: {self.response_text}\n")
 
             # Check for barge-in before starting TTS generation
             if barge_in_thread and self._check_barge_in_interrupt():
-                logger.info("Barge-in detected after response, before TTS generation")
+                logger.debug("Barge-in detected after response, before TTS generation")
                 self._handle_immediate_barge_in(barge_in_thread)
                 return
 
@@ -923,8 +923,7 @@ class WakeWordMode:
             pattern = os.path.join(self.config.tmp_files_path, "tts-response-*.mp3")
             orphaned_files = glob.glob(pattern)
             if orphaned_files:
-                orphaned_info = [os.path.basename(f) for f in orphaned_files]
-                logger.info("Cleaning up %s orphaned TTS files: %s", len(orphaned_files), orphaned_info)
+                logger.debug("Cleaning up %d orphaned TTS files: %s", len(orphaned_files), [os.path.basename(f) for f in orphaned_files])
             self._cleanup_specific_tts_files(orphaned_files)
         except Exception as e:
             logger.warning("Error cleaning up orphaned TTS files: %s", e)
@@ -983,7 +982,7 @@ class WakeWordMode:
                 frames_per_buffer=porcupine_instance.frame_length
             )
 
-            logger.info("Barge-in thread: Audio stream opened, listening for wake word...")
+            logger.debug("Barge-in thread: Audio stream opened, listening for wake word...")
 
             while self.running and not barge_in_event.is_set() and not stop_flag.is_set():
                 try:
@@ -993,7 +992,7 @@ class WakeWordMode:
                     keyword_index = porcupine_instance.process(pcm)
 
                     if keyword_index >= 0:
-                        logger.info("Barge-in: Wake word detected! Interrupting...")
+                        logger.debug("Barge-in: Wake word detected! Interrupting...")
                         barge_in_event.set()
                         break
 
@@ -1030,16 +1029,16 @@ class WakeWordMode:
         Transitions back to IDLE or LISTENING (if barge-in).
         """
         import threading
-        tts_file_info = [os.path.basename(f) for f in self.tts_files] if self.tts_files else None
-        # Log what files actually exist in temp directory
-        try:
-            pattern = os.path.join(self.config.tmp_files_path, "tts-response-*.mp3")
-            all_tts_on_disk = [os.path.basename(f) for f in glob.glob(pattern)]
-            logger.info("=== ENTERING RESPONDING === thread=%s", threading.current_thread().name)
-            logger.info("  self.tts_files = %s", tts_file_info)
-            logger.info("  files_on_disk = %s", all_tts_on_disk)
-        except Exception:
-            logger.info("=== ENTERING RESPONDING === thread=%s, TTS files: %s", threading.current_thread().name, tts_file_info)
+        if logger.isEnabledFor(logging.DEBUG):
+            tts_file_info = [os.path.basename(f) for f in self.tts_files] if self.tts_files else None
+            try:
+                pattern = os.path.join(self.config.tmp_files_path, "tts-response-*.mp3")
+                all_tts_on_disk = [os.path.basename(f) for f in glob.glob(pattern)]
+                logger.debug("=== ENTERING RESPONDING === thread=%s tts_files=%s files_on_disk=%s",
+                             threading.current_thread().name, tts_file_info, all_tts_on_disk)
+            except Exception:
+                logger.debug("=== ENTERING RESPONDING === thread=%s, TTS files: %s",
+                             threading.current_thread().name, tts_file_info)
 
         if self.config.visual_state_indicator:
             print("🔊 Responding...")
