@@ -130,7 +130,7 @@ class WakeWordMode:
         Raises:
             RuntimeError: If Porcupine access key is missing or invalid
         """
-        logger.info("Initializing wake word detection and VAD")
+        logger.debug("Initializing wake word detection and VAD")
 
         if not self.config.porcupine_access_key:
             error_msg = (
@@ -163,12 +163,12 @@ class WakeWordMode:
             self.porcupine = self._create_porcupine_instance()
 
             if keyword_paths:
-                logger.info("Porcupine initialized with custom keyword paths: %s", keyword_paths)
+                logger.debug("Porcupine initialized with custom keyword paths: %s", keyword_paths)
             else:
-                logger.info("Porcupine initialized with built-in wake phrase: '%s'", self.config.wake_phrase)
+                logger.debug("Porcupine initialized with built-in wake phrase: '%s'", self.config.wake_phrase)
 
-            logger.info("Porcupine sample rate: %s", self.porcupine.sample_rate)
-            logger.info("Porcupine frame length: %s", self.porcupine.frame_length)
+            logger.debug("Porcupine sample rate: %s", self.porcupine.sample_rate)
+            logger.debug("Porcupine frame length: %s", self.porcupine.frame_length)
 
         except RuntimeError:
             raise
@@ -185,7 +185,7 @@ class WakeWordMode:
                     duration=self.config.wake_confirmation_beep_duration,
                     tmp_path=self.config.tmp_files_path
                 )
-                logger.info("Confirmation beep created at: %s", self.confirmation_beep_path)
+                logger.debug("Confirmation beep created at: %s", self.confirmation_beep_path)
             except Exception as e:
                 logger.warning("Failed to create confirmation beep: %s", e)
                 self.confirmation_beep_path = None
@@ -199,7 +199,7 @@ class WakeWordMode:
                     duration=getattr(self.config, "voice_ack_earcon_duration", 0.06),
                     tmp_path=self.config.tmp_files_path,
                 )
-                logger.info("Ack earcon created at: %s", self.ack_earcon_path)
+                logger.debug("Ack earcon created at: %s", self.ack_earcon_path)
             except Exception as e:
                 logger.warning("Failed to create ack earcon: %s", e)
                 self.ack_earcon_path = None
@@ -265,7 +265,7 @@ class WakeWordMode:
                 keyword_index = self.porcupine.process(pcm)
 
                 if keyword_index >= 0:
-                    logger.info("Wake word detected: '%s'", self.config.wake_phrase)
+                    logger.debug("Wake word detected: '%s'", self.config.wake_phrase)
 
                     if self.config.wake_confirmation_beep and self.confirmation_beep_path:
                         try:
@@ -326,7 +326,7 @@ class WakeWordMode:
         if sample_rate not in vad_sample_rates:
             # Find closest supported rate
             vad_sample_rate = min(vad_sample_rates, key=lambda x: abs(x - sample_rate))
-            logger.info("VAD requires specific sample rates. Using %sHz instead of %sHz", vad_sample_rate, sample_rate)
+            logger.debug("VAD requires specific sample rates. Using %sHz instead of %sHz", vad_sample_rate, sample_rate)
         else:
             vad_sample_rate = sample_rate
 
@@ -349,13 +349,13 @@ class WakeWordMode:
                 frames_per_buffer=vad_frame_size
             )
 
-            logger.info("Recording with VAD: %sHz, frame_duration=%sms", vad_sample_rate, frame_duration_ms)
+            logger.debug("Recording with VAD: %sHz, frame_duration=%sms", vad_sample_rate, frame_duration_ms)
 
             while self.running and self.state == State.LISTENING:
                 # Check timeout
                 elapsed = time.time() - recording_start
                 if elapsed > self.config.vad_timeout:
-                    logger.info("VAD timeout reached (%ss)", self.config.vad_timeout)
+                    logger.debug("VAD timeout reached (%ss)", self.config.vad_timeout)
                     break
 
                 # Read audio frame
@@ -384,7 +384,7 @@ class WakeWordMode:
                     else:
                         silence_duration = time.time() - silence_start
                         if silence_duration >= self.config.vad_silence_duration:
-                            logger.info("Silence detected (%.2fs)", silence_duration)
+                            logger.debug("Silence detected (%.2fs)", silence_duration)
                             break
 
             # Save recorded audio to temporary WAV file
@@ -439,8 +439,8 @@ class WakeWordMode:
                         self.recorded_audio_path = None
                     raise
 
-                logger.info("Recorded audio saved: %s", self.recorded_audio_path)
-                logger.info("Recording duration: %.2fs, %s frames", elapsed, len(frames))
+                logger.debug("Recorded audio saved: %s", self.recorded_audio_path)
+                logger.debug("Recording duration: %.2fs, %s frames", elapsed, len(frames))
 
                 # Voice UX: play a short ack earcon before PROCESSING begins
                 if _is_enabled_flag(getattr(self.config, "bot_voice", False)) and _is_enabled_flag(
@@ -457,7 +457,7 @@ class WakeWordMode:
                                 with (self._audio_lock or contextlib.nullcontext()):
                                     self.audio.play_audio_file(self.ack_earcon_path)
                             else:
-                                logger.info("Skipping ack earcon: audio is already playing")
+                                logger.debug("Skipping ack earcon: audio is already playing")
                         except Exception as e:
                             logger.warning("Failed to play ack earcon: %s", e)
 
@@ -508,7 +508,7 @@ class WakeWordMode:
         )
         self.barge_in_thread.start()
 
-        logger.info("Barge-in detection started")
+        logger.debug("Barge-in detection started")
 
         return self.barge_in_thread
 
@@ -523,7 +523,7 @@ class WakeWordMode:
         # provides defensive programming against race conditions or unexpected states.
         barge_in_enabled = getattr(self.config, "barge_in", False)
         if barge_in_enabled and self.barge_in_event and self.barge_in_event.is_set():
-            logger.info("Barge-in interrupt detected")
+            logger.debug("Barge-in interrupt detected")
             return True
         return False
 
@@ -577,7 +577,7 @@ class WakeWordMode:
         poll_count = 0
         while thread.is_alive():
             if self._check_barge_in_interrupt():
-                logger.info("Barge-in during %s - responding immediately!", operation_name)
+                logger.debug("Barge-in during %s - responding immediately!", operation_name)
                 return False, None
             time.sleep(0.05)
             poll_count += 1
@@ -689,7 +689,7 @@ class WakeWordMode:
             audio_path = self.recorded_audio_path
 
             # Transcribe the audio (with immediate barge-in response if enabled)
-            logger.info("Transcribing audio from: %s", audio_path)
+            logger.debug("Transcribing audio from: %s", audio_path)
 
             if barge_in_thread:
                 completed, user_input = self._run_with_barge_in_polling(
@@ -746,7 +746,7 @@ class WakeWordMode:
 
                     # Final barge-in check before transitioning to RESPONDING
                     if barge_in_thread and self._check_barge_in_interrupt():
-                        logger.info("Barge-in detected after route definition, before streaming")
+                        logger.debug("Barge-in detected after route definition, before streaming")
                         self._handle_immediate_barge_in(barge_in_thread)
                         return
 
@@ -780,7 +780,7 @@ class WakeWordMode:
                     self.tts_files = None
 
                     if barge_in_thread and self._check_barge_in_interrupt():
-                        logger.info("Barge-in detected before streaming")
+                        logger.debug("Barge-in detected before streaming")
                         self._handle_immediate_barge_in(barge_in_thread)
                         return
 
@@ -841,7 +841,7 @@ class WakeWordMode:
             # Final barge-in check before transitioning to RESPONDING
             # This catches barge-in detected between last polling check and now
             if barge_in_thread and self._check_barge_in_interrupt():
-                logger.info("Barge-in detected after processing completed, before RESPONDING")
+                logger.debug("Barge-in detected after processing completed, before RESPONDING")
                 # Clean up TTS files we just generated since we're not going to play them
                 if self.tts_files:
                     self._cleanup_remaining_tts_files(self.tts_files)
@@ -850,7 +850,7 @@ class WakeWordMode:
                 return
 
             # Transition to RESPONDING state (barge-in thread continues running)
-            logger.info("=== TRANSITIONING TO RESPONDING === TTS files: %s", len(self.tts_files) if self.tts_files else 0)
+            logger.debug("=== TRANSITIONING TO RESPONDING === TTS files: %s", len(self.tts_files) if self.tts_files else 0)
             if self.config.debug:
                 self.audio.log_mixer_state("BEFORE RESPONDING transition")
             self.state = State.RESPONDING
@@ -864,7 +864,7 @@ class WakeWordMode:
             if self.recorded_audio_path and os.path.exists(self.recorded_audio_path):
                 try:
                     os.remove(self.recorded_audio_path)
-                    logger.info("Cleaned up recording after error: %s", self.recorded_audio_path)
+                    logger.debug("Cleaned up recording after error: %s", self.recorded_audio_path)
                 except Exception as cleanup_error:
                     logger.warning("Failed to clean up recording file after error: %s", cleanup_error)
 
@@ -910,7 +910,7 @@ class WakeWordMode:
             try:
                 if os.path.exists(file_path):
                     os.remove(file_path)
-                    logger.info("Cleaned up orphaned TTS file: %s", file_path)
+                    logger.debug("Cleaned up orphaned TTS file: %s", file_path)
             except OSError as e:
                 logger.warning("Failed to delete orphaned TTS file: %s", e)
 
@@ -970,11 +970,11 @@ class WakeWordMode:
 
         try:
             # Create dedicated Porcupine instance for this thread (thread-safety)
-            logger.info("Barge-in thread: Creating Porcupine instance...")
+            logger.debug("Barge-in thread: Creating Porcupine instance...")
             porcupine_instance = self._create_porcupine_instance()
-            logger.info("Barge-in thread: Porcupine created successfully")
+            logger.debug("Barge-in thread: Porcupine created successfully")
 
-            logger.info("Barge-in thread: Opening PyAudio stream...")
+            logger.debug("Barge-in thread: Opening PyAudio stream...")
             pa = pyaudio.PyAudio()
             audio_stream = pa.open(
                 rate=porcupine_instance.sample_rate,
@@ -1347,7 +1347,7 @@ class WakeWordMode:
                         "Barge-in will be disabled for this response."
                     )
             else:
-                logger.info("Barge-in thread already running from PROCESSING, reusing it")
+                logger.debug("Barge-in thread already running from PROCESSING, reusing it")
             try:
                 logger.info("Playing %s TTS files", len(self.tts_files))
 
@@ -1377,7 +1377,7 @@ class WakeWordMode:
                         # Check for barge-in after playing file (might have interrupted mid-playback)
                         # Note: barge_in_event may be None if Porcupine failed to initialize
                         if barge_in_enabled and self.barge_in_event and self.barge_in_event.is_set():
-                            logger.info("Barge-in detected, interrupted during playback")
+                            logger.debug("Barge-in detected, interrupted during playback")
                             # First, clean up the file we just played successfully
                             try:
                                 if os.path.exists(file_path):
@@ -1405,7 +1405,7 @@ class WakeWordMode:
         # Signal barge-in thread to stop and wait for it to finish
         if self.barge_in_stop_flag is not None:
             self.barge_in_stop_flag.set()
-            logger.info("Signaled barge-in thread to stop")
+            logger.debug("Signaled barge-in thread to stop")
             # Wait for thread to finish to ensure PyAudio stream is closed before LISTENING reopens it
             if self.barge_in_thread is not None and self.barge_in_thread.is_alive():
                 try:
@@ -1417,7 +1417,7 @@ class WakeWordMode:
         if self.recorded_audio_path and os.path.exists(self.recorded_audio_path):
             try:
                 os.remove(self.recorded_audio_path)
-                logger.info("Cleaned up recording: %s", self.recorded_audio_path)
+                logger.debug("Cleaned up recording: %s", self.recorded_audio_path)
             except Exception as e:
                 logger.warning("Failed to clean up recording file: %s", e)
 
@@ -1429,7 +1429,7 @@ class WakeWordMode:
         # Transition to LISTENING if barge-in occurred, otherwise back to IDLE
         # Note: barge_in_event may be None if Porcupine failed to initialize
         if barge_in_enabled and self.barge_in_event and self.barge_in_event.is_set():
-            logger.info("Transitioning to LISTENING after barge-in")
+            logger.debug("Transitioning to LISTENING after barge-in")
 
             # Play confirmation beep (consistent with _handle_immediate_barge_in)
             if self.config.wake_confirmation_beep and self.confirmation_beep_path:
