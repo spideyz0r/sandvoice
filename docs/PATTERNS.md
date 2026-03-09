@@ -55,12 +55,16 @@ if logger.isEnabledFor(logging.DEBUG):
 ```
 
 **User-facing output** (always shown, not gated) uses `print()` directly — this is intentional
-and correct for top-level / plugin code:
+and correct in any module (including `common/`) when the output is part of the interactive UX:
 
 ```python
 print(f"You: {user_input}")
+print("🎤 Listening...")
 print("Warning: audio hardware not found.")
 ```
+
+The rule "never use `print()` for diagnostic output" applies to internal diagnostics only.
+State indicators, conversation output, and user-visible errors may use `print()` anywhere.
 
 **Plugins** follow the same logger rule if they have a class; for standalone `process()`
 functions, `logging.error()` is acceptable since plugins are simpler and have fewer log points.

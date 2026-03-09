@@ -583,7 +583,7 @@ class WakeWordMode:
             time.sleep(0.05)
             poll_count += 1
             # Every 2 seconds (40 polls), check if audio is unexpectedly playing
-            if self.config.debug and poll_count % 40 == 0:
+            if logger.isEnabledFor(logging.DEBUG) and poll_count % 40 == 0:
                 try:
                     import pygame
                     if pygame.mixer.get_init() and pygame.mixer.music.get_busy():
@@ -1041,7 +1041,7 @@ class WakeWordMode:
                              threading.current_thread().name, tts_file_info, all_tts_on_disk)
             except Exception as e:
                 logger.debug("=== ENTERING RESPONDING === thread=%s, TTS files: %s (disk listing failed: %s)",
-                             threading.current_thread().name, tts_file_info, e)
+                             threading.current_thread().name, tts_file_info, e, exc_info=True)
 
         if self.config.visual_state_indicator:
             print("🔊 Responding...")
@@ -1350,7 +1350,7 @@ class WakeWordMode:
             else:
                 logger.debug("Barge-in thread already running from PROCESSING, reusing it")
             try:
-                logger.info("Playing %s TTS files", len(self.tts_files))
+                logger.debug("Playing %s TTS files", len(self.tts_files))
 
                 # Play files with barge-in support via stop_event in play_audio_file()
                 with (self._audio_lock or contextlib.nullcontext()):
@@ -1401,7 +1401,7 @@ class WakeWordMode:
                 print(f"Error playing TTS: {str(e)}")
 
         else:
-            logger.info("No TTS files to play (bot_voice disabled or TTS generation failed)")
+            logger.debug("No TTS files to play (bot_voice disabled or TTS generation failed)")
 
         # Signal barge-in thread to stop and wait for it to finish
         if self.barge_in_stop_flag is not None:
