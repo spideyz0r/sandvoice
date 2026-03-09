@@ -88,8 +88,8 @@ def retry_with_backoff(max_attempts=3, initial_delay=1):
         Decorated function that retries on failure
 
     Note:
-        Non-retryable exceptions (FileNotFoundError, PermissionError, ValueError)
-        are raised immediately without retry.
+        Non-retryable exceptions (FileNotFoundError, PermissionError, ValueError,
+        KeyError, json.JSONDecodeError) are raised immediately without retry.
     """
     def decorator(func):
         @wraps(func)

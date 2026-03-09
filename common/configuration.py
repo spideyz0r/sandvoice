@@ -285,7 +285,7 @@ class Config:
                 if self.debug:
                     print(f"Auto-detected audio channels: {self.channels}")
             except Exception as e:
-                logging.warning(
+                logger.warning(
                     "Failed to auto-detect audio channels: %s. Falling back to 2 channels.",
                     e
                 )
