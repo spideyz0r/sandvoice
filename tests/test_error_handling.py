@@ -272,7 +272,7 @@ class TestSetupErrorLogging(unittest.TestCase):
         self.assertEqual(len(console_handlers), 1)
 
     def test_level_update_on_reconfigure(self):
-        """Calling setup_error_logging again with a different level updates the handler level."""
+        """Calling setup_error_logging again with a different level updates both root and handler level."""
         cfg_warn = self._make_config(log_level="warning")
         cfg_debug = self._make_config(log_level="debug")
         setup_error_logging(cfg_warn)
@@ -280,6 +280,7 @@ class TestSetupErrorLogging(unittest.TestCase):
         root = logging.getLogger()
         console = next(h for h in root.handlers if getattr(h, "_sandvoice_console", False))
         self.assertEqual(console.level, logging.DEBUG)
+        self.assertEqual(root.level, logging.DEBUG)
 
     def test_file_logging_enabled(self):
         """File handler is created when enable_error_logging is True."""
