@@ -94,7 +94,7 @@ class WakeWordMode:
         self.barge_in_stop_flag = None  # Flag to stop barge-in thread immediately
         self.barge_in_thread = None  # Thread for barge-in detection
 
-        logger.info("Initializing wake word mode")
+        logger.debug("Initializing wake word mode")
 
     def run(self):
         """Main event loop. Runs until user exits with Ctrl+C.
@@ -309,7 +309,7 @@ class WakeWordMode:
             self.audio.log_mixer_state("LISTENING state entered")
 
         if not self.config.vad_enabled:
-            logger.warning("VAD is disabled in config. Skipping recording.")
+            logger.info("VAD is disabled via configuration; skipping VAD-based recording.")
             self.state = State.PROCESSING
             return
 
@@ -556,7 +556,7 @@ class WakeWordMode:
         """
         # If barge-in is already active, skip starting the operation
         if self._check_barge_in_interrupt():
-            logger.info("Barge-in already active before starting %s - skipping", operation_name)
+            logger.debug("Barge-in already active before starting %s - skipping", operation_name)
             return False, None
 
         result_holder = [None]
@@ -832,8 +832,9 @@ class WakeWordMode:
                 self.tts_files = tts_files
 
                 if self.tts_files:
-                    tts_file_info = [os.path.basename(f) for f in self.tts_files]
-                    logger.info("Generated %s TTS files: %s", len(self.tts_files), tts_file_info)
+                    logger.info("Generated %d TTS files", len(self.tts_files))
+                    if logger.isEnabledFor(logging.DEBUG):
+                        logger.debug("TTS files: %s", [os.path.basename(f) for f in self.tts_files])
                 else:
                     logger.warning("No TTS files generated")
 
@@ -923,7 +924,8 @@ class WakeWordMode:
             pattern = os.path.join(self.config.tmp_files_path, "tts-response-*.mp3")
             orphaned_files = glob.glob(pattern)
             if orphaned_files:
-                logger.debug("Cleaning up %d orphaned TTS files: %s", len(orphaned_files), [os.path.basename(f) for f in orphaned_files])
+                if logger.isEnabledFor(logging.DEBUG):
+                    logger.debug("Cleaning up %d orphaned TTS files: %s", len(orphaned_files), [os.path.basename(f) for f in orphaned_files])
             self._cleanup_specific_tts_files(orphaned_files)
         except Exception as e:
             logger.warning("Error cleaning up orphaned TTS files: %s", e)
