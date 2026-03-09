@@ -214,16 +214,20 @@ class TestHandleFileError(unittest.TestCase):
 
 class TestSetupErrorLogging(unittest.TestCase):
     def setUp(self):
-        """Clear root logger handlers before each test to avoid cross-test pollution."""
+        """Save root logger state and clear handlers before each test."""
         root = logging.getLogger()
-        root.handlers.clear()
+        self._orig_root_level = root.level
+        for h in list(root.handlers):
+            h.close()
+            root.removeHandler(h)
 
     def tearDown(self):
-        """Remove any handlers added during the test."""
+        """Remove handlers added during the test and restore root logger level."""
         root = logging.getLogger()
         for h in list(root.handlers):
             h.close()
             root.removeHandler(h)
+        root.setLevel(self._orig_root_level)
 
     def _make_config(self, log_level="warning", enable_error_logging=False, error_log_path=""):
         cfg = Mock()
@@ -308,6 +312,16 @@ class TestSetupErrorLogging(unittest.TestCase):
             cfg = self._make_config(enable_error_logging=True, error_log_path=log_path)
             setup_error_logging(cfg)
             self.assertTrue(os.path.exists(os.path.dirname(log_path)))
+
+    def test_file_logging_empty_path_logs_error_and_skips_handler(self):
+        """When enable_error_logging=True but error_log_path is empty, log an error and add no file handler."""
+        cfg = self._make_config(enable_error_logging=True, error_log_path="")
+        with self.assertLogs("common.error_handling", level="ERROR") as captured:
+            setup_error_logging(cfg)
+        root = logging.getLogger()
+        file_handlers = [h for h in root.handlers if getattr(h, "_sandvoice_file", False)]
+        self.assertEqual(len(file_handlers), 0)
+        self.assertTrue(any("error_log_path" in msg for msg in captured.output))
 
 
 if __name__ == '__main__':
