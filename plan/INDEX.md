@@ -129,7 +129,7 @@ plan/
 
 ### Priority 23: Request Timing Summary Log
 **Document**: [backlog/23-request-timing-summary-log.md](./backlog/23-request-timing-summary-log.md)
-**Description**: Emit a single INFO line per request summarising transcription, routing, plugin, and TTS timing plus cache status. Enables clean benchmarking without debug: enabled.
+**Description**: Emit a single INFO line per request summarising transcription, routing, plugin, and TTS timing plus cache status. Enables clean benchmarking without enabling `log_level: debug`. Requires Plan 28.
 
 ### Priority 24: Wake Word Refactor
 **Document**: [backlog/24-wake-word-refactor.md](./backlog/24-wake-word-refactor.md)
@@ -146,6 +146,10 @@ plan/
 ### Priority 27: Scheduled Tasks File and Lifecycle Management
 **Document**: [backlog/27-tasks-file-and-lifecycle.md](./backlog/27-tasks-file-and-lifecycle.md)
 **Description**: Move scheduled task definitions to a dedicated `~/.sandvoice/tasks.yaml` file and make it the sole source of truth — tasks removed from the file are automatically deleted from the DB on startup. `tasks.yaml` replaces the `tasks:` key in `config.yaml` with no backwards compatibility.
+
+### Priority 28: Logging Level Refactor
+**Document**: [backlog/28-logging-level-refactor.md](./backlog/28-logging-level-refactor.md)
+**Description**: Replace `debug: enabled/disabled` with a standard `log_level: warning|info|debug` config key and remove ~200 scattered `if self.config.debug: logger.*()` guards — the logging framework is the filter, not the code. Prerequisite for Plan 23 (timing summary).
 
 ### Future Enhancements
 **Document**: [backlog/FUTURE.md](./backlog/FUTURE.md)
