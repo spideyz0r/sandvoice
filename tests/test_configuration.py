@@ -798,5 +798,48 @@ class TestCacheConfig(_TempHomeBase):
                 self.assertTrue(config.cache_enabled, msg=f"cache_enabled={value!r} should be truthy")
 
 
+class TestLogLevel(_TempHomeBase):
+    """Tests for log_level config key and config.debug property (Plan 28)."""
+
+    def test_log_level_default_is_warning(self):
+        """Default log_level is 'warning'."""
+        config = Config()
+        self.assertEqual(config.log_level, "warning")
+
+    def test_log_level_info(self):
+        """log_level: info is stored correctly."""
+        self.write_config({"log_level": "info"})
+        config = Config()
+        self.assertEqual(config.log_level, "info")
+
+    def test_log_level_debug(self):
+        """log_level: debug is stored correctly."""
+        self.write_config({"log_level": "debug"})
+        config = Config()
+        self.assertEqual(config.log_level, "debug")
+
+    def test_log_level_invalid_falls_back_to_warning(self):
+        """An unrecognised log_level value is silently normalised to 'warning'."""
+        self.write_config({"log_level": "verbose"})
+        config = Config()
+        self.assertEqual(config.log_level, "warning")
+
+    def test_debug_property_false_when_warning(self):
+        """config.debug is False when log_level is 'warning'."""
+        config = Config()
+        self.assertFalse(config.debug)
+
+    def test_debug_property_false_when_info(self):
+        """config.debug is False when log_level is 'info'."""
+        self.write_config({"log_level": "info"})
+        config = Config()
+        self.assertFalse(config.debug)
+
+    def test_debug_property_true_when_debug(self):
+        """config.debug is True when log_level is 'debug'."""
+        self.write_config({"log_level": "debug"})
+        config = Config()
+        self.assertTrue(config.debug)
+
 if __name__ == '__main__':
     unittest.main()

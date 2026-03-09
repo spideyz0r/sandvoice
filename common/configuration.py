@@ -2,6 +2,9 @@ import os, yaml, logging
 from common.platform_detection import log_platform_info
 from common.audio_device_detection import get_optimal_channels, log_device_info
 
+logger = logging.getLogger(__name__)
+
+
 class Config:
     def __init__(self):
         self.config_file = os.path.join(os.path.expanduser("~"), ".sandvoice", "config.yaml")
@@ -21,7 +24,7 @@ class Config:
             # - normal: balanced detail
             # - detailed: more thorough, structured answers
             "verbosity": "brief",
-            "debug": "disabled",
+            "log_level": "warning",
             "summary_words": "100",
             "search_sources": "4",
             "push_to_talk": "disabled",
@@ -110,8 +113,7 @@ class Config:
             return self.defaults
         with open(self.config_file, "r") as f:
             data = yaml.safe_load(f)
-        # combine both dicts, data overrides defaults
-        return {**self.defaults, **data}
+        return {**self.defaults, **(data or {})}
 
     def load_config(self):
         self.channels = self.get("channels")
@@ -134,7 +136,8 @@ class Config:
         self.rss_news = self.get("rss_news")
         self.rss_news_max_items = self.get("rss_news_max_items")
         self.tmp_recording = self.tmp_files_path + "recording"
-        self.debug = self.get("debug").lower() == "enabled"
+        raw = str(self.get("log_level") or "warning").strip().lower()
+        self.log_level = raw if raw in ("warning", "info", "debug") else "warning"
         self.bot_voice = self.get("bot_voice").lower() == "enabled"
         self.push_to_talk = self.get("push_to_talk").lower() == "enabled"
         self.linux_warnings = self.get("linux_warnings").lower() == "enabled"
@@ -236,7 +239,7 @@ class Config:
         except (TypeError, ValueError):
             self.cache_weather_max_stale_s = self.defaults["cache_weather_max_stale_s"]
         if self.cache_weather_max_stale_s < self.cache_weather_ttl_s:
-            logging.warning(
+            logger.warning(
                 "cache_weather_max_stale_s (%d) is less than cache_weather_ttl_s (%d); "
                 "clamping max_stale to ttl value.",
                 self.cache_weather_max_stale_s,
@@ -282,7 +285,7 @@ class Config:
                 if self.debug:
                     print(f"Auto-detected audio channels: {self.channels}")
             except Exception as e:
-                logging.warning(
+                logger.warning(
                     "Failed to auto-detect audio channels: %s. Falling back to 2 channels.",
                     e
                 )
@@ -299,6 +302,11 @@ class Config:
             log_device_info(self)
 
         self.validate_config()
+
+    @property
+    def debug(self) -> bool:
+        """True when log_level is 'debug'. Read-only; set log_level instead."""
+        return self.log_level == "debug"
 
     def validate_config(self):
         """Validate configuration values and raise errors for invalid settings."""
@@ -412,7 +420,7 @@ class Config:
         # Report all errors
         if errors:
             error_msg = "Configuration validation failed:\n" + "\n".join(f"  - {err}" for err in errors)
-            logging.error(error_msg)
+            logger.error(error_msg)
             raise ValueError(error_msg)
 
     def get(self, key):
