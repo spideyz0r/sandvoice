@@ -128,7 +128,7 @@ class WakeWordMode:
         """Initialize Porcupine, VAD, and confirmation beep.
 
         Raises:
-            RuntimeError: If Porcupine access key is missing or invalid
+            RuntimeError: If Porcupine access key is missing or invalid, or if VAD is disabled
         """
         logger.debug("Initializing wake word detection and VAD")
 
@@ -137,6 +137,14 @@ class WakeWordMode:
                 "Porcupine access key is required for wake word mode. "
                 "Get your free key at https://console.picovoice.ai/ and add it to your config: "
                 "porcupine_access_key: YOUR_KEY_HERE"
+            )
+            print(f"Error: {error_msg}")
+            raise RuntimeError(error_msg)
+
+        if not self.config.vad_enabled:
+            error_msg = (
+                "Wake-word mode requires VAD-based recording. "
+                "Enable it in your config: vad_enabled: true"
             )
             print(f"Error: {error_msg}")
             raise RuntimeError(error_msg)
@@ -307,11 +315,6 @@ class WakeWordMode:
         # Debug: Check if any audio is unexpectedly playing when we enter LISTENING
         if self.config.debug:
             self.audio.log_mixer_state("LISTENING state entered")
-
-        if not self.config.vad_enabled:
-            logger.debug("VAD is disabled via configuration; skipping VAD-based recording.")
-            self.state = State.PROCESSING
-            return
 
         # Initialize VAD
         vad = webrtcvad.Vad(self.config.vad_aggressiveness)
