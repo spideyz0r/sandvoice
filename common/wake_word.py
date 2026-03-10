@@ -590,7 +590,7 @@ class WakeWordMode:
                 try:
                     import pygame
                     if pygame.mixer.get_init() and pygame.mixer.music.get_busy():
-                        logger.warning(">>> UNEXPECTED: Audio is playing during %s polling!", operation_name)
+                        logger.debug(">>> UNEXPECTED: Audio is playing during %s polling!", operation_name)
                 except Exception:
                     pass
 
@@ -929,7 +929,8 @@ class WakeWordMode:
             orphaned_files = glob.glob(pattern)
             if orphaned_files:
                 if logger.isEnabledFor(logging.DEBUG):
-                    logger.debug("Cleaning up %d orphaned TTS files: %s", len(orphaned_files), [os.path.basename(f) for f in orphaned_files])
+                    orphaned_basenames = [os.path.basename(f) for f in orphaned_files]
+                    logger.debug("Cleaning up %d orphaned TTS files: %s", len(orphaned_files), orphaned_basenames)
             self._cleanup_specific_tts_files(orphaned_files)
         except Exception as e:
             logger.warning("Error cleaning up orphaned TTS files: %s", e)
