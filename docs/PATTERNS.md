@@ -442,25 +442,29 @@ One test file per module: `tests/test_<module_name>.py`.
 
 ### Mocking
 
-Never touch real APIs, real audio hardware, or real filesystem in tests.
+Never touch real APIs, real audio hardware, or user/system resources in tests.
+Temporary files and directories (`tempfile`) are fine for filesystem I/O tests.
+Mock external services and audio hardware.
+
+The test suite uses `unittest` — not pytest fixtures:
 
 ```python
+import unittest
 from unittest.mock import MagicMock, patch
 
-@pytest.fixture
-def mock_config():
-    config = MagicMock()
-    config.debug = False
-    config.api_retry_attempts = 1
-    config.gpt_response_model = "gpt-3.5-turbo"
-    return config
+class TestAI(unittest.TestCase):
+    def setUp(self):
+        self.mock_config = MagicMock()
+        self.mock_config.debug = False
+        self.mock_config.api_retry_attempts = 1
+        self.mock_config.gpt_response_model = "gpt-3.5-turbo"
 
-def test_something(mock_config):
-    with patch("common.ai.OpenAI") as mock_openai:
-        mock_openai.return_value.chat.completions.create.return_value = ...
-        ai = AI(mock_config)
-        result = ai.generate_response("hello")
-        assert result.content == "expected"
+    def test_something(self):
+        with patch("common.ai.OpenAI") as mock_openai:
+            mock_openai.return_value.chat.completions.create.return_value = ...
+            ai = AI(self.mock_config)
+            result = ai.generate_response("hello")
+            self.assertEqual(result.content, "expected")
 ```
 
 ### Required test cases (minimum per function)
