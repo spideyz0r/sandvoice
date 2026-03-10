@@ -144,7 +144,7 @@ class WakeWordMode:
         if not self.config.vad_enabled:
             error_msg = (
                 "Wake-word mode requires VAD-based recording. "
-                "Enable it in your config: vad_enabled: true"
+                "Enable it in your config: vad_enabled: enabled"
             )
             print(f"Error: {error_msg}")
             raise RuntimeError(error_msg)

@@ -198,8 +198,7 @@ class TestWakeWordModeInitialize(unittest.TestCase):
 
         self.assertIsNone(mode.confirmation_beep_path)
 
-    @patch('common.wake_word.pvporcupine.create')
-    def test_initialize_raises_when_vad_disabled(self, mock_porcupine_create):
+    def test_initialize_raises_when_vad_disabled(self):
         self.mock_config.vad_enabled = False
 
         mode = WakeWordMode(self.mock_config, self.mock_ai, self.mock_audio)
