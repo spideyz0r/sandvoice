@@ -184,7 +184,7 @@ class SandVoice:
                 self._scheduler_audio = Audio(self.config)
             success, failed_file, error = self._scheduler_audio.play_audio_files(tts_files)
             if not success:
-                logger.error("Scheduler speak: audio playback failed for '%s': %s", failed_file, error)
+                logger.warning("Scheduler speak: audio playback failed for '%s': %s", failed_file, error)
 
     def _scheduler_invoke_plugin(self, plugin_name, query, refresh_only):
         route = {"route": plugin_name, "refresh_only": refresh_only}
@@ -197,7 +197,7 @@ class SandVoice:
                         self._scheduler_audio = Audio(self.config)
                     success, failed_file, error = self._scheduler_audio.play_audio_files(tts_files)
                     if not success:
-                        logger.error("Scheduler plugin: audio playback failed for '%s': %s", failed_file, error)
+                        logger.warning("Scheduler plugin: audio playback failed for '%s': %s", failed_file, error)
         return result
 
     def _scheduler_route_message(self, user_input, route):
@@ -481,7 +481,7 @@ class SandVoice:
                     with self._ai_audio_lock:
                         success, failed_file, error = audio.play_audio_files(tts_files)
                     if not success:
-                        logger.error("Audio playback failed for '%s': %s", failed_file, error)
+                        logger.warning("Audio playback failed for '%s': %s", failed_file, error)
                         print("Audio playback failed. Continuing with text only.")
                         if self.config.debug:
                             print(f"Preserving TTS file '{failed_file}' for debugging.")
