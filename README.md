@@ -175,7 +175,7 @@ All configuration keys are loaded from `common/configuration.py` defaults and ca
 - `unit`: `metric` or `imperial` (used by weather routing/plugin)
 - `language`: language string for assistant replies (used in system prompt)
 - `verbosity`: `brief`, `normal`, or `detailed` (controls default response length)
-- `log_level`: `warning` (default), `info`, or `debug` — controls logging verbosity. `warning` = silent unless something is wrong; `info` = startup events and milestones; `debug` = full internal detail. (Old `debug: enabled` still works via automatic migration, but `log_level` is preferred.)
+- `log_level`: `warning` (default), `info`, or `debug` — controls logging verbosity. `warning` = silent unless something is wrong; `info` = startup events and milestones; `debug` = full internal detail.
 - `summary_words`: target word count for summaries (used by some plugins)
 - `search_sources`: number of sources to use for search-like plugins (plugin-dependent)
 - `push_to_talk`: `enabled`/`disabled`; when enabled, prompts for a keypress before recording again
