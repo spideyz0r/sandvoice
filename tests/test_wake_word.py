@@ -207,6 +207,7 @@ class TestWakeWordModeInitialize(unittest.TestCase):
             mode._initialize()
 
         self.assertIn("VAD", str(context.exception))
+        self.assertIn("vad_enabled", str(context.exception))
 
 
 class TestWakeWordModeStateIdle(unittest.TestCase):

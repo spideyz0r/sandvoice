@@ -1035,7 +1035,6 @@ class WakeWordMode:
         Barge-in thread may already be running from PROCESSING state.
         Transitions back to IDLE or LISTENING (if barge-in).
         """
-        import threading
         if logger.isEnabledFor(logging.DEBUG):
             tts_file_info = [os.path.basename(f) for f in self.tts_files] if self.tts_files else None
             try:
