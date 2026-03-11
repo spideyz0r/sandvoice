@@ -75,8 +75,7 @@ class SandVoice:
         if not os.path.exists(self.config.plugin_path):
             print(f"Plugin path {self.config.plugin_path} does not exist")
             exit(1)
-        if self.config.debug:
-            print(f"Loading plugins from {self.config.plugin_path}")
+        logger.debug("Loading plugins from %s", self.config.plugin_path)
         plugins_dir = self.config.plugin_path
         for filename in os.listdir(plugins_dir):
             if filename.endswith(".py"):
@@ -184,8 +183,8 @@ class SandVoice:
             if self._scheduler_audio is None:
                 self._scheduler_audio = Audio(self.config)
             success, failed_file, error = self._scheduler_audio.play_audio_files(tts_files)
-            if not success and self.config.debug:
-                logger.error("Scheduler speak: audio playback failed for '%s': %s", failed_file, error)
+            if not success:
+                logger.warning("Scheduler speak: audio playback failed for '%s': %s", failed_file, error)
 
     def _scheduler_invoke_plugin(self, plugin_name, query, refresh_only):
         route = {"route": plugin_name, "refresh_only": refresh_only}
@@ -197,16 +196,15 @@ class SandVoice:
                     if self._scheduler_audio is None:
                         self._scheduler_audio = Audio(self.config)
                     success, failed_file, error = self._scheduler_audio.play_audio_files(tts_files)
-                    if not success and self.config.debug:
-                        logger.error("Scheduler plugin: audio playback failed for '%s': %s", failed_file, error)
+                    if not success:
+                        logger.warning("Scheduler plugin: audio playback failed for '%s': %s", failed_file, error)
         return result
 
     def _scheduler_route_message(self, user_input, route):
         """Route a scheduler-triggered message using a dedicated AI instance to avoid
         polluting the interactive conversation history."""
-        if self.config.debug:
-            print(route)
-            print(f"Plugins: {str(self.plugins)}")
+        logger.debug("Route: %s", route)
+        logger.debug("Plugins: %s", self.plugins.keys())
         if route["route"] in self.plugins:
             ctx = _SchedulerContext(self, self._scheduler_ai)
             return self.plugins[route["route"]](user_input, route, ctx)
@@ -214,9 +212,8 @@ class SandVoice:
             return self._scheduler_ai.generate_response(user_input).content
 
     def route_message(self, user_input, route):
-        if self.config.debug:
-            print(route)
-            print(f"Plugins: {str(self.plugins)}")
+        logger.debug("Route: %s", route)
+        logger.debug("Plugins: %s", self.plugins.keys())
         if route["route"] in self.plugins:
             return self.plugins[route["route"]](user_input, route, self)
         else:
@@ -270,8 +267,7 @@ class SandVoice:
                         return True
                     except queue.Full:
                         if time.monotonic() >= deadline:
-                            if self.config.debug:
-                                print("Warning: timed out enqueueing streaming text chunk")
+                            logger.warning("Timed out enqueueing streaming text chunk")
                             return False
 
             def tts_worker():
@@ -443,8 +439,7 @@ class SandVoice:
                 if not sentinel_enqueued:
                     # If the queue is stuck full (e.g., hung/slow TTS worker), force an exit path.
                     stop_event.set()
-                    if self.config.debug:
-                        print("Warning: failed to enqueue streaming TTS sentinel; forcing stop_event")
+                    logger.warning("Failed to enqueue streaming TTS sentinel; forcing stop_event")
 
                 # Wait for threads to finish playback.
                 tts_join_timeout = int(getattr(self.config, "stream_tts_tts_join_timeout_s", 30) or 30)
@@ -455,31 +450,22 @@ class SandVoice:
                 stop_event.set()
                 raise
 
-            if (tts_thread.is_alive() or player_thread.is_alive()) and self.config.debug:
-                print("Warning: streaming TTS threads did not exit cleanly within timeout")
+            if tts_thread.is_alive() or player_thread.is_alive():
+                logger.warning("Streaming TTS threads did not exit cleanly within timeout")
 
             if not player_success[0]:
-                if self.config.debug:
-                    print(
-                        f"Error during streaming audio playback for file '{player_failed_file[0]}': {player_error[0]}\n"
-                        "Stopping voice playback and continuing with text only."
-                    )
-                else:
-                    print("Audio playback failed during streaming. Continuing with text only.")
+                logger.warning("Streaming audio playback failed for '%s': %s", player_failed_file[0], player_error[0])
+                print("Audio playback failed during streaming. Continuing with text only.")
 
             response = "".join(full_parts)
             if not (self.config.debug and stream_print_deltas):
                 print(f"{self.config.botname}: {response}\n")
 
-            if production_failed_event.is_set() and tts_error[0] and self.config.debug:
-                print(
-                    "Streaming TTS production failed; finishing playback of already-queued audio and continuing with text only. "
-                    f"Error: {tts_error[0]}"
-                )
+            if production_failed_event.is_set() and tts_error[0]:
+                logger.warning("Streaming TTS production failed; error: %s", tts_error[0])
 
             if stop_event.is_set() and tts_error[0]:
-                if self.config.debug:
-                    print(f"Streaming TTS failed; continuing with text only. Error: {tts_error[0]}")
+                logger.warning("Streaming TTS failed; error: %s", tts_error[0])
 
         else:
             response = self.route_message(user_input, route)
@@ -488,27 +474,17 @@ class SandVoice:
             if self.config.bot_voice:
                 tts_files = self.ai.text_to_speech(response)
                 if not tts_files:
-                    if self.config.debug:
-                        response_str = "" if response is None else str(response)
-                        if not response_str.strip():
-                            print("TTS was requested (bot_voice enabled) but response text was empty; skipping audio playback.")
-                        else:
-                            print(
-                                "TTS was requested (bot_voice enabled) for a non-empty response, "
-                                "but no audio files were generated. This may indicate that the TTS API failed, "
-                                "that the response text was filtered out as empty/whitespace during preprocessing, "
-                                "or another internal TTS issue. Skipping audio playback."
-                            )
+                    response_str = "" if response is None else str(response)
+                    if response_str.strip():
+                        logger.warning("TTS returned no audio files for non-empty response; skipping playback")
                 else:
                     with self._ai_audio_lock:
                         success, failed_file, error = audio.play_audio_files(tts_files)
                     if not success:
+                        logger.warning("Audio playback failed for '%s': %s", failed_file, error)
+                        print("Audio playback failed. Continuing with text only.")
                         if self.config.debug:
-                            print(f"Error during audio playback for file '{failed_file}': {error}")
-                            print("Stopping voice playback and continuing with text only.")
                             print(f"Preserving TTS file '{failed_file}' for debugging.")
-                        else:
-                            print("Audio playback failed. Continuing with text only.")
 
         if self.config.push_to_talk and not self.config.cli_input:
             input("Press any key to speak...")
@@ -567,9 +543,8 @@ if __name__ == "__main__":
     # Default mode (ESC key) or CLI mode
     else:
         while True:
-            if sandvoice.config.debug:
-                print(sandvoice.ai.conversation_history)
-                print(sandvoice.__str__())
+            logger.debug("Conversation history: %s", sandvoice.ai.conversation_history)
+            logger.debug("SandVoice: %s", sandvoice)
             sandvoice.runIt()
 
 ## TODO

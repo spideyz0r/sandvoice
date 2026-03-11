@@ -1,5 +1,6 @@
 import requests, logging, datetime
-from common.error_handling import handle_api_error
+
+logger = logging.getLogger(__name__)
 
 class HackerNews:
     def __init__(self, timeout=10):
@@ -13,9 +14,7 @@ class HackerNews:
             response.raise_for_status()
             return response.json()
         except requests.exceptions.RequestException as e:
-            error_msg = handle_api_error(e, service_name="Hacker News API")
-            logging.error(f"Hacker News API error: {e}")
-            print(error_msg)
+            logger.error("Hacker News API error: %s", e)
             return []
 
     def get_story_details(self, story_id):
@@ -24,9 +23,7 @@ class HackerNews:
             response.raise_for_status()
             return response.json()
         except requests.exceptions.RequestException as e:
-            error_msg = handle_api_error(e, service_name="Hacker News API")
-            logging.error(f"Hacker News story error: {e}")
-            print(error_msg)
+            logger.error("Hacker News story error: %s", e)
             return None
 
     def get_best_story_briefs(self):
@@ -57,7 +54,7 @@ class HackerNews:
                     "text": story.get('text', ''),
                 })
             except Exception as e:
-                logging.error(f"Error processing story {story_id}: {e}")
+                logger.warning("Error processing story %s: %s", story_id, e)
                 continue
 
         return briefs
@@ -73,7 +70,7 @@ class HackerNews:
                     continue
                 stories.append(f"{story.get('title', 'No title')} - {story.get('url', '')}")
             except Exception as e:
-                logging.error(f"Error processing story {story_id}: {e}")
+                logger.warning("Error processing story %s: %s", story_id, e)
                 continue
         return stories
 
@@ -81,8 +78,7 @@ def process(user_input, route_data, s):
     try:
         hacker_news = HackerNews(timeout=s.config.api_timeout)
         briefs = hacker_news.get_best_story_briefs()
-        if s.config.debug:
-            print(f"Fetched {len(briefs)} Hacker News stories")
+        logger.debug("Fetched %d Hacker News stories", len(briefs))
 
         if not briefs:
             return "I couldn't fetch any Hacker News stories at the moment. Please try again later."
@@ -100,6 +96,5 @@ def process(user_input, route_data, s):
         response = s.ai.generate_response(user_input, extra_info)
         return response.content
     except Exception as e:
-        if s.config.debug:
-            logging.error(f"Hacker News plugin error: {e}")
+        logger.error("Hacker News plugin error: %s", e)
         return "Unable to fetch Hacker News stories at the moment. Please try again later."
