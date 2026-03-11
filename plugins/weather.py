@@ -10,9 +10,7 @@ logger = logging.getLogger(__name__)
 class OpenWeatherReader:
     def __init__(self, location, unit="metric", timeout=10):
         if not os.environ.get('OPENWEATHERMAP_API_KEY'):
-            error_msg = "Missing OPENWEATHERMAP_API_KEY environment variable"
-            logger.error(error_msg)
-            raise ValueError(error_msg)
+            raise ValueError("Missing OPENWEATHERMAP_API_KEY environment variable")
         self.api_key = os.environ['OPENWEATHERMAP_API_KEY']
         self.location = location
         self.unit = unit
