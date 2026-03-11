@@ -233,7 +233,7 @@ class TestWeatherPluginWithCache(unittest.TestCase):
 
 
 class TestWeatherPluginDebugPaths(unittest.TestCase):
-    """Cover debug-only code paths and exception branches."""
+    """Cover logger calls and exception branches (config.debug has no effect on these paths)."""
 
     def setUp(self):
         os.environ['OPENWEATHERMAP_API_KEY'] = 'test-key'
@@ -244,7 +244,7 @@ class TestWeatherPluginDebugPaths(unittest.TestCase):
     @patch('plugins.weather.OpenWeatherReader')
     def test_debug_log_when_location_missing(self, MockReader):
         MockReader.return_value.get_current_weather.return_value = _WEATHER_DATA
-        s = _make_sandvoice(cache=None, debug=True, location="Tokyo")
+        s = _make_sandvoice(cache=None, debug=False, location="Tokyo")
         from plugins.weather import process
         with patch('plugins.weather.logger') as mock_logger:
             process("weather", {}, s)
@@ -254,16 +254,16 @@ class TestWeatherPluginDebugPaths(unittest.TestCase):
     @patch('plugins.weather.OpenWeatherReader')
     def test_debug_log_when_unit_missing(self, MockReader):
         MockReader.return_value.get_current_weather.return_value = _WEATHER_DATA
-        s = _make_sandvoice(cache=None, debug=True, unit="imperial")
+        s = _make_sandvoice(cache=None, debug=False, unit="imperial")
         from plugins.weather import process
         with patch('plugins.weather.logger') as mock_logger:
             process("weather", {"location": "Tokyo"}, s)
         debug_calls = [str(call) for call in mock_logger.debug.call_args_list]
         self.assertTrue(any("unit" in c for c in debug_calls))
 
-    def test_value_error_debug_logging(self):
+    def test_value_error_returns_error_message(self):
         os.environ.pop('OPENWEATHERMAP_API_KEY', None)
-        s = _make_sandvoice(cache=None, debug=True)
+        s = _make_sandvoice(cache=None, debug=False)
         from plugins.weather import process
         result = process("weather", {}, s)
         self.assertIn("Unable to fetch", result)
@@ -278,7 +278,7 @@ class TestWeatherPluginDebugPaths(unittest.TestCase):
     @patch('plugins.weather.OpenWeatherReader')
     def test_generic_exception_returns_error(self, MockReader):
         MockReader.side_effect = RuntimeError("unexpected error")
-        s = _make_sandvoice(cache=None, debug=True)
+        s = _make_sandvoice(cache=None, debug=False)
         from plugins.weather import process
         result = process("weather", {}, s)
         self.assertIn("Unable to fetch", result)

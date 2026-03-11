@@ -1,5 +1,4 @@
 import requests, logging, datetime
-from common.error_handling import handle_api_error
 
 logger = logging.getLogger(__name__)
 
@@ -15,9 +14,7 @@ class HackerNews:
             response.raise_for_status()
             return response.json()
         except requests.exceptions.RequestException as e:
-            error_msg = handle_api_error(e, service_name="Hacker News API")
             logger.error("Hacker News API error: %s", e)
-            print(error_msg)
             return []
 
     def get_story_details(self, story_id):
@@ -26,9 +23,7 @@ class HackerNews:
             response.raise_for_status()
             return response.json()
         except requests.exceptions.RequestException as e:
-            error_msg = handle_api_error(e, service_name="Hacker News API")
             logger.error("Hacker News story error: %s", e)
-            print(error_msg)
             return None
 
     def get_best_story_briefs(self):
