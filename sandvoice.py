@@ -204,7 +204,7 @@ class SandVoice:
         """Route a scheduler-triggered message using a dedicated AI instance to avoid
         polluting the interactive conversation history."""
         logger.debug("Route: %s", route)
-        logger.debug("Plugins: %s", list(self.plugins))
+        logger.debug("Plugins: %s", self.plugins.keys())
         if route["route"] in self.plugins:
             ctx = _SchedulerContext(self, self._scheduler_ai)
             return self.plugins[route["route"]](user_input, route, ctx)
@@ -213,7 +213,7 @@ class SandVoice:
 
     def route_message(self, user_input, route):
         logger.debug("Route: %s", route)
-        logger.debug("Plugins: %s", list(self.plugins))
+        logger.debug("Plugins: %s", self.plugins.keys())
         if route["route"] in self.plugins:
             return self.plugins[route["route"]](user_input, route, self)
         else:
