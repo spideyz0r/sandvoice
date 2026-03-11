@@ -275,8 +275,8 @@ class Audio:
                             os.remove(remaining_file)
                     except OSError as cleanup_error:
                         # Best-effort cleanup: ignore file deletion errors.
-                        logger.warning("Failed to delete remaining temporary audio chunk file '%s': %s",
-                                       remaining_file, cleanup_error)
+                        logger.debug("Failed to delete remaining temporary audio chunk file '%s': %s",
+                                     remaining_file, cleanup_error)
                 break
             finally:
                 if delete_file:
@@ -285,8 +285,8 @@ class Audio:
                             os.remove(file_path)
                     except OSError as cleanup_error:
                         # Best-effort cleanup: ignore file deletion errors.
-                        logger.warning("Failed to delete temporary audio file '%s': %s",
-                                       file_path, cleanup_error)
+                        logger.debug("Failed to delete temporary audio file '%s': %s",
+                                     file_path, cleanup_error)
 
         return failed_file is None, failed_file, error
 
@@ -315,7 +315,7 @@ class Audio:
                 if path and os.path.exists(path):
                     os.remove(path)
             except OSError as cleanup_error:
-                logger.warning("Failed to delete temporary audio file '%s': %s", path, cleanup_error)
+                logger.debug("Failed to delete temporary audio file '%s': %s", path, cleanup_error)
 
         try:
             while True:
