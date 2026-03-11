@@ -1,5 +1,7 @@
 import feedparser, datetime, logging
 
+logger = logging.getLogger(__name__)
+
 class RSSReader:
     def __init__(self, url, max_items=5):
         self.url = url
@@ -26,13 +28,13 @@ class RSSReader:
                         news_item['published'] = datetime.datetime(*news_item['published'][:6])
                     news_items.append(news_item)
                 except Exception as e:
-                    logging.error(f"Error parsing news entry: {e}")
+                    logger.error("Error parsing news entry: %s", e)
                     continue
 
             return news_items
         except Exception as e:
             error_msg = f"Error fetching RSS feed: {str(e)}"
-            logging.error(f"RSS feed error: {e}")
+            logger.error("RSS feed error: %s", e)
             print(f"Error: {error_msg}")
             return []
 
@@ -47,6 +49,5 @@ def process (user_input, route, s):
         response = s.ai.generate_response(user_input, f"Use this information to answer questions about any news. Make pertinent comments if any too. This is the hot news at the moment: {str(latest_news)}. Don't read the URLs \n. Use your knowledge to give some context to each new if possible")
         return response.content
     except Exception as e:
-        if s.config.debug:
-            logging.error(f"News plugin error: {e}")
+        logger.error("News plugin error: %s", e)
         return "Unable to fetch news at the moment. Please try again later."

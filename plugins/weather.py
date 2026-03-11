@@ -64,12 +64,10 @@ def _is_legacy_cache_entry(value):
 def process(user_input, route, s):
     try:
         if not route.get('location'):
-            if s.config.debug:
-                print("No location found in route, using default location")
+            logger.debug("No location found in route, using default location")
             route['location'] = s.config.location
         if not route.get('unit'):
-            if s.config.debug:
-                print("No unit found in route, using default unit")
+            logger.debug("No unit found in route, using default unit")
             route['unit'] = s.config.unit
 
         location = route['location']
@@ -133,14 +131,12 @@ def process(user_input, route, s):
         )
         return response.content
     except ValueError as e:
-        if s.config.debug:
-            logger.error("Weather plugin configuration error: %s", e)
+        logger.error("Weather plugin configuration error: %s", e)
         if route.get('refresh_only', False):
             return None
         return "Unable to fetch weather information. Please check your configuration."
     except Exception as e:
-        if s.config.debug:
-            logger.error("Weather plugin error: %s", e)
+        logger.error("Weather plugin error: %s", e)
         if route.get('refresh_only', False):
             return None
         return "Unable to fetch weather information. Please try again later."

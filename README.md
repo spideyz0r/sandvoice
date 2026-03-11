@@ -96,7 +96,7 @@ location: Toronto, ON, CA
 unit: metric
 language: English
 verbosity: brief
-debug: disabled
+log_level: warning
 summary_words: 100
 search_sources: 4
 push_to_talk: disabled
@@ -175,7 +175,7 @@ All configuration keys are loaded from `common/configuration.py` defaults and ca
 - `unit`: `metric` or `imperial` (used by weather routing/plugin)
 - `language`: language string for assistant replies (used in system prompt)
 - `verbosity`: `brief`, `normal`, or `detailed` (controls default response length)
-- `debug`: `enabled`/`disabled` (prints extra information and logs more details)
+- `log_level`: `warning` (default), `info`, or `debug` — controls logging verbosity. `warning` = silent unless something is wrong; `info` = startup events and milestones; `debug` = full internal detail. (Old `debug: enabled` still works via automatic migration, but `log_level` is preferred.)
 - `summary_words`: target word count for summaries (used by some plugins)
 - `search_sources`: number of sources to use for search-like plugins (plugin-dependent)
 - `push_to_talk`: `enabled`/`disabled`; when enabled, prompts for a keypress before recording again
@@ -188,7 +188,7 @@ All configuration keys are loaded from `common/configuration.py` defaults and ca
 - `gpt_response_model`: model used for normal responses (`AI.generate_response()`)
 
 - `stream_responses`: `enabled`/`disabled`; stream LLM responses and assemble final text from deltas
-- `stream_print_deltas`: `enabled`/`disabled`; when streaming and `debug` is enabled, print deltas as they arrive
+- `stream_print_deltas`: `enabled`/`disabled`; when streaming and `log_level: debug` is set, print deltas as they arrive
 
 - `stream_tts`: `enabled`/`disabled`; when streaming responses, generate and play TTS chunks before the full response completes (default route only)
 - `stream_tts_boundary`: `sentence` or `paragraph`; chunk boundary preference

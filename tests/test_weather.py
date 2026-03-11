@@ -242,24 +242,24 @@ class TestWeatherPluginDebugPaths(unittest.TestCase):
         os.environ.pop('OPENWEATHERMAP_API_KEY', None)
 
     @patch('plugins.weather.OpenWeatherReader')
-    def test_debug_print_when_location_missing(self, MockReader):
+    def test_debug_log_when_location_missing(self, MockReader):
         MockReader.return_value.get_current_weather.return_value = _WEATHER_DATA
         s = _make_sandvoice(cache=None, debug=True, location="Tokyo")
         from plugins.weather import process
-        with patch('builtins.print') as mock_print:
+        with patch('plugins.weather.logger') as mock_logger:
             process("weather", {}, s)
-        printed = [str(call) for call in mock_print.call_args_list]
-        self.assertTrue(any("location" in p for p in printed))
+        debug_calls = [str(call) for call in mock_logger.debug.call_args_list]
+        self.assertTrue(any("location" in c for c in debug_calls))
 
     @patch('plugins.weather.OpenWeatherReader')
-    def test_debug_print_when_unit_missing(self, MockReader):
+    def test_debug_log_when_unit_missing(self, MockReader):
         MockReader.return_value.get_current_weather.return_value = _WEATHER_DATA
         s = _make_sandvoice(cache=None, debug=True, unit="imperial")
         from plugins.weather import process
-        with patch('builtins.print') as mock_print:
+        with patch('plugins.weather.logger') as mock_logger:
             process("weather", {"location": "Tokyo"}, s)
-        printed = [str(call) for call in mock_print.call_args_list]
-        self.assertTrue(any("unit" in p for p in printed))
+        debug_calls = [str(call) for call in mock_logger.debug.call_args_list]
+        self.assertTrue(any("unit" in c for c in debug_calls))
 
     def test_value_error_debug_logging(self):
         os.environ.pop('OPENWEATHERMAP_API_KEY', None)
