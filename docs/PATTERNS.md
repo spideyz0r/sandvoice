@@ -42,8 +42,9 @@ logger.warning("Thread did not exit within %s seconds", timeout)
 | Internal loop events (timeout, silence, VAD frame) | `DEBUG` |
 | Internal thread / state-machine transitions | `DEBUG` |
 | Cleanup details, temporary file names | `DEBUG` |
+| Best-effort cleanup errors (ignored, execution continues) | `DEBUG` |
 | Config warnings, deprecated keys | `WARNING` |
-| Recoverable errors (fallback used) | `WARNING` |
+| Recoverable errors (fallback used, operator should know) | `WARNING` |
 | Unrecoverable errors | `ERROR` |
 
 When a log argument requires non-trivial construction (list comprehension, glob), guard the
