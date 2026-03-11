@@ -198,6 +198,17 @@ class TestWakeWordModeInitialize(unittest.TestCase):
 
         self.assertIsNone(mode.confirmation_beep_path)
 
+    def test_initialize_raises_when_vad_disabled(self):
+        self.mock_config.vad_enabled = False
+
+        mode = WakeWordMode(self.mock_config, self.mock_ai, self.mock_audio)
+
+        with self.assertRaises(RuntimeError) as context:
+            mode._initialize()
+
+        self.assertIn("VAD", str(context.exception))
+        self.assertIn("vad_enabled", str(context.exception))
+
 
 class TestWakeWordModeStateIdle(unittest.TestCase):
     def setUp(self):
@@ -680,24 +691,6 @@ class TestWakeWordModeStateListening(unittest.TestCase):
 
         # Should transition to PROCESSING after timeout
         self.assertEqual(mode.state, State.PROCESSING)
-
-    @patch('common.wake_word.pyaudio.PyAudio')
-    @patch('common.wake_word.webrtcvad.Vad')
-    def test_state_listening_skips_when_vad_disabled(self, mock_vad_class, mock_pyaudio_class):
-        self.mock_config.vad_enabled = False
-
-        mode = WakeWordMode(self.mock_config, self.mock_ai, self.mock_audio)
-        mode.running = True
-        mode.state = State.LISTENING
-
-        mode._state_listening()
-
-        # Should skip recording and go to PROCESSING
-        self.assertEqual(mode.state, State.PROCESSING)
-
-        # Should not initialize VAD or PyAudio
-        mock_vad_class.assert_not_called()
-        mock_pyaudio_class.assert_not_called()
 
     @patch('common.wake_word.pyaudio.PyAudio')
     @patch('common.wake_word.webrtcvad.Vad')
