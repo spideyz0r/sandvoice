@@ -1,10 +1,12 @@
 #import re, os, pyaudio, wave
 #from pydub import AudioSegment
 import contextlib
-import re, os, time, pyaudio, wave, lameenc, logging, queue
+import re, os, time, threading, pyaudio, wave, lameenc, logging, queue
 from pynput import keyboard
 from ctypes import *
 from common.error_handling import handle_file_error
+
+logger = logging.getLogger(__name__)
 
 # this is necessary to mute some outputs from pygame
 os.environ['PYGAME_HIDE_SUPPORT_PROMPT'] = "hide"
@@ -19,16 +21,15 @@ class Audio:
 
     def log_mixer_state(self, context=""):
         """Log the current state of pygame.mixer.music for debugging."""
-        if not self.config.debug:
+        if not logger.isEnabledFor(logging.DEBUG):
             return
         try:
-            import threading
             mixer_init = pygame.mixer.get_init()
             music_busy = pygame.mixer.music.get_busy() if mixer_init else None
-            logging.info(f">>> MIXER STATE [{context}]: thread={threading.current_thread().name}, "
-                        f"mixer_init={mixer_init is not None}, music_busy={music_busy}")
+            logger.debug(">>> MIXER STATE [%s]: thread=%s, mixer_init=%s, music_busy=%s",
+                         context, threading.current_thread().name, mixer_init is not None, music_busy)
         except Exception as e:
-            logging.warning(f">>> MIXER STATE [{context}]: Error getting state: {e}")
+            logger.debug(">>> MIXER STATE [%s]: Error getting state: %s", context, e)
 
     def init_recording(self):
         listener = keyboard.Listener(on_press=self.on_press)
@@ -44,18 +45,15 @@ class Audio:
                 f = self.get_libasound_path()
                 if f is None:
                     error_msg = "libasound library not found. Please install ALSA (libasound2) or ensure it is available in a standard library path."
-                    if self.config.debug:
-                        logging.error(error_msg)
+                    logger.error("%s", error_msg)
                     raise RuntimeError(error_msg)
-                if self.config.debug:
-                    print("Loading libasound from: " + f)
+                logger.debug("Loading libasound from: %s", f)
                 asound = cdll.LoadLibrary(f)
                 asound.snd_lib_error_set_handler(c_error_handler)
             self.audio = pyaudio.PyAudio()
         except OSError as e:
             error_msg = "Audio hardware not found. Please connect audio device."
-            if self.config.debug:
-                logging.error(f"Audio initialization error: {e}")
+            logger.error("Audio initialization error: %s", e)
             print(f"Error: {error_msg}")
             if self.config.fallback_to_text_on_audio_error:
                 print("Continuing in text-only mode. Use --cli flag for better experience.")
@@ -64,8 +62,7 @@ class Audio:
                 raise RuntimeError(error_msg)
         except Exception as e:
             error_msg = f"Failed to initialize audio: {str(e)}"
-            if self.config.debug:
-                logging.error(f"Audio initialization error: {e}")
+            logger.error("Audio initialization error: %s", e)
             print(f"Error: {error_msg}")
             if self.config.fallback_to_text_on_audio_error:
                 print("Continuing in text-only mode. Use --cli flag for better experience.")
@@ -127,14 +124,12 @@ class Audio:
             wf.close()
         except OSError as e:
             error_msg = handle_file_error(e, operation="write", filename="recording.wav")
-            if self.config.debug:
-                logging.error(f"Recording file error: {e}")
+            logger.error("Recording file error: %s", e)
             print(error_msg)
             raise
         except Exception as e:
             error_msg = f"Recording failed: {str(e)}"
-            if self.config.debug:
-                logging.error(f"Recording error: {e}")
+            logger.error("Recording error: %s", e)
             print(f"Error: {error_msg}")
             raise
 
@@ -152,14 +147,12 @@ class Audio:
                 mp3_file.write(mp3_data)
         except FileNotFoundError as e:
             error_msg = handle_file_error(e, operation="read", filename="recording.wav")
-            if self.config.debug:
-                logging.error(f"MP3 conversion file error: {e}")
+            logger.error("MP3 conversion file error: %s", e)
             print(error_msg)
             raise
         except Exception as e:
             error_msg = f"MP3 conversion failed: {str(e)}"
-            if self.config.debug:
-                logging.error(f"MP3 conversion error: {e}")
+            logger.error("MP3 conversion error: %s", e)
             print(f"Error: {error_msg}")
             raise
 
@@ -177,22 +170,18 @@ class Audio:
                        to ensure no cached audio can play.
         """
         try:
-            import threading
             current_thread = threading.current_thread().name
             self.log_mixer_state("stop_playback BEFORE")
             if pygame.mixer.get_init():
                 was_busy = pygame.mixer.music.get_busy()
                 pygame.mixer.music.stop()
-                if self.config.debug:
-                    logging.info(f">>> stop_playback called: thread={current_thread}, was_busy={was_busy}")
+                logger.debug(">>> stop_playback called: thread=%s, was_busy=%s", current_thread, was_busy)
                 if full_reset:
                     pygame.mixer.quit()
-                    if self.config.debug:
-                        logging.info(f">>> pygame.mixer.quit() called for full reset")
+                    logger.debug(">>> pygame.mixer.quit() called for full reset")
             self.log_mixer_state("stop_playback AFTER")
         except Exception as e:
-            if self.config.debug:
-                logging.warning(f"Error stopping audio playback: {e}")
+            logger.warning("Error stopping audio playback: %s", e)
 
     def is_playing(self):
         """Return True if pygame mixer music is currently playing."""
@@ -211,7 +200,6 @@ class Audio:
             stop_event: Optional threading.Event - if set, playback stops early
         """
         try:
-            import threading
             current_thread = threading.current_thread().name
 
             self.log_mixer_state(f"play_audio_file ENTER - {os.path.basename(file_path) if file_path else 'None'}")
@@ -220,48 +208,39 @@ class Audio:
                 try:
                     pygame.mixer.init()
                 except Exception as init_error:
-                    if self.config.debug:
-                        logging.error(f"pygame mixer.init() raised an exception: {init_error}")
+                    logger.error("pygame mixer.init() raised an exception: %s", init_error)
                     raise
 
                 if not pygame.mixer.get_init():
                     error_msg = "pygame mixer initialization failed: pygame.mixer.get_init() returned None after mixer.init()"
-                    if self.config.debug:
-                        logging.error(error_msg)
+                    logger.error("%s", error_msg)
                     raise RuntimeError(error_msg)
             # Stop any currently playing audio before loading new file
             if pygame.mixer.music.get_busy():
-                if self.config.debug:
-                    logging.info(f">>> STOPPING PREVIOUS AUDIO: thread={current_thread}")
+                logger.debug(">>> STOPPING PREVIOUS AUDIO: thread=%s", current_thread)
                 pygame.mixer.music.stop()
-            if self.config.debug:
-                logging.info(f">>> AUDIO PLAYBACK STARTING: thread={current_thread}, file={file_path}")
+            logger.debug(">>> AUDIO PLAYBACK STARTING: thread=%s, file=%s", current_thread, file_path)
             pygame.mixer.music.load(file_path)
             pygame.mixer.music.play()
-            if self.config.debug:
-                logging.info(f">>> AUDIO PLAYBACK play() CALLED: thread={current_thread}")
+            logger.debug(">>> AUDIO PLAYBACK play() CALLED: thread=%s", current_thread)
 
             while pygame.mixer.music.get_busy():
                 # Check for early termination signal
                 if stop_event and stop_event.is_set():
                     pygame.mixer.music.stop()
-                    if self.config.debug:
-                        logging.info(f">>> Playback interrupted by stop_event: thread={current_thread}")
+                    logger.debug(">>> Playback interrupted by stop_event: thread=%s", current_thread)
                     break
                 pygame.time.Clock().tick(10)
 
-            if self.config.debug:
-                logging.info(f">>> play_audio_file EXIT: thread={current_thread}, file={file_path}")
+            logger.debug(">>> play_audio_file EXIT: thread=%s, file=%s", current_thread, file_path)
         except FileNotFoundError as e:
             error_msg = handle_file_error(e, operation="read", filename=os.path.basename(file_path))
-            if self.config.debug:
-                logging.error(f"Audio playback file error: {e}")
+            logger.error("Audio playback file error: %s", e)
             print(error_msg)
             raise
         except Exception as e:
             error_msg = f"Audio playback failed: {str(e)}"
-            if self.config.debug:
-                logging.error(f"Audio playback error: {e}")
+            logger.error("Audio playback error: %s", e)
             print(f"Error: {error_msg}")
             raise
 
@@ -296,10 +275,8 @@ class Audio:
                             os.remove(remaining_file)
                     except OSError as cleanup_error:
                         # Best-effort cleanup: ignore file deletion errors.
-                        if self.config.debug:
-                            logging.warning(
-                                f"Failed to delete remaining temporary audio chunk file '{remaining_file}': {cleanup_error}"
-                            )
+                        logger.warning("Failed to delete remaining temporary audio chunk file '%s': %s",
+                                       remaining_file, cleanup_error)
                 break
             finally:
                 if delete_file:
@@ -308,10 +285,8 @@ class Audio:
                             os.remove(file_path)
                     except OSError as cleanup_error:
                         # Best-effort cleanup: ignore file deletion errors.
-                        if self.config.debug:
-                            logging.warning(
-                                f"Failed to delete temporary audio file '{file_path}': {cleanup_error}"
-                            )
+                        logger.warning("Failed to delete temporary audio file '%s': %s",
+                                       file_path, cleanup_error)
 
         return failed_file is None, failed_file, error
 
@@ -340,8 +315,7 @@ class Audio:
                 if path and os.path.exists(path):
                     os.remove(path)
             except OSError as cleanup_error:
-                if self.config.debug:
-                    logging.warning(f"Failed to delete temporary audio file '{path}': {cleanup_error}")
+                logger.warning("Failed to delete temporary audio file '%s': %s", path, cleanup_error)
 
         try:
             while True:

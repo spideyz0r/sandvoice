@@ -436,20 +436,21 @@ class TestStopPlayback(unittest.TestCase):
         # Should not raise exception
         audio.stop_playback()
     
-    def test_stop_playback_logs_in_debug_mode(self):
-        """Test that stop_playback logs when debug is enabled."""
+    def test_stop_playback_logs_debug(self):
+        """Test that stop_playback emits a debug log entry."""
         audio = self.Audio.__new__(self.Audio)
         audio.config = Mock(debug=True)
 
         import pygame
         pygame.mixer.init()
 
-        with patch('common.audio.logging.info') as mock_log:
+        with patch('common.audio.logger') as mock_logger:
+            mock_logger.isEnabledFor.return_value = True
             audio.stop_playback()
-            # Check that stop_playback was logged (format includes thread and was_busy info)
-            log_calls = [str(call) for call in mock_log.call_args_list]
-            stop_logged = any('stop_playback' in call for call in log_calls)
-            self.assertTrue(stop_logged, "stop_playback should be logged in debug mode")
+            # Check that stop_playback was logged via logger.debug
+            debug_calls = [str(call) for call in mock_logger.debug.call_args_list]
+            stop_logged = any('stop_playback' in call for call in debug_calls)
+            self.assertTrue(stop_logged, "stop_playback should emit a debug log entry")
 
 
 class TestPlayAudioFileWithStopEvent(unittest.TestCase):
@@ -553,8 +554,8 @@ class TestPlayAudioFileWithStopEvent(unittest.TestCase):
             pygame.mixer.music.stop = original_stop
             pygame.mixer.music.get_busy = original_get_busy
 
-    def test_stop_event_logs_interruption_in_debug_mode(self):
-        """Test that playback interruption is logged in debug mode."""
+    def test_stop_event_logs_interruption(self):
+        """Test that playback interruption is logged via logger.debug."""
         audio = self.Audio.__new__(self.Audio)
         audio.config = Mock(debug=True)
 
@@ -581,7 +582,8 @@ class TestPlayAudioFileWithStopEvent(unittest.TestCase):
                 with tempfile.NamedTemporaryFile(suffix='.mp3', delete=False) as f:
                     temp_file = f.name
 
-                with patch('common.audio.logging.info') as mock_log:
+                with patch('common.audio.logger') as mock_logger:
+                    mock_logger.isEnabledFor.return_value = True
                     try:
                         audio.play_audio_file(temp_file, stop_event=stop_event)
                     except (RuntimeError, FileNotFoundError, OSError):
@@ -589,8 +591,8 @@ class TestPlayAudioFileWithStopEvent(unittest.TestCase):
                         # We're testing the logging behavior, not actual audio playback.
                         pass
 
-                    # Verify the interruption was logged
-                    log_messages = [str(call) for call in mock_log.call_args_list]
+                    # Verify the interruption was logged via logger.debug
+                    log_messages = [str(call) for call in mock_logger.debug.call_args_list]
                     interrupted_logged = any('interrupted' in msg.lower() for msg in log_messages)
                     self.assertTrue(interrupted_logged,
                                     "Should log that playback was interrupted by stop_event")

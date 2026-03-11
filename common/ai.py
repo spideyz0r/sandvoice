@@ -1,9 +1,10 @@
 from openai import OpenAI
 from jinja2 import Template
-import datetime, json, yaml, warnings, os, logging, re, uuid
+import datetime, json, yaml, warnings, os, logging, re, uuid, threading
 from types import SimpleNamespace
 from common.error_handling import retry_with_backoff, setup_error_logging, handle_api_error, handle_file_error
 
+logger = logging.getLogger(__name__)
 
 # OpenAI TTS rejects inputs above ~4096 characters. Use 3800 as a conservative
 # default to leave headroom for any encoding/edge-case variations in length.
@@ -217,20 +218,17 @@ class AI:
                 return (completion.choices[0].message.content or "").strip()
             except Exception as e:
                 error_msg = handle_api_error(e, service_name="OpenAI Chat Completions")
-                if self.config.debug:
-                    logging.error(f"Translation error (chat completions): {e}")
+                logger.error("Translation error (chat completions): %s", e)
                 print(error_msg)
                 raise
         except FileNotFoundError as e:
             error_msg = handle_file_error(e, operation="read", filename=os.path.basename(file_path))
-            if self.config.debug:
-                logging.error(f"Transcription file error: {e}")
+            logger.error("Transcription file error: %s", e)
             print(error_msg)
             raise
         except Exception as e:
             error_msg = handle_api_error(e, service_name="OpenAI Whisper")
-            if self.config.debug:
-                logging.error(f"Transcription error: {e}")
+            logger.error("Transcription error: %s", e)
             print(error_msg)
             raise
 
@@ -328,8 +326,7 @@ class AI:
             return SimpleNamespace(content=assistant_content)
         except Exception as e:
             error_msg = handle_api_error(e, service_name="OpenAI GPT")
-            if self.config.debug:
-                logging.error(f"Response generation error: {e}")
+            logger.error("Response generation error: %s", e)
             print(error_msg)
             return ErrorMessage("Sorry, I'm having trouble right now. Please try again in a moment.")
 
@@ -448,21 +445,18 @@ class AI:
             return json.loads(completion.choices[0].message.content)
         except FileNotFoundError as e:
             error_msg = handle_file_error(e, operation="read", filename="routes.yaml")
-            if self.config.debug:
-                logging.error(f"Routes file error: {e}")
+            logger.error("Routes file error: %s", e)
             print(error_msg)
             # Return default route as fallback
             return {"route": "default-route", "reason": "Error loading routes"}
         except json.JSONDecodeError as e:
             error_msg = "Error parsing route response from AI. Using default route."
-            if self.config.debug:
-                logging.error(f"Route JSON parse error: {e}")
+            logger.error("Route JSON parse error: %s", e)
             print(error_msg)
             return {"route": "default-route", "reason": "Parse error"}
         except Exception as e:
             error_msg = handle_api_error(e, service_name="OpenAI GPT")
-            if self.config.debug:
-                logging.error(f"Route definition error: {e}")
+            logger.error("Route definition error: %s", e)
             print(error_msg)
             return {"route": "default-route", "reason": "API error"}
 
@@ -503,23 +497,20 @@ class AI:
             return json.loads(completion.choices[0].message.content)
         except json.JSONDecodeError as e:
             error_msg = "Error parsing summary response from AI."
-            if self.config.debug:
-                logging.error(f"Summary JSON parse error: {e}")
+            logger.error("Summary JSON parse error: %s", e)
             print(error_msg)
             return {"title": "Error", "text": "Unable to generate summary"}
         except Exception as e:
             error_msg = handle_api_error(e, service_name="OpenAI GPT")
-            if self.config.debug:
-                logging.error(f"Text summary error: {e}")
+            logger.error("Text summary error: %s", e)
             print(error_msg)
             return {"title": "Error", "text": "Unable to generate summary"}
 
     @retry_with_backoff(max_attempts=3, initial_delay=1)
     def text_to_speech(self, text, model = None, voice = None):
-        if self.config.debug:
-            import threading
-            logging.info(f">>> TTS GENERATION CALLED from thread {threading.current_thread().name}: text={text[:50] if text else 'empty'}...")
-            logging.info(f">>> TTS GENERATION full text length: {len(text) if text else 0} chars")
+        logger.debug(">>> TTS GENERATION CALLED from thread %s: text=%s...",
+                     threading.current_thread().name, text[:50] if text else "empty")
+        logger.debug(">>> TTS GENERATION full text length: %d chars", len(text) if text else 0)
         if not model:
             model = self.config.text_to_speech_model
         if not voice:
@@ -547,9 +538,8 @@ class AI:
                     )
                     output_files.append(speech_file_path)
                     response.stream_to_file(speech_file_path)
-                    if self.config.debug:
-                        import threading
-                        logging.info(f">>> TTS FILE CREATED: thread={threading.current_thread().name}, file={os.path.basename(speech_file_path)}")
+                    logger.debug(">>> TTS FILE CREATED: thread=%s, file=%s",
+                                 threading.current_thread().name, os.path.basename(speech_file_path))
             except Exception:
                 for f in output_files:
                     try:
@@ -562,11 +552,7 @@ class AI:
 
             return output_files
         except Exception as e:
-            # Avoid noisy tracebacks by default; keep details in debug or when file logging is enabled.
-            if self.config.debug:
-                logging.exception("Text-to-speech error")
-            else:
-                logging.error(f"Text-to-speech error: {e}")
+            logger.exception("Text-to-speech error")
 
             if self.config.fallback_to_text_on_audio_error:
                 print(handle_api_error(e, service_name="OpenAI TTS"))
