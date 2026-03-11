@@ -28,14 +28,12 @@ class RSSReader:
                         news_item['published'] = datetime.datetime(*news_item['published'][:6])
                     news_items.append(news_item)
                 except Exception as e:
-                    logger.error("Error parsing news entry: %s", e)
+                    logger.warning("Error parsing news entry: %s", e)
                     continue
 
             return news_items
         except Exception as e:
-            error_msg = f"Error fetching RSS feed: {str(e)}"
             logger.error("RSS feed error: %s", e)
-            print(f"Error: {error_msg}")
             return []
 
 def process (user_input, route, s):

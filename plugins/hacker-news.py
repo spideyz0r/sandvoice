@@ -59,7 +59,7 @@ class HackerNews:
                     "text": story.get('text', ''),
                 })
             except Exception as e:
-                logger.error("Error processing story %s: %s", story_id, e)
+                logger.warning("Error processing story %s: %s", story_id, e)
                 continue
 
         return briefs
@@ -75,7 +75,7 @@ class HackerNews:
                     continue
                 stories.append(f"{story.get('title', 'No title')} - {story.get('url', '')}")
             except Exception as e:
-                logger.error("Error processing story %s: %s", story_id, e)
+                logger.warning("Error processing story %s: %s", story_id, e)
                 continue
         return stories
 

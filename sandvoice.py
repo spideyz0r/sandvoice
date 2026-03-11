@@ -454,7 +454,7 @@ class SandVoice:
                 logger.warning("Streaming TTS threads did not exit cleanly within timeout")
 
             if not player_success[0]:
-                logger.error("Streaming audio playback failed for '%s': %s", player_failed_file[0], player_error[0])
+                logger.warning("Streaming audio playback failed for '%s': %s", player_failed_file[0], player_error[0])
                 print("Audio playback failed during streaming. Continuing with text only.")
 
             response = "".join(full_parts)
