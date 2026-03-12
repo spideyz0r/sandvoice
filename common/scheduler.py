@@ -209,6 +209,64 @@ class TaskScheduler:
                     name, task_id, schedule_type, schedule_value, action_type, self._fmt_time(first_run))
         return task_id
 
+    def sync_tasks(self, loaded_tasks: list[dict]):
+        tasks_in_file = set()
+        for task_def in loaded_tasks:
+            if not isinstance(task_def, dict):
+                logger.warning("Skipping task file entry — expected a mapping, got %s", type(task_def).__name__)
+                continue
+            name = task_def.get("name")
+            if not isinstance(name, str):
+                logger.warning(
+                    "Skipping task file entry with invalid 'name' type %s (expected non-empty string)",
+                    type(name).__name__,
+                )
+                continue
+            name = name.strip()
+            if not name:
+                logger.warning("Skipping task file entry with missing or empty 'name'")
+                continue
+            tasks_in_file.add(name)
+
+        db_tasks = self._db.get_all_tasks()
+        db_task_names = {task.name for task in db_tasks}
+
+        for task in db_tasks:
+            if task.name not in tasks_in_file:
+                self._db.delete_task(task.id)
+                logger.info("Task removed from DB: '%s' (%s)", task.name, task.id)
+
+        for task_def in loaded_tasks:
+            if not isinstance(task_def, dict):
+                continue
+            name = task_def.get("name")
+            if not isinstance(name, str):
+                continue
+            name = name.strip()
+            if not name or name in db_task_names:
+                continue
+            try:
+                action_payload = task_def.get("action_payload", {})
+                if action_payload is None:
+                    action_payload = {}
+                elif not isinstance(action_payload, dict):
+                    logger.warning(
+                        "Task '%s' has non-mapping 'action_payload' of type %s; defaulting to {}",
+                        name,
+                        type(action_payload).__name__,
+                    )
+                    action_payload = {}
+                self.add_task(
+                    name=name,
+                    schedule_type=task_def["schedule_type"],
+                    schedule_value=str(task_def["schedule_value"]),
+                    action_type=task_def["action_type"],
+                    action_payload=action_payload,
+                )
+                db_task_names.add(name)
+            except Exception as e:
+                logger.warning("Failed to register task '%s' from tasks file: %s", name, e)
+
     def pause_task(self, task_id: str):
         self._db.set_status(task_id, "paused")
         logger.info("Task paused: %s", task_id)

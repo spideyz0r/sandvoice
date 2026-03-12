@@ -120,7 +120,13 @@ class SandVoice:
                 tz=self.config.timezone,
             )
             self._scheduler_ai = ai
-            self._register_config_tasks(scheduler, db)
+            if self.config.tasks_file_exists:
+                scheduler.sync_tasks(self.config.tasks)
+            else:
+                logger.info(
+                    "Tasks file not found at %s; skipping scheduler DB sync",
+                    self.config.tasks_file_path,
+                )
             return scheduler
         except Exception as e:
             logger.warning("Scheduler disabled — failed to initialize: %s", e)
@@ -131,47 +137,6 @@ class SandVoice:
                     pass
             self._scheduler_ai = None
             return None
-
-    def _register_config_tasks(self, scheduler, db):
-        """Register tasks defined in config.tasks, skipping any already active/paused."""
-        for task_def in self.config.tasks:
-            if not isinstance(task_def, dict):
-                logger.warning("Skipping config task — expected a mapping, got %s", type(task_def).__name__)
-                continue
-            name = task_def.get("name")
-            if not isinstance(name, str):
-                logger.warning(
-                    "Skipping config task with invalid 'name' type %s (expected non-empty string)",
-                    type(name).__name__,
-                )
-                continue
-            name = name.strip()
-            if not name:
-                logger.warning("Skipping config task with missing or empty 'name'")
-                continue
-            if db.get_active_or_paused_task_by_name(name):
-                logger.info("Skipping config task '%s' — already active or paused in DB", name)
-                continue
-            try:
-                action_payload = task_def.get("action_payload", {})
-                if action_payload is None:
-                    action_payload = {}
-                elif not isinstance(action_payload, dict):
-                    logger.warning(
-                        "Config task '%s' has non-mapping 'action_payload' of type %s; defaulting to {}",
-                        name,
-                        type(action_payload).__name__,
-                    )
-                    action_payload = {}
-                scheduler.add_task(
-                    name=name,
-                    schedule_type=task_def["schedule_type"],
-                    schedule_value=str(task_def["schedule_value"]),
-                    action_type=task_def["action_type"],
-                    action_payload=action_payload,
-                )
-            except Exception as e:
-                logger.warning("Failed to register config task '%s': %s", name, e)
 
     def _scheduler_speak(self, text):
         if not text or not self.config.bot_voice:

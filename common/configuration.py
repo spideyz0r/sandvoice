@@ -103,7 +103,7 @@ class Config:
             "scheduler_enabled": "disabled",
             "scheduler_poll_interval": 30,
             "scheduler_db_path": os.path.join(os.path.expanduser("~"), ".sandvoice", "sandvoice.db"),
-            "tasks": [],
+            "tasks_file_path": os.path.join(os.path.expanduser("~"), ".sandvoice", "tasks.yaml"),
         }
         self.config = self.load_defaults()
         self.load_config()
@@ -219,8 +219,10 @@ class Config:
             self.scheduler_poll_interval = 30
         raw_db_path = self.get("scheduler_db_path")
         self.scheduler_db_path = os.path.expanduser(str(raw_db_path)) if raw_db_path else self.defaults["scheduler_db_path"]
-        raw_tasks = self.get("tasks")
-        self.tasks = list(raw_tasks) if isinstance(raw_tasks, list) else []
+        raw_tasks_file_path = self.get("tasks_file_path")
+        self.tasks_file_path = os.path.expanduser(str(raw_tasks_file_path)) if raw_tasks_file_path else self.defaults["tasks_file_path"]
+        self.tasks_file_exists = os.path.exists(self.tasks_file_path)
+        self.tasks = self._load_tasks_file()
 
         # Background Cache (Plan 20)
         raw_cache_enabled = self.get("cache_enabled")
@@ -364,6 +366,9 @@ class Config:
         if not self.tmp_files_path or not isinstance(self.tmp_files_path, str):
             errors.append("tmp_files_path must be a non-empty string")
 
+        if not self.tasks_file_path or not isinstance(self.tasks_file_path, str):
+            errors.append("tasks_file_path must be a non-empty string")
+
         # Validate wake word settings
         if not isinstance(self.wake_word_sensitivity, (int, float)) or not (0.0 <= self.wake_word_sensitivity <= 1.0):
             errors.append("wake_word_sensitivity must be between 0.0 and 1.0")
@@ -425,3 +430,14 @@ class Config:
 
     def get(self, key):
             return self.config.get(key, self.defaults[key])
+
+    def _load_tasks_file(self):
+        if not self.tasks_file_exists:
+            return []
+        with open(self.tasks_file_path, "r") as f:
+            data = yaml.safe_load(f)
+        if data is None:
+            return []
+        if not isinstance(data, list):
+            raise ValueError("tasks file must contain a YAML list")
+        return list(data)

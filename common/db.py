@@ -166,6 +166,16 @@ class SchedulerDB:
             ).fetchone()
         return self._row_to_task(row) if row else None
 
+    def get_all_tasks(self) -> list[ScheduledTask]:
+        with self._lock:
+            rows = self._conn.execute("SELECT * FROM scheduled_tasks").fetchall()
+        return [self._row_to_task(row) for row in rows]
+
+    def delete_task(self, task_id: str):
+        with self._lock:
+            self._conn.execute("DELETE FROM scheduled_tasks WHERE id = ?", (task_id,))
+            self._conn.commit()
+
     def get_task(self, task_id: str) -> Optional[ScheduledTask]:
         with self._lock:
             row = self._conn.execute(
