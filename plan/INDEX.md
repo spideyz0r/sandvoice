@@ -59,6 +59,10 @@ plan/
 **Document**: [completed/21-task-scheduler.md](./completed/21-task-scheduler.md)
 **Description**: Lightweight SQLite-backed in-process scheduler supporting cron, interval, and one-shot tasks. Powers Plan 20 periodic cache refresh and future timers/reminders.
 
+### Priority 28: Logging Level Refactor
+**Document**: [completed/28-logging-level-refactor.md](./completed/28-logging-level-refactor.md)
+**Description**: Replace `debug: enabled/disabled` with a standard `log_level: warning|info|debug` config key and remove ~200 scattered `if self.config.debug: logger.*()` guards — the logging framework is the filter, not the code. Prerequisite for Plan 23 (timing summary).
+
 ---
 
 ## In Progress 🚧
@@ -147,9 +151,6 @@ plan/
 **Document**: [backlog/27-tasks-file-and-lifecycle.md](./backlog/27-tasks-file-and-lifecycle.md)
 **Description**: Move scheduled task definitions to a dedicated `~/.sandvoice/tasks.yaml` file and make it the sole source of truth — tasks removed from the file are automatically deleted from the DB on startup. `tasks.yaml` replaces the `tasks:` key in `config.yaml` with no backwards compatibility.
 
-### Priority 28: Logging Level Refactor
-**Document**: [backlog/28-logging-level-refactor.md](./backlog/28-logging-level-refactor.md)
-**Description**: Replace `debug: enabled/disabled` with a standard `log_level: warning|info|debug` config key and remove ~200 scattered `if self.config.debug: logger.*()` guards — the logging framework is the filter, not the code. Prerequisite for Plan 23 (timing summary).
 
 ### Future Enhancements
 **Document**: [backlog/FUTURE.md](./backlog/FUTURE.md)
