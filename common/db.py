@@ -6,7 +6,7 @@ import threading
 import uuid
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from typing import Optional
+from typing import List, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -166,7 +166,7 @@ class SchedulerDB:
             ).fetchone()
         return self._row_to_task(row) if row else None
 
-    def get_all_tasks(self) -> list[ScheduledTask]:
+    def get_all_tasks(self) -> List[ScheduledTask]:
         with self._lock:
             rows = self._conn.execute("SELECT * FROM scheduled_tasks").fetchall()
         return [self._row_to_task(row) for row in rows]

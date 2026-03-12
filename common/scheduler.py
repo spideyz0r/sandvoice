@@ -2,7 +2,7 @@ import json
 import logging
 import threading
 from datetime import datetime, timedelta, timezone
-from typing import Callable, Optional
+from typing import Any, Callable, Iterable, Optional
 
 try:
     from zoneinfo import ZoneInfo
@@ -209,11 +209,13 @@ class TaskScheduler:
                     name, task_id, schedule_type, schedule_value, action_type, self._fmt_time(first_run))
         return task_id
 
-    def sync_tasks(self, loaded_tasks: list[dict]):
+    def sync_tasks(self, loaded_tasks: Iterable[Any]):
         tasks_in_file = set()
+        saw_invalid_entry = False
         for task_def in loaded_tasks:
             if not isinstance(task_def, dict):
                 logger.warning("Skipping task file entry — expected a mapping, got %s", type(task_def).__name__)
+                saw_invalid_entry = True
                 continue
             name = task_def.get("name")
             if not isinstance(name, str):
@@ -221,20 +223,25 @@ class TaskScheduler:
                     "Skipping task file entry with invalid 'name' type %s (expected non-empty string)",
                     type(name).__name__,
                 )
+                saw_invalid_entry = True
                 continue
             name = name.strip()
             if not name:
                 logger.warning("Skipping task file entry with missing or empty 'name'")
+                saw_invalid_entry = True
                 continue
             tasks_in_file.add(name)
 
         db_tasks = self._db.get_all_tasks()
         db_task_names = {task.name for task in db_tasks}
 
-        for task in db_tasks:
-            if task.name not in tasks_in_file:
-                self._db.delete_task(task.id)
-                logger.info("Task removed from DB: '%s' (%s)", task.name, task.id)
+        if saw_invalid_entry:
+            logger.warning("Tasks file contains invalid entries; skipping DB deletions for this startup")
+        else:
+            for task in db_tasks:
+                if task.name not in tasks_in_file:
+                    self._db.delete_task(task.id)
+                    logger.info("Task removed from DB: '%s' (%s)", task.name, task.id)
 
         for task_def in loaded_tasks:
             if not isinstance(task_def, dict):

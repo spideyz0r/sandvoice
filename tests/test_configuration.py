@@ -755,6 +755,22 @@ class TestTasksFileConfig(unittest.TestCase):
             Config()
         self.assertIn("tasks file must contain a YAML list", str(context.exception))
 
+    def test_tasks_file_path_directory_raises_value_error(self):
+        tasks_dir = os.path.join(self.temp_dir, ".sandvoice", "tasks-dir")
+        os.makedirs(tasks_dir, exist_ok=True)
+        self.write_config({"tasks_file_path": "~/.sandvoice/tasks-dir"})
+        with self.assertRaises(ValueError) as context:
+            Config()
+        self.assertIn("tasks_file_path must point to a file", str(context.exception))
+
+    def test_legacy_tasks_key_prints_warning(self):
+        self.write_config({"tasks": []})
+        with patch("builtins.print") as mock_print:
+            config = Config()
+        self.assertEqual(config.tasks, [])
+        printed = [str(call) for call in mock_print.call_args_list]
+        self.assertTrue(any("tasks" in call and "ignored" in call for call in printed))
+
 
 class TestCacheConfig(_TempHomeBase):
     """cache_enabled, cache_weather_ttl_s, cache_weather_max_stale_s defaults and clamping."""

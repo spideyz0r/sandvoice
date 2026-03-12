@@ -221,8 +221,12 @@ class Config:
         self.scheduler_db_path = os.path.expanduser(str(raw_db_path)) if raw_db_path else self.defaults["scheduler_db_path"]
         raw_tasks_file_path = self.get("tasks_file_path")
         self.tasks_file_path = os.path.expanduser(str(raw_tasks_file_path)) if raw_tasks_file_path else self.defaults["tasks_file_path"]
-        self.tasks_file_exists = os.path.exists(self.tasks_file_path)
+        if os.path.exists(self.tasks_file_path) and not os.path.isfile(self.tasks_file_path):
+            raise ValueError("tasks_file_path must point to a file")
+        self.tasks_file_exists = os.path.isfile(self.tasks_file_path)
         self.tasks = self._load_tasks_file()
+        if "tasks" in self.config:
+            print("WARNING: 'tasks' in config.yaml is ignored. Use tasks_file_path/tasks.yaml instead.")
 
         # Background Cache (Plan 20)
         raw_cache_enabled = self.get("cache_enabled")
@@ -429,7 +433,7 @@ class Config:
             raise ValueError(error_msg)
 
     def get(self, key):
-            return self.config.get(key, self.defaults[key])
+        return self.config.get(key, self.defaults[key])
 
     def _load_tasks_file(self):
         if not self.tasks_file_exists:

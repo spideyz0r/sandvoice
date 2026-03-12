@@ -301,7 +301,7 @@ In `~/.sandvoice/tasks.yaml`:
 # One-shot reminder at a specific date and time (once)
 - name: meeting-reminder
   schedule_type: once
-  schedule_value: "2026-03-02T21:00:00-05:00"   # EST offset; also accepts UTC (+00:00 or Z)
+  schedule_value: "2099-03-02T21:00:00-05:00"   # replace with your own time; also accepts UTC (+00:00 or Z)
   action_type: speak
   action_payload:
     text: "Your meeting starts in 15 minutes."
@@ -354,6 +354,9 @@ action_payload:
 - `tasks.yaml` is the source of truth for scheduled tasks. On startup, tasks in the file are inserted into the DB if missing, and tasks present in the DB but missing from the file are deleted.
 - If `tasks.yaml` exists and is empty (`[]`), all scheduled tasks are removed from the DB on the next startup.
 - If `tasks.yaml` does not exist, startup still succeeds and task sync is skipped entirely. Existing DB tasks continue to run unchanged.
+- Invalid task entries are skipped, and DB deletions are suppressed for that startup so a malformed `tasks.yaml` cannot accidentally wipe persisted tasks.
+- Existing DB tasks are matched by `name` and left unchanged if that name is still present in `tasks.yaml`, even if the schedule or payload differs. Rename the task or delete its DB row to force re-registration.
+- Completed `once` tasks are also matched by name and will not be re-registered while a DB row with that name still exists.
 - `once` tasks that fail with a transient error (e.g. network timeout) are retried on the next scheduler tick. Permanent config errors (bad JSON, missing fields) mark the task completed immediately so they don't loop.
 - All timestamps are stored and compared in UTC internally. Log timestamps are displayed using your configured `timezone`, which should be an IANA timezone name (e.g. `America/New_York`) for correct offsets and DST handling. If the timezone cannot be resolved, the scheduler logs a warning and falls back to UTC.
 - The scheduler runs in a background daemon thread and shuts down cleanly on exit.
