@@ -84,8 +84,6 @@ class TestTextToSpeechChunking(unittest.TestCase):
         mock_config.text_to_speech_model = 'tts-1'
         mock_config.bot_voice_model = 'nova'
         mock_config.tmp_files_path = self.temp_dir
-        mock_config.fallback_to_text_on_audio_error = True
-        mock_config.enable_error_logging = False
         mock_config.debug = False
 
         mock_client = Mock()
@@ -117,8 +115,6 @@ class TestTextToSpeechChunking(unittest.TestCase):
         mock_config.text_to_speech_model = 'tts-1'
         mock_config.bot_voice_model = 'nova'
         mock_config.tmp_files_path = self.temp_dir
-        mock_config.fallback_to_text_on_audio_error = True
-        mock_config.enable_error_logging = False
         mock_config.debug = False
 
         mock_client = Mock()
@@ -155,8 +151,6 @@ class TestTextToSpeechChunking(unittest.TestCase):
         mock_config.text_to_speech_model = 'tts-1'
         mock_config.bot_voice_model = 'nova'
         mock_config.tmp_files_path = self.temp_dir
-        mock_config.fallback_to_text_on_audio_error = True
-        mock_config.enable_error_logging = False
         mock_config.debug = False
 
         mock_client = Mock()
@@ -181,30 +175,6 @@ class TestTextToSpeechChunking(unittest.TestCase):
         first_path = os.path.join(self.temp_dir, 'tts-response-abc123-chunk-001.mp3')
         self.assertFalse(os.path.exists(first_path))
 
-    @patch('common.ai.OpenAI')
-    @patch('common.ai.setup_error_logging')
-    @patch('common.ai.split_text_for_tts')
-    @patch('builtins.print')
-    def test_text_to_speech_raises_when_no_fallback(self, mock_print, mock_split, mock_setup, mock_openai_class):
-        mock_split.return_value = ["chunk1"]
-
-        mock_config = Mock()
-        mock_config.api_timeout = 10
-        mock_config.api_retry_attempts = 1
-        mock_config.text_to_speech_model = 'tts-1'
-        mock_config.bot_voice_model = 'nova'
-        mock_config.tmp_files_path = self.temp_dir
-        mock_config.fallback_to_text_on_audio_error = False
-        mock_config.enable_error_logging = False
-        mock_config.debug = False
-
-        mock_client = Mock()
-        mock_openai_class.return_value = mock_client
-        mock_client.audio.speech.create.side_effect = Exception("TTS Error")
-
-        ai = AI(mock_config)
-        with self.assertRaises(Exception):
-            ai.text_to_speech("ignored")
 
 
 if __name__ == '__main__':

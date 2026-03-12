@@ -189,8 +189,8 @@ class WakeWordMode:
         if self.config.wake_confirmation_beep:
             try:
                 self.confirmation_beep_path = create_confirmation_beep(
-                    freq=self.config.wake_confirmation_beep_freq,
-                    duration=self.config.wake_confirmation_beep_duration,
+                    freq=800,
+                    duration=0.1,
                     tmp_path=self.config.tmp_files_path
                 )
                 logger.debug("Confirmation beep created at: %s", self.confirmation_beep_path)
@@ -203,8 +203,8 @@ class WakeWordMode:
         ):
             try:
                 self.ack_earcon_path = create_ack_earcon(
-                    freq=getattr(self.config, "voice_ack_earcon_freq", 600),
-                    duration=getattr(self.config, "voice_ack_earcon_duration", 0.06),
+                    freq=600,
+                    duration=0.06,
                     tmp_path=self.config.tmp_files_path,
                 )
                 logger.debug("Ack earcon created at: %s", self.ack_earcon_path)
@@ -317,11 +317,11 @@ class WakeWordMode:
             self.audio.log_mixer_state("LISTENING state entered")
 
         # Initialize VAD
-        vad = webrtcvad.Vad(self.config.vad_aggressiveness)
+        vad = webrtcvad.Vad(3)
 
         # Audio parameters
         sample_rate = self.config.rate
-        frame_duration_ms = self.config.vad_frame_duration
+        frame_duration_ms = 30
 
         # VAD requires 16-bit PCM audio at 8kHz, 16kHz, 32kHz, or 48kHz
         # If config.rate doesn't match, we need to handle it
@@ -1094,7 +1094,7 @@ class WakeWordMode:
             # Clean up any orphaned TTS files from interrupted previous requests
             self._cleanup_all_orphaned_tts_files()
 
-            stream_tts_buffer_chunks = max(1, int(getattr(self.config, "stream_tts_buffer_chunks", 2) or 2))
+            stream_tts_buffer_chunks = 2
             text_queue = queue.Queue(maxsize=stream_tts_buffer_chunks)
             audio_queue_max_files = max(4, stream_tts_buffer_chunks * 4)
             audio_queue = queue.Queue(maxsize=audio_queue_max_files)
@@ -1215,23 +1215,17 @@ class WakeWordMode:
             player_thread.start()
 
             boundary = str(getattr(self.config, "stream_tts_boundary", "sentence") or "sentence").strip().lower()
-            try:
-                target_s = int(getattr(self.config, "stream_tts_first_chunk_target_s", 6) or 6)
-            except Exception:
-                target_s = 6
-
             # Rough heuristic for English: ~35 characters/sec spoken.
             chars_per_second = 35
-            first_min_chars = max(120, int(target_s * chars_per_second))
+            first_min_chars = max(120, int(6 * chars_per_second))
             next_min_chars = 200
 
-            stream_print_deltas = _is_enabled_flag(getattr(self.config, "stream_print_deltas", False))
             buffer = ""
             full_parts = []
             is_first = True
             stream_completed = False
 
-            if self.config.debug and stream_print_deltas:
+            if self.config.debug:
                 print(f"{self.config.botname}: ", end="", flush=True)
 
             try:
@@ -1266,7 +1260,7 @@ class WakeWordMode:
 
             except Exception as e:
                 interrupt_event.set()
-                if self.config.debug and stream_print_deltas:
+                if self.config.debug:
                     print()
                 print(handle_api_error(e, service_name="OpenAI GPT (streaming)"))
 
@@ -1291,8 +1285,8 @@ class WakeWordMode:
                 logger.warning("Failed to enqueue wake-word streaming sentinel")
                 interrupt_event.set()
 
-            tts_join_timeout = int(getattr(self.config, "stream_tts_tts_join_timeout_s", 30) or 30)
-            player_join_timeout = int(getattr(self.config, "stream_tts_player_join_timeout_s", 60) or 60)
+            tts_join_timeout = 30
+            player_join_timeout = 60
             tts_thread.join(timeout=tts_join_timeout)
             player_thread.join(timeout=player_join_timeout)
 
@@ -1308,8 +1302,8 @@ class WakeWordMode:
                 )
 
             response_text = "".join(full_parts).strip()
-            # Print final text (unless we are streaming deltas in debug or barge-in occurred)
-            if response_text and (not (self.config.debug and stream_print_deltas)):
+            # Print final text (unless we are in debug mode or barge-in occurred)
+            if response_text and not self.config.debug:
                 if not (barge_in_event and barge_in_event.is_set()):
                     print(f"{self.config.botname}: {response_text}\n")
 

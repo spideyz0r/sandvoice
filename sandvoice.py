@@ -243,7 +243,7 @@ class SandVoice:
             stop_event = threading.Event()
             # production_failed_event: stop producing new streaming audio (but allow already-queued audio to finish)
             production_failed_event = threading.Event()
-            stream_tts_buffer_chunks = max(1, int(getattr(self.config, "stream_tts_buffer_chunks", 2) or 2))
+            stream_tts_buffer_chunks = 2
             text_queue = queue.Queue(maxsize=stream_tts_buffer_chunks)
 
             # Bound audio queue to avoid unbounded temp-file growth if TTS outpaces playback.
@@ -374,23 +374,16 @@ class SandVoice:
             try:
 
                 boundary = str(getattr(self.config, "stream_tts_boundary", "sentence") or "sentence").strip().lower()
-                try:
-                    target_s = int(getattr(self.config, "stream_tts_first_chunk_target_s", 6) or 6)
-                except Exception:
-                    target_s = 6
-
                 # Rough heuristic for English: ~35 characters/sec spoken.
                 chars_per_second = 35
-                first_min_chars = max(120, int(target_s * chars_per_second))
+                first_min_chars = max(120, int(6 * chars_per_second))
                 next_min_chars = 200
-
-                stream_print_deltas = bool(getattr(self.config, "stream_print_deltas", False))
 
                 buffer = ""
                 full_parts = []
                 is_first = True
 
-                if self.config.debug and stream_print_deltas:
+                if self.config.debug:
                     print(f"{self.config.botname}: ", end="", flush=True)
 
                 try:
@@ -420,7 +413,7 @@ class SandVoice:
                                 break
                 except Exception as e:
                     stop_event.set()
-                    if self.config.debug and stream_print_deltas:
+                    if self.config.debug:
                         # Ensure the error message starts on a new line, separate from streamed output.
                         print()
                     print(handle_api_error(e, service_name="OpenAI GPT (streaming)"))
@@ -442,8 +435,8 @@ class SandVoice:
                     logger.warning("Failed to enqueue streaming TTS sentinel; forcing stop_event")
 
                 # Wait for threads to finish playback.
-                tts_join_timeout = int(getattr(self.config, "stream_tts_tts_join_timeout_s", 30) or 30)
-                player_join_timeout = int(getattr(self.config, "stream_tts_player_join_timeout_s", 60) or 60)
+                tts_join_timeout = 30
+                player_join_timeout = 60
                 tts_thread.join(timeout=tts_join_timeout)
                 player_thread.join(timeout=player_join_timeout)
             except Exception:
@@ -458,7 +451,7 @@ class SandVoice:
                 print("Audio playback failed during streaming. Continuing with text only.")
 
             response = "".join(full_parts)
-            if not (self.config.debug and stream_print_deltas):
+            if not self.config.debug:
                 print(f"{self.config.botname}: {response}\n")
 
             if production_failed_event.is_set() and tts_error[0]:

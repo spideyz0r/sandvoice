@@ -59,8 +59,6 @@ class TestAIInitialization(unittest.TestCase):
         """Test initialization fails without API key"""
         del os.environ['OPENAI_API_KEY']
         mock_config = Mock()
-        mock_config.enable_error_logging = False
-        mock_config.error_log_path = '/tmp/error.log'
 
         with self.assertRaises(ValueError) as context:
             AI(mock_config)
@@ -353,7 +351,6 @@ class TestGenerateResponse(unittest.TestCase):
         mock_config.location = 'Test City'
         mock_config.debug = False
         mock_config.stream_responses = True
-        mock_config.stream_print_deltas = False
 
         mock_client = Mock()
         mock_openai_class.return_value = mock_client
@@ -616,7 +613,6 @@ class TestStreamResponseDeltas(unittest.TestCase):
         mock_config.timezone = 'EST'
         mock_config.location = 'Test City'
         mock_config.debug = False
-        mock_config.stream_print_deltas = False
 
         mock_client = Mock()
         mock_openai_class.return_value = mock_client
@@ -648,7 +644,6 @@ class TestStreamResponseDeltas(unittest.TestCase):
         mock_config.timezone = 'EST'
         mock_config.location = 'Test City'
         mock_config.debug = False
-        mock_config.stream_print_deltas = False
 
         mock_client = Mock()
         mock_openai_class.return_value = mock_client

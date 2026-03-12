@@ -30,7 +30,6 @@ class Config:
             "push_to_talk": "disabled",
             "rss_news": "https://feeds.bbci.co.uk/news/rss.xml",
             "rss_news_max_items": "5",
-            "linux_warnings": "enabled",
             "gpt_summary_model" : "gpt-3.5-turbo",
             "gpt_route_model" : "gpt-3.5-turbo",
             "gpt_response_model" : "gpt-3.5-turbo",
@@ -53,22 +52,13 @@ class Config:
             "bot_voice": "enabled",
             "api_timeout": 10,
             "api_retry_attempts": 3,
-            "enable_error_logging": "disabled",
-            "error_log_path": os.path.join(os.path.expanduser("~"), ".sandvoice", "error.log"),
-            "fallback_to_text_on_audio_error": "enabled",
 
             # LLM streaming (Phase 1: stream text assembly)
             "stream_responses": "disabled",
-            # Only used when stream_responses is enabled; useful in debug/CLI.
-            "stream_print_deltas": "disabled",
 
             # Plan 08 Phase 2: streaming TTS (buffer then play)
             "stream_tts": "disabled",
             "stream_tts_boundary": "sentence",  # sentence|paragraph
-            "stream_tts_first_chunk_target_s": 6,
-            "stream_tts_buffer_chunks": 2,
-            "stream_tts_tts_join_timeout_s": 30,
-            "stream_tts_player_join_timeout_s": 60,
             # Wake word mode settings (only active with --wake-word flag)
             "wake_word_enabled": "enabled",
             "wake_phrase": "hey sandvoice",
@@ -77,22 +67,16 @@ class Config:
             "porcupine_keyword_paths": None,
             # Voice Activity Detection
             "vad_enabled": "enabled",
-            "vad_aggressiveness": 3,
             "vad_silence_duration": 1.5,
-            "vad_frame_duration": 30,
             "vad_timeout": 30,
             # Audio feedback
             "wake_confirmation_beep": "enabled",
-            "wake_confirmation_beep_freq": 800,
-            "wake_confirmation_beep_duration": 0.1,
             "visual_state_indicator": "enabled",
             # Barge-in feature (interrupt TTS with wake word)
             "barge_in": "disabled",
 
             # Voice UX
             "voice_ack_earcon": "disabled",
-            "voice_ack_earcon_freq": 600,
-            "voice_ack_earcon_duration": 0.06,
 
             # Background Cache (Plan 20)
             "cache_enabled": "disabled",
@@ -140,7 +124,6 @@ class Config:
         self.log_level = raw if raw in ("warning", "info", "debug") else "warning"
         self.bot_voice = self.get("bot_voice").lower() == "enabled"
         self.push_to_talk = self.get("push_to_talk").lower() == "enabled"
-        self.linux_warnings = self.get("linux_warnings").lower() == "enabled"
         self.sandvoice_path = f"{os.path.dirname(os.path.realpath(__file__))}/../"
         self.plugin_path = f"{self.sandvoice_path}plugins/"
         self.gpt_summary_model = self.get("gpt_summary_model")
@@ -158,31 +141,11 @@ class Config:
         self.cli_input = self.get("cli_input").lower() == "enabled"
         self.api_timeout = self.get("api_timeout")
         self.api_retry_attempts = self.get("api_retry_attempts")
-        self.enable_error_logging = self.get("enable_error_logging").lower() == "enabled"
-        self.error_log_path = self.get("error_log_path")
-        self.fallback_to_text_on_audio_error = self.get("fallback_to_text_on_audio_error").lower() == "enabled"
 
         # Streaming
         self.stream_responses = self.get("stream_responses").lower() == "enabled"
-        self.stream_print_deltas = self.get("stream_print_deltas").lower() == "enabled"
-
         self.stream_tts = self.get("stream_tts").lower() == "enabled"
         self.stream_tts_boundary = str(self.get("stream_tts_boundary") or "sentence").strip().lower()
-        self.stream_tts_first_chunk_target_s = self.get("stream_tts_first_chunk_target_s")
-        self.stream_tts_buffer_chunks = self.get("stream_tts_buffer_chunks")
-        self.stream_tts_tts_join_timeout_s = self.get("stream_tts_tts_join_timeout_s")
-        self.stream_tts_player_join_timeout_s = self.get("stream_tts_player_join_timeout_s")
-
-        # Normalize numeric YAML representations for streaming TTS
-        if isinstance(self.stream_tts_first_chunk_target_s, float) and self.stream_tts_first_chunk_target_s.is_integer():
-            self.stream_tts_first_chunk_target_s = int(self.stream_tts_first_chunk_target_s)
-        if isinstance(self.stream_tts_buffer_chunks, float) and self.stream_tts_buffer_chunks.is_integer():
-            self.stream_tts_buffer_chunks = int(self.stream_tts_buffer_chunks)
-
-        if isinstance(self.stream_tts_tts_join_timeout_s, float) and self.stream_tts_tts_join_timeout_s.is_integer():
-            self.stream_tts_tts_join_timeout_s = int(self.stream_tts_tts_join_timeout_s)
-        if isinstance(self.stream_tts_player_join_timeout_s, float) and self.stream_tts_player_join_timeout_s.is_integer():
-            self.stream_tts_player_join_timeout_s = int(self.stream_tts_player_join_timeout_s)
 
         # Wake word mode settings
         self.wake_word_enabled = self.get("wake_word_enabled").lower() == "enabled"
@@ -192,14 +155,10 @@ class Config:
         self.porcupine_keyword_paths = self.get("porcupine_keyword_paths")
         # Voice Activity Detection
         self.vad_enabled = self.get("vad_enabled").lower() == "enabled"
-        self.vad_aggressiveness = self.get("vad_aggressiveness")
         self.vad_silence_duration = self.get("vad_silence_duration")
-        self.vad_frame_duration = self.get("vad_frame_duration")
         self.vad_timeout = self.get("vad_timeout")
         # Audio feedback
         self.wake_confirmation_beep = self.get("wake_confirmation_beep").lower() == "enabled"
-        self.wake_confirmation_beep_freq = self.get("wake_confirmation_beep_freq")
-        self.wake_confirmation_beep_duration = self.get("wake_confirmation_beep_duration")
         self.visual_state_indicator = self.get("visual_state_indicator").lower() == "enabled"
         # Barge-in feature
         self.barge_in = self.get("barge_in").lower() == "enabled"
@@ -255,46 +214,18 @@ class Config:
             self.voice_ack_earcon = voice_ack_earcon != 0
         else:
             self.voice_ack_earcon = str(voice_ack_earcon or "disabled").lower() == "enabled"
-        self.voice_ack_earcon_freq = self.get("voice_ack_earcon_freq")
-        self.voice_ack_earcon_duration = self.get("voice_ack_earcon_duration")
-
-        # Normalize common YAML representations
-        if isinstance(self.voice_ack_earcon_freq, float) and self.voice_ack_earcon_freq.is_integer():
-            self.voice_ack_earcon_freq = int(self.voice_ack_earcon_freq)
-        elif isinstance(self.voice_ack_earcon_freq, str):
-            freq_str = self.voice_ack_earcon_freq.strip()
-            try:
-                freq_val = float(freq_str)
-            except Exception:
-                freq_val = None
-
-            if freq_val is not None and float(freq_val).is_integer():
-                self.voice_ack_earcon_freq = int(freq_val)
-
-        if isinstance(self.voice_ack_earcon_duration, str):
-            duration_str = self.voice_ack_earcon_duration.strip()
-            try:
-                self.voice_ack_earcon_duration = float(duration_str)
-            except Exception:
-                pass
 
         # Auto-detect channels if not explicitly configured
         if self.channels is None:
             try:
                 self.channels = get_optimal_channels()
-                if self.debug:
-                    print(f"Auto-detected audio channels: {self.channels}")
+                logger.debug("Auto-detected audio channels: %d", self.channels)
             except Exception as e:
                 logger.warning(
                     "Failed to auto-detect audio channels: %s. Falling back to 2 channels.",
                     e
                 )
                 self.channels = 2
-
-        # Deprecation warning for linux_warnings
-        if "linux_warnings" in self.config and self.config["linux_warnings"] != self.defaults["linux_warnings"]:
-            print("WARNING: 'linux_warnings' configuration is deprecated and no longer needed.")
-            print("Platform-specific audio settings are now auto-detected.")
 
         # Log platform and audio device info in debug mode
         if self.debug:
@@ -375,47 +306,15 @@ class Config:
             errors.append("porcupine_access_key must be a string")
 
         # Validate VAD settings
-        if not isinstance(self.vad_aggressiveness, int) or not (0 <= self.vad_aggressiveness <= 3):
-            errors.append("vad_aggressiveness must be between 0 and 3")
-
         if not isinstance(self.vad_silence_duration, (int, float)) or self.vad_silence_duration <= 0:
             errors.append("vad_silence_duration must be a positive number")
-
-        if self.vad_frame_duration not in [10, 20, 30]:
-            errors.append("vad_frame_duration must be 10, 20, or 30")
 
         if not isinstance(self.vad_timeout, (int, float)) or self.vad_timeout <= 0:
             errors.append("vad_timeout must be a positive number")
 
-        # Validate audio feedback settings
-        if not isinstance(self.wake_confirmation_beep_freq, int) or self.wake_confirmation_beep_freq <= 0:
-            errors.append("wake_confirmation_beep_freq must be a positive integer")
-
-        if not isinstance(self.wake_confirmation_beep_duration, (int, float)) or self.wake_confirmation_beep_duration <= 0:
-            errors.append("wake_confirmation_beep_duration must be a positive number")
-
-        if self.voice_ack_earcon:
-            if not isinstance(self.voice_ack_earcon_freq, int) or self.voice_ack_earcon_freq <= 0:
-                errors.append("voice_ack_earcon_freq must be a positive integer")
-
-            if not isinstance(self.voice_ack_earcon_duration, (int, float)) or self.voice_ack_earcon_duration <= 0:
-                errors.append("voice_ack_earcon_duration must be a positive number")
-
         # Validate streaming TTS settings
         if self.stream_tts_boundary not in ["sentence", "paragraph"]:
             errors.append("stream_tts_boundary must be 'sentence' or 'paragraph'")
-
-        if isinstance(self.stream_tts_first_chunk_target_s, bool) or not isinstance(self.stream_tts_first_chunk_target_s, int) or self.stream_tts_first_chunk_target_s < 1:
-            errors.append("stream_tts_first_chunk_target_s must be an integer >= 1")
-
-        if isinstance(self.stream_tts_buffer_chunks, bool) or not isinstance(self.stream_tts_buffer_chunks, int) or self.stream_tts_buffer_chunks < 1:
-            errors.append("stream_tts_buffer_chunks must be an integer >= 1")
-
-        if isinstance(self.stream_tts_tts_join_timeout_s, bool) or not isinstance(self.stream_tts_tts_join_timeout_s, int) or self.stream_tts_tts_join_timeout_s < 1:
-            errors.append("stream_tts_tts_join_timeout_s must be an integer >= 1")
-
-        if isinstance(self.stream_tts_player_join_timeout_s, bool) or not isinstance(self.stream_tts_player_join_timeout_s, int) or self.stream_tts_player_join_timeout_s < 1:
-            errors.append("stream_tts_player_join_timeout_s must be an integer >= 1")
 
         # Report all errors
         if errors:

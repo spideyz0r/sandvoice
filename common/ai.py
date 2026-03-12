@@ -284,7 +284,6 @@ class AI:
             # Only treat explicit boolean True as enabled.
             # This avoids accidental truthiness with Mock() in tests/callers.
             stream_responses = (getattr(self.config, "stream_responses", False) is True)
-            stream_print_deltas = (getattr(self.config, "stream_print_deltas", False) is True)
 
             messages = [
                 {"role": "system", "content": system_role},
@@ -315,10 +314,10 @@ class AI:
 
                 if piece:
                     collected.append(piece)
-                    if self.config.debug and stream_print_deltas:
+                    if self.config.debug:
                         print(piece, end="", flush=True)
 
-            if self.config.debug and stream_print_deltas:
+            if self.config.debug:
                 print("", flush=True)
 
             assistant_content = "".join(collected)
@@ -385,7 +384,6 @@ class AI:
         if extra_info is not None:
             system_role = system_role + "Consider the following to answer your question: " + extra_info
 
-        stream_print_deltas = (getattr(self.config, "stream_print_deltas", False) is True)
         messages = [
             {"role": "system", "content": system_role},
         ] + [{"role": "user", "content": message} for message in self.conversation_history]
@@ -410,13 +408,13 @@ class AI:
 
                 if piece:
                     collected.append(piece)
-                    if self.config.debug and stream_print_deltas:
+                    if self.config.debug:
                         print(piece, end="", flush=True)
                     yield piece
 
             stream_completed = True
         finally:
-            if self.config.debug and stream_print_deltas:
+            if self.config.debug:
                 print("", flush=True)
 
             # Only persist the assistant turn if the stream completed without raising.
@@ -553,10 +551,5 @@ class AI:
             return output_files
         except Exception as e:
             logger.exception("Text-to-speech error")
-
-            if self.config.fallback_to_text_on_audio_error:
-                print(handle_api_error(e, service_name="OpenAI TTS"))
-                return []
-
             print(handle_api_error(e, service_name="OpenAI TTS"))
-            raise
+            return []

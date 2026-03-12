@@ -102,21 +102,15 @@ search_sources: 4
 push_to_talk: disabled
 rss_news: https://feeds.bbci.co.uk/news/rss.xml
 rss_news_max_items: 5
-linux_warnings: enabled
 
 gpt_summary_model: gpt-3.5-turbo
 gpt_route_model: gpt-3.5-turbo
 gpt_response_model: gpt-3.5-turbo
 
 stream_responses: disabled
-stream_print_deltas: disabled
 
 stream_tts: disabled
 stream_tts_boundary: sentence
-stream_tts_first_chunk_target_s: 6
-stream_tts_buffer_chunks: 2
-stream_tts_tts_join_timeout_s: 30
-stream_tts_player_join_timeout_s: 60
 
 speech_to_text_model: whisper-1
 speech_to_text_task: translate
@@ -131,9 +125,6 @@ bot_voice: enabled
 
 api_timeout: 10
 api_retry_attempts: 3
-enable_error_logging: disabled
-error_log_path: /Users/YOUR_USER/.sandvoice/error.log
-fallback_to_text_on_audio_error: enabled
 
 wake_word_enabled: enabled
 wake_phrase: hey sandvoice
@@ -142,21 +133,15 @@ porcupine_access_key: ""
 porcupine_keyword_paths: null
 
 vad_enabled: enabled
-vad_aggressiveness: 3
 vad_silence_duration: 1.5
-vad_frame_duration: 30
 vad_timeout: 30
 
 wake_confirmation_beep: enabled
-wake_confirmation_beep_freq: 800
-wake_confirmation_beep_duration: 0.1
 visual_state_indicator: enabled
 
 barge_in: disabled
 
 voice_ack_earcon: disabled
-voice_ack_earcon_freq: 600
-voice_ack_earcon_duration: 0.06
 
 ```
 
@@ -181,21 +166,15 @@ All configuration keys are loaded from `common/configuration.py` defaults and ca
 - `push_to_talk`: `enabled`/`disabled`; when enabled, prompts for a keypress before recording again
 - `rss_news`: RSS feed URL used by the `news` plugin
 - `rss_news_max_items`: max RSS items read per request
-- `linux_warnings`: `enabled`/`disabled`; deprecated (platform audio is now auto-detected)
 
 - `gpt_summary_model`: model used for summarization (`AI.text_summary()`)
 - `gpt_route_model`: model used for routing (`AI.define_route()`)
 - `gpt_response_model`: model used for normal responses (`AI.generate_response()`)
 
-- `stream_responses`: `enabled`/`disabled`; stream LLM responses and assemble final text from deltas
-- `stream_print_deltas`: `enabled`/`disabled`; when streaming and `log_level: debug` is set, print deltas as they arrive
+- `stream_responses`: `enabled`/`disabled`; stream LLM responses and assemble final text from deltas. When `log_level: debug` is set, deltas are printed as they arrive.
 
 - `stream_tts`: `enabled`/`disabled`; when streaming responses, generate and play TTS chunks before the full response completes (default route only)
 - `stream_tts_boundary`: `sentence` or `paragraph`; chunk boundary preference
-- `stream_tts_first_chunk_target_s`: integer seconds; target size of the first speakable chunk
-- `stream_tts_buffer_chunks`: integer; how many text chunks to buffer ahead of playback
-- `stream_tts_tts_join_timeout_s`: integer seconds; join timeout for the TTS worker thread
-- `stream_tts_player_join_timeout_s`: integer seconds; join timeout for the audio player thread
 - `speech_to_text_model`: model used for speech-to-text
 - `speech_to_text_task`: `translate` or `transcribe` (translate outputs English; transcribe keeps the spoken language)
 - `speech_to_text_language`: optional ISO-639-1 hint for transcription (e.g. `pt`, `en`); empty means auto-detect
@@ -209,9 +188,6 @@ All configuration keys are loaded from `common/configuration.py` defaults and ca
 
 - `api_timeout`: OpenAI client timeout in seconds
 - `api_retry_attempts`: retry attempts for OpenAI calls (backoff)
-- `enable_error_logging`: `enabled`/`disabled`; writes errors to a file
-- `error_log_path`: file path used when error logging is enabled (absolute path)
-- `fallback_to_text_on_audio_error`: `enabled`/`disabled`; if enabled, keep going if TTS/audio fails
 
 - `wake_word_enabled`: `enabled`/`disabled`; wake word functionality toggle (used by `--wake-word` mode)
 - `wake_phrase`: wake phrase keyword name (built-in Porcupine keyword) when not using custom `.ppn`
@@ -220,21 +196,15 @@ All configuration keys are loaded from `common/configuration.py` defaults and ca
 - `porcupine_keyword_paths`: custom Porcupine keyword model path(s) (`.ppn`) or `null`
 
 - `vad_enabled`: `enabled`/`disabled`; voice activity detection toggle
-- `vad_aggressiveness`: 0-3
 - `vad_silence_duration`: seconds of silence before stopping recording
-- `vad_frame_duration`: 10, 20, or 30 (ms)
 - `vad_timeout`: max seconds to wait for speech
 
-- `wake_confirmation_beep`: `enabled`/`disabled`; play beep on wake
-- `wake_confirmation_beep_freq`: beep frequency (Hz)
-- `wake_confirmation_beep_duration`: beep duration (seconds)
+- `wake_confirmation_beep`: `enabled`/`disabled`; play beep on wake (800 Hz, 100 ms)
 - `visual_state_indicator`: `enabled`/`disabled`; show terminal state indicators in wake word mode
 
 - `barge_in`: `enabled`/`disabled`; interrupt TTS in `--wake-word` mode by saying the wake word
 
-- `voice_ack_earcon`: `enabled`/`disabled`; play a short ack earcon after recording and before processing
-- `voice_ack_earcon_freq`: earcon frequency (Hz, integer)
-- `voice_ack_earcon_duration`: earcon duration (seconds)
+- `voice_ack_earcon`: `enabled`/`disabled`; play a short ack earcon after recording and before processing (600 Hz, 60 ms)
 
 - `scheduler_enabled`: `enabled`/`disabled`; enables the background task scheduler
 - `scheduler_poll_interval`: seconds between scheduler ticks (default `30`)

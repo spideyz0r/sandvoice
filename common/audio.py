@@ -3,7 +3,6 @@
 import contextlib
 import re, os, time, threading, pyaudio, wave, lameenc, logging, queue
 from pynput import keyboard
-from ctypes import *
 from common.error_handling import handle_file_error
 
 logger = logging.getLogger(__name__)
@@ -39,55 +38,19 @@ class Audio:
 
     def initialize_audio(self):
         try:
-            if not self.config.linux_warnings:
-                ERROR_HANDLER_FUNC = CFUNCTYPE(None, c_char_p, c_int, c_char_p, c_int, c_char_p)
-                c_error_handler = ERROR_HANDLER_FUNC(self.py_error_handler)
-                f = self.get_libasound_path()
-                if f is None:
-                    error_msg = "libasound library not found. Please install ALSA (libasound2) or ensure it is available in a standard library path."
-                    logger.error("%s", error_msg)
-                    raise RuntimeError(error_msg)
-                logger.debug("Loading libasound from: %s", f)
-                asound = cdll.LoadLibrary(f)
-                asound.snd_lib_error_set_handler(c_error_handler)
             self.audio = pyaudio.PyAudio()
         except OSError as e:
             error_msg = "Audio hardware not found. Please connect audio device."
             logger.error("Audio initialization error: %s", e)
             print(f"Error: {error_msg}")
-            if self.config.fallback_to_text_on_audio_error:
-                print("Continuing in text-only mode. Use --cli flag for better experience.")
-                self.audio = None
-            else:
-                raise RuntimeError(error_msg)
+            print("Continuing in text-only mode. Use --cli flag for better experience.")
+            self.audio = None
         except Exception as e:
             error_msg = f"Failed to initialize audio: {str(e)}"
             logger.error("Audio initialization error: %s", e)
             print(f"Error: {error_msg}")
-            if self.config.fallback_to_text_on_audio_error:
-                print("Continuing in text-only mode. Use --cli flag for better experience.")
-                self.audio = None
-            else:
-                raise
-
-    def get_libasound_path(self):
-        lib_paths = [
-            '/usr/lib',
-            '/usr/lib64',
-            '/lib',
-            '/lib64',
-        ]
-        lib_pattern = re.compile(r'libasound\.so\..*')
-        for file in lib_paths:
-            if not os.path.isdir(file):
-                continue
-            for f in os.listdir(file):
-                if lib_pattern.match(f):
-                    return os.path.join(file, f)
-        return None
-
-    def py_error_handler(self, filename, line, function, err, fmt):
-        pass
+            print("Continuing in text-only mode. Use --cli flag for better experience.")
+            self.audio = None
 
     def on_press(self, key):
         if key == keyboard.Key.esc:

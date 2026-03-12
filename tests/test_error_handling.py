@@ -229,11 +229,9 @@ class TestSetupErrorLogging(unittest.TestCase):
             root.removeHandler(h)
         root.setLevel(self._orig_root_level)
 
-    def _make_config(self, log_level="warning", enable_error_logging=False, error_log_path=""):
+    def _make_config(self, log_level="warning"):
         cfg = Mock()
         cfg.log_level = log_level
-        cfg.enable_error_logging = enable_error_logging
-        cfg.error_log_path = error_log_path
         return cfg
 
     def test_console_handler_always_installed(self):
@@ -282,47 +280,6 @@ class TestSetupErrorLogging(unittest.TestCase):
         self.assertEqual(console.level, logging.DEBUG)
         self.assertEqual(root.level, logging.DEBUG)
 
-    def test_file_logging_enabled(self):
-        """File handler is created when enable_error_logging is True."""
-        with tempfile.TemporaryDirectory() as tmpdir:
-            log_path = os.path.join(tmpdir, "test.log")
-            cfg = self._make_config(enable_error_logging=True, error_log_path=log_path)
-            setup_error_logging(cfg)
-
-            test_logger = logging.getLogger("test_file")
-            test_logger.error("Test error message")
-            for h in logging.getLogger().handlers:
-                h.flush()
-
-            self.assertTrue(os.path.exists(log_path))
-            with open(log_path) as f:
-                self.assertIn("Test error message", f.read())
-
-    def test_file_logging_disabled_no_file_handler(self):
-        """No file handler added when enable_error_logging is False."""
-        cfg = self._make_config(enable_error_logging=False)
-        setup_error_logging(cfg)
-        root = logging.getLogger()
-        file_handlers = [h for h in root.handlers if getattr(h, "_sandvoice_file", False)]
-        self.assertEqual(len(file_handlers), 0)
-
-    def test_logging_creates_directory(self):
-        """File logging setup creates the log directory if it doesn't exist."""
-        with tempfile.TemporaryDirectory() as tmpdir:
-            log_path = os.path.join(tmpdir, "subdir", "test.log")
-            cfg = self._make_config(enable_error_logging=True, error_log_path=log_path)
-            setup_error_logging(cfg)
-            self.assertTrue(os.path.exists(os.path.dirname(log_path)))
-
-    def test_file_logging_empty_path_logs_error_and_skips_handler(self):
-        """When enable_error_logging=True but error_log_path is empty, log an error and add no file handler."""
-        cfg = self._make_config(enable_error_logging=True, error_log_path="")
-        with self.assertLogs("common.error_handling", level="ERROR") as captured:
-            setup_error_logging(cfg)
-        root = logging.getLogger()
-        file_handlers = [h for h in root.handlers if getattr(h, "_sandvoice_file", False)]
-        self.assertEqual(len(file_handlers), 0)
-        self.assertTrue(any("error_log_path" in msg for msg in captured.output))
 
 
 if __name__ == '__main__':
