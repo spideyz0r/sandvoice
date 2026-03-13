@@ -5,6 +5,26 @@ from common.audio_device_detection import get_optimal_channels, log_device_info
 logger = logging.getLogger(__name__)
 
 
+def _parse_exact_int(value):
+    """Convert value to int only if it is already an exact integer representation.
+
+    Non-integer floats (e.g. 800.9) are returned unchanged so validate_config()
+    can reject them with a clear error.
+    """
+    if isinstance(value, bool):
+        return value  # bool is a subclass of int; let validation reject it
+    if isinstance(value, int):
+        return value
+    if isinstance(value, float) and value.is_integer():
+        return int(value)
+    if isinstance(value, str):
+        try:
+            return int(value)
+        except ValueError:
+            pass
+    return value
+
+
 class Config:
     def __init__(self):
         self.config_file = os.path.join(os.path.expanduser("~"), ".sandvoice", "config.yaml")
@@ -175,10 +195,7 @@ class Config:
         self.vad_timeout = self.get("vad_timeout")
         # Audio feedback
         self.wake_confirmation_beep = self.get("wake_confirmation_beep").lower() == "enabled"
-        try:
-            self.wake_confirmation_beep_freq = int(self.get("wake_confirmation_beep_freq"))
-        except (TypeError, ValueError):
-            self.wake_confirmation_beep_freq = self.get("wake_confirmation_beep_freq")
+        self.wake_confirmation_beep_freq = _parse_exact_int(self.get("wake_confirmation_beep_freq"))
         try:
             self.wake_confirmation_beep_duration = float(self.get("wake_confirmation_beep_duration"))
         except (TypeError, ValueError):
@@ -238,10 +255,7 @@ class Config:
             self.voice_ack_earcon = voice_ack_earcon != 0
         else:
             self.voice_ack_earcon = str(voice_ack_earcon or "disabled").lower() == "enabled"
-        try:
-            self.voice_ack_earcon_freq = int(self.get("voice_ack_earcon_freq"))
-        except (TypeError, ValueError):
-            self.voice_ack_earcon_freq = self.get("voice_ack_earcon_freq")
+        self.voice_ack_earcon_freq = _parse_exact_int(self.get("voice_ack_earcon_freq"))
         try:
             self.voice_ack_earcon_duration = float(self.get("voice_ack_earcon_duration"))
         except (TypeError, ValueError):
