@@ -314,11 +314,6 @@ class AI:
 
                 if piece:
                     collected.append(piece)
-                    if self.config.debug:
-                        print(piece, end="", flush=True)
-
-            if self.config.debug:
-                print("", flush=True)
 
             assistant_content = "".join(collected)
             self.conversation_history.append(f"{self.config.botname}: " + assistant_content)

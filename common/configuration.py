@@ -175,8 +175,14 @@ class Config:
         self.vad_timeout = self.get("vad_timeout")
         # Audio feedback
         self.wake_confirmation_beep = self.get("wake_confirmation_beep").lower() == "enabled"
-        self.wake_confirmation_beep_freq = self.get("wake_confirmation_beep_freq")
-        self.wake_confirmation_beep_duration = self.get("wake_confirmation_beep_duration")
+        try:
+            self.wake_confirmation_beep_freq = int(self.get("wake_confirmation_beep_freq"))
+        except (TypeError, ValueError):
+            self.wake_confirmation_beep_freq = self.get("wake_confirmation_beep_freq")
+        try:
+            self.wake_confirmation_beep_duration = float(self.get("wake_confirmation_beep_duration"))
+        except (TypeError, ValueError):
+            self.wake_confirmation_beep_duration = self.get("wake_confirmation_beep_duration")
         self.visual_state_indicator = self.get("visual_state_indicator").lower() == "enabled"
         # Barge-in feature
         self.barge_in = self.get("barge_in").lower() == "enabled"
@@ -232,8 +238,14 @@ class Config:
             self.voice_ack_earcon = voice_ack_earcon != 0
         else:
             self.voice_ack_earcon = str(voice_ack_earcon or "disabled").lower() == "enabled"
-        self.voice_ack_earcon_freq = self.get("voice_ack_earcon_freq")
-        self.voice_ack_earcon_duration = self.get("voice_ack_earcon_duration")
+        try:
+            self.voice_ack_earcon_freq = int(self.get("voice_ack_earcon_freq"))
+        except (TypeError, ValueError):
+            self.voice_ack_earcon_freq = self.get("voice_ack_earcon_freq")
+        try:
+            self.voice_ack_earcon_duration = float(self.get("voice_ack_earcon_duration"))
+        except (TypeError, ValueError):
+            self.voice_ack_earcon_duration = self.get("voice_ack_earcon_duration")
 
         # Auto-detect channels if not explicitly configured
         if self.channels is None:

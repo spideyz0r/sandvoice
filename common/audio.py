@@ -39,11 +39,10 @@ class Audio:
     def initialize_audio(self):
         try:
             self.audio = pyaudio.PyAudio()
-        except OSError as e:
-            logger.error("Audio initialization error: %s", e)
-            self.audio = None
         except Exception as e:
             logger.error("Audio initialization error: %s", e)
+            print(f"Error: Audio initialization failed: {e}")
+            print("Use --cli flag for text-only mode.")
             self.audio = None
 
     def on_press(self, key):

@@ -98,7 +98,7 @@ language: English
 verbosity: brief
 log_level: warning
 enable_error_logging: disabled
-error_log_path: ""
+error_log_path: /Users/YOUR_USER/.sandvoice/error.log
 summary_words: 100
 search_sources: 4
 push_to_talk: disabled
