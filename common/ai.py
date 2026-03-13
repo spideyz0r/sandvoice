@@ -304,6 +304,10 @@ class AI:
                 stream=True,
             )
 
+            # Deltas are not printed here — callers always print the assembled response,
+            # so printing deltas too would cause duplicate output (deltas + full response).
+            # For per-delta debug visibility, use stream_response_deltas() instead, which
+            # gates the final assembled-response print on not-debug to avoid duplication.
             collected = []
             for event in stream:
                 try:
