@@ -59,6 +59,10 @@ plan/
 **Document**: [completed/21-task-scheduler.md](./completed/21-task-scheduler.md)
 **Description**: Lightweight SQLite-backed in-process scheduler supporting cron, interval, and one-shot tasks. Powers Plan 20 periodic cache refresh and future timers/reminders.
 
+### Priority 27: Scheduled Tasks File and Lifecycle Management
+**Document**: [completed/27-tasks-file-and-lifecycle.md](./completed/27-tasks-file-and-lifecycle.md)
+**Description**: Move scheduled task definitions to a dedicated `~/.sandvoice/tasks.yaml` file and make it the sole source of truth — tasks removed from the file are automatically deleted from the DB on startup. `tasks.yaml` replaces the `tasks:` key in `config.yaml` with no backwards compatibility.
+
 ### Priority 28: Logging Level Refactor
 **Document**: [completed/28-logging-level-refactor.md](./completed/28-logging-level-refactor.md)
 **Description**: Replace `debug: enabled/disabled` with a standard `log_level: warning|info|debug` config key and remove ~200 scattered `if self.config.debug: logger.*()` guards — the logging framework is the filter, not the code. Prerequisite for Plan 23 (timing summary).
@@ -146,11 +150,6 @@ plan/
 ### Priority 26: Configuration Audit and Simplification
 **Document**: [backlog/26-config-audit-simplification.md](./backlog/26-config-audit-simplification.md)
 **Description**: Audit all ~50 config keys, remove already-deprecated keys (linux_warnings), hardcode internal implementation knobs, and subsume stream_print_deltas into debug. Targets ~30-40% reduction in user-facing config surface with no behavior change.
-
-### Priority 27: Scheduled Tasks File and Lifecycle Management
-**Document**: [backlog/27-tasks-file-and-lifecycle.md](./backlog/27-tasks-file-and-lifecycle.md)
-**Description**: Move scheduled task definitions to a dedicated `~/.sandvoice/tasks.yaml` file and make it the sole source of truth — tasks removed from the file are automatically deleted from the DB on startup. `tasks.yaml` replaces the `tasks:` key in `config.yaml` with no backwards compatibility.
-
 
 ### Future Enhancements
 **Document**: [backlog/FUTURE.md](./backlog/FUTURE.md)
