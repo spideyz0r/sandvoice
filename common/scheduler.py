@@ -161,14 +161,13 @@ class TaskScheduler:
         action_type: str,
         action_payload: dict,
     ) -> str:
-        name, schedule_type, schedule_value, action_type, action_payload = self._normalize_task_definition(
+        name, schedule_type, schedule_value, action_type, action_payload, first_run = self._normalize_task_definition(
             name=name,
             schedule_type=schedule_type,
             schedule_value=schedule_value,
             action_type=action_type,
             action_payload=action_payload,
         )
-        first_run = self._first_run(schedule_type, schedule_value)
         task_id = self._db.add_task(
             name=name,
             schedule_type=schedule_type,
@@ -205,7 +204,7 @@ class TaskScheduler:
                 continue
             tasks_in_file.add(name)
             try:
-                _, schedule_type, schedule_value, action_type, action_payload = self._normalize_task_definition(
+                _, schedule_type, schedule_value, action_type, action_payload, _first_run = self._normalize_task_definition(
                     name=name,
                     schedule_type=task_def["schedule_type"],
                     schedule_value=task_def["schedule_value"],
@@ -307,9 +306,16 @@ class TaskScheduler:
 
         # Validate schedule syntax/value during the first pass so malformed
         # task files cannot trigger DB deletions before registration fails.
-        self._first_run(schedule_type, normalized_schedule_value)
+        first_run = self._first_run(schedule_type, normalized_schedule_value)
 
-        return normalized_name, schedule_type, normalized_schedule_value, action_type, normalized_action_payload
+        return (
+            normalized_name,
+            schedule_type,
+            normalized_schedule_value,
+            action_type,
+            normalized_action_payload,
+            first_run,
+        )
 
     def pause_task(self, task_id: str):
         self._db.set_status(task_id, "paused")

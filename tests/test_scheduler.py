@@ -477,7 +477,7 @@ class TestTaskScheduler(unittest.TestCase):
         ])
         tasks = self.db.get_all_tasks()
         self.assertEqual(1, len(tasks))
-        self.assertEqual("morning-reminder", tasks[0].name)
+        self.assertEqual({"morning-reminder"}, {task.name for task in tasks})
 
     def test_sync_tasks_deletes_db_tasks_missing_from_file(self):
         keep_id = self.db.add_task(

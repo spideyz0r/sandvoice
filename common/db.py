@@ -168,7 +168,9 @@ class SchedulerDB:
 
     def get_all_tasks(self) -> List[ScheduledTask]:
         with self._lock:
-            rows = self._conn.execute("SELECT * FROM scheduled_tasks").fetchall()
+            rows = self._conn.execute(
+                "SELECT * FROM scheduled_tasks ORDER BY created_at ASC, id ASC"
+            ).fetchall()
         return [self._row_to_task(row) for row in rows]
 
     def delete_task(self, task_id: str):
