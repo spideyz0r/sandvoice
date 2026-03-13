@@ -39,9 +39,14 @@ class Audio:
     def initialize_audio(self):
         try:
             self.audio = pyaudio.PyAudio()
-        except Exception as e:
+        except OSError as e:
             logger.error("Audio initialization error: %s", e)
             print("Error: Audio device not found or unavailable.")
+            print("Use --cli flag for text-only mode.")
+            self.audio = None
+        except Exception as e:
+            logger.error("Audio initialization error: %s", e)
+            print("Error: Audio initialization failed.")
             print("Use --cli flag for text-only mode.")
             self.audio = None
 
