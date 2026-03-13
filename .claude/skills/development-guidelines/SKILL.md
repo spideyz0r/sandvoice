@@ -482,20 +482,36 @@ gh pr edit <PR_NUMBER> --add-reviewer "copilot-pull-request-reviewer[bot]"
 
 ## Checklist Before PR
 
+**Patterns**
+- [ ] Read `docs/PATTERNS.md` and applied every applicable section
+- [ ] Logging: `logger = logging.getLogger(__name__)` at module top in all `common/` modules — never bare `logging.error()` / `logging.info()`, never `print()` for diagnostics
+- [ ] Paths: `os.path.expanduser('~')` and `os.path.join()` — no `os.environ['HOME']`, no string concatenation
+- [ ] No bare `except:` — always `except SpecificError as e` or `except Exception as e`
+- [ ] No function >50 lines, no nesting >3 levels
+- [ ] All external calls (API, file I/O, network) wrapped in try/except
+
+**Implementation**
 - [ ] Feature branch from latest main
 - [ ] Implements planning doc requirements
 - [ ] All acceptance criteria met
 - [ ] Code matches existing style
 - [ ] No over-engineering
-- [ ] Comprehensive error handling
-- [ ] All tests pass
-- [ ] Coverage >80%
+- [ ] PR-specific proactive review items addressed (from living implementation doc)
+
+**Tests**
+- [ ] All tests pass: `pytest`
+- [ ] Coverage >80%: `pytest --cov --cov-report=term-missing`
+- [ ] No test touches real APIs, real audio hardware, or real filesystem outside tmp
 - [ ] Tested on Mac M1
 - [ ] Tested on Pi 3B (when applicable)
+
+**Documentation**
 - [ ] Config changes documented
 - [ ] README updated (if user-facing)
-- [ ] plan/INDEX.md updated
-- [ ] Commits don't mention Claude
+- [ ] `plan/INDEX.md` updated (🚧 when starting, ✅ when all PRs merged)
+
+**Git & PR**
+- [ ] Commits don't mention Claude or AI
 - [ ] PR created with proper description
 - [ ] PR references planning doc
 - [ ] Copilot reviewer added to PR

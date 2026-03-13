@@ -1,5 +1,6 @@
 import time
 import logging
+import os
 import json
 from functools import wraps
 
@@ -18,13 +19,13 @@ _NON_RETRYABLE_EXCEPTIONS = (
 
 def setup_error_logging(config):
     """
-    Configure SandVoice logging handlers based on log_level.
+    Configure SandVoice logging handlers based on log_level and file logging settings.
 
     Always installs a console handler (find-or-create, idempotent). Re-calling with
     a different log_level updates the handler level in place.
 
     Args:
-        config: Configuration object with log_level
+        config: Configuration object with log_level, enable_error_logging, error_log_path
     """
     level = _LOG_LEVELS.get(getattr(config, "log_level", "warning"), logging.WARNING)
 
@@ -42,6 +43,37 @@ def setup_error_logging(config):
         "%(asctime)s.%(msecs)03d %(levelname)s %(name)s: %(message)s",
         datefmt="%H:%M:%S",
     ))
+
+    _setup_file_handler_if_configured(config, root)
+
+
+def _setup_file_handler_if_configured(config, root):
+    """Add a file handler for error logging if enable_error_logging is set."""
+    enable_error_logging = getattr(config, "enable_error_logging", False)
+    if not enable_error_logging:
+        return
+
+    has_sandvoice_file = any(getattr(h, "_sandvoice_file", False) for h in root.handlers)
+    if has_sandvoice_file:
+        return
+
+    error_log_path = getattr(config, "error_log_path", "")
+    if not error_log_path:
+        logger.error("enable_error_logging is True but error_log_path is not set")
+        return
+
+    log_path = os.path.expanduser(error_log_path)
+    log_dir = os.path.dirname(log_path)
+    if log_dir:
+        os.makedirs(log_dir, exist_ok=True)
+
+    file_handler = logging.FileHandler(log_path)
+    file_handler.setLevel(logging.ERROR)
+    file_handler.setFormatter(logging.Formatter(
+        "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+    ))
+    file_handler._sandvoice_file = True
+    root.addHandler(file_handler)
 
 
 def retry_with_backoff(max_attempts=3, initial_delay=1):

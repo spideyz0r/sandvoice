@@ -97,6 +97,8 @@ unit: metric
 language: English
 verbosity: brief
 log_level: warning
+enable_error_logging: disabled
+error_log_path: ""
 summary_words: 100
 search_sources: 4
 push_to_talk: disabled
@@ -111,6 +113,7 @@ stream_responses: disabled
 
 stream_tts: disabled
 stream_tts_boundary: sentence
+stream_tts_first_chunk_target_s: 6
 
 speech_to_text_model: whisper-1
 speech_to_text_task: translate
@@ -139,11 +142,15 @@ vad_frame_duration: 30
 vad_timeout: 30
 
 wake_confirmation_beep: enabled
+wake_confirmation_beep_freq: 800
+wake_confirmation_beep_duration: 0.1
 visual_state_indicator: enabled
 
 barge_in: disabled
 
 voice_ack_earcon: disabled
+voice_ack_earcon_freq: 600
+voice_ack_earcon_duration: 0.06
 
 ```
 
@@ -163,6 +170,8 @@ All configuration keys are loaded from `common/configuration.py` defaults and ca
 - `language`: language string for assistant replies (used in system prompt)
 - `verbosity`: `brief`, `normal`, or `detailed` (controls default response length)
 - `log_level`: `warning` (default), `info`, or `debug` — controls logging verbosity. `warning` = silent unless something is wrong; `info` = startup events and milestones; `debug` = full internal detail. Replaces the removed `debug: enabled/disabled` key.
+- `enable_error_logging`: `enabled`/`disabled`; when enabled, writes errors to a log file at `error_log_path`
+- `error_log_path`: absolute path to the error log file (required when `enable_error_logging: enabled`)
 - `summary_words`: target word count for summaries (used by some plugins)
 - `search_sources`: number of sources to use for search-like plugins (plugin-dependent)
 - `push_to_talk`: `enabled`/`disabled`; when enabled, prompts for a keypress before recording again
@@ -177,6 +186,7 @@ All configuration keys are loaded from `common/configuration.py` defaults and ca
 
 - `stream_tts`: `enabled`/`disabled`; when streaming responses, generate and play TTS chunks before the full response completes (default route only)
 - `stream_tts_boundary`: `sentence` or `paragraph`; chunk boundary preference
+- `stream_tts_first_chunk_target_s`: target spoken duration (seconds) to accumulate before playing the first TTS chunk (default `6`; 0 = play immediately)
 - `speech_to_text_model`: model used for speech-to-text
 - `speech_to_text_task`: `translate` or `transcribe` (translate outputs English; transcribe keeps the spoken language)
 - `speech_to_text_language`: optional ISO-639-1 hint for transcription (e.g. `pt`, `en`); empty means auto-detect
@@ -203,12 +213,16 @@ All configuration keys are loaded from `common/configuration.py` defaults and ca
 - `vad_frame_duration`: 10, 20, or 30 (ms)
 - `vad_timeout`: max seconds to wait for speech
 
-- `wake_confirmation_beep`: `enabled`/`disabled`; play beep on wake (800 Hz, 100 ms)
+- `wake_confirmation_beep`: `enabled`/`disabled`; play beep on wake
+- `wake_confirmation_beep_freq`: frequency in Hz for the wake confirmation beep (default `800`)
+- `wake_confirmation_beep_duration`: duration in seconds for the wake confirmation beep (default `0.1`)
 - `visual_state_indicator`: `enabled`/`disabled`; show terminal state indicators in wake word mode
 
 - `barge_in`: `enabled`/`disabled`; interrupt TTS in `--wake-word` mode by saying the wake word
 
-- `voice_ack_earcon`: `enabled`/`disabled`; play a short ack earcon after recording and before processing (600 Hz, 60 ms)
+- `voice_ack_earcon`: `enabled`/`disabled`; play a short ack earcon after recording and before processing
+- `voice_ack_earcon_freq`: frequency in Hz for the ack earcon (default `600`)
+- `voice_ack_earcon_duration`: duration in seconds for the ack earcon (default `0.06`)
 
 - `scheduler_enabled`: `enabled`/`disabled`; enables the background task scheduler
 - `scheduler_poll_interval`: seconds between scheduler ticks (default `30`)

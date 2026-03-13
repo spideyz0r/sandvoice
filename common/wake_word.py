@@ -189,8 +189,8 @@ class WakeWordMode:
         if self.config.wake_confirmation_beep:
             try:
                 self.confirmation_beep_path = create_confirmation_beep(
-                    freq=800,
-                    duration=0.1,
+                    freq=self.config.wake_confirmation_beep_freq,
+                    duration=self.config.wake_confirmation_beep_duration,
                     tmp_path=self.config.tmp_files_path
                 )
                 logger.debug("Confirmation beep created at: %s", self.confirmation_beep_path)
@@ -203,8 +203,8 @@ class WakeWordMode:
         ):
             try:
                 self.ack_earcon_path = create_ack_earcon(
-                    freq=600,
-                    duration=0.06,
+                    freq=self.config.voice_ack_earcon_freq,
+                    duration=self.config.voice_ack_earcon_duration,
                     tmp_path=self.config.tmp_files_path,
                 )
                 logger.debug("Ack earcon created at: %s", self.ack_earcon_path)
@@ -1217,7 +1217,8 @@ class WakeWordMode:
             boundary = str(getattr(self.config, "stream_tts_boundary", "sentence") or "sentence").strip().lower()
             # Rough heuristic for English: ~35 characters/sec spoken.
             chars_per_second = 35
-            first_min_chars = max(120, int(6 * chars_per_second))
+            target_s = int(getattr(self.config, "stream_tts_first_chunk_target_s", 6) or 6)
+            first_min_chars = max(120, int(target_s * chars_per_second))
             next_min_chars = 200
 
             buffer = ""

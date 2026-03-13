@@ -59,6 +59,8 @@ class TestAIInitialization(unittest.TestCase):
         """Test initialization fails without API key"""
         del os.environ['OPENAI_API_KEY']
         mock_config = Mock()
+        mock_config.enable_error_logging = False
+        mock_config.error_log_path = '/tmp/error.log'
 
         with self.assertRaises(ValueError) as context:
             AI(mock_config)

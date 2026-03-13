@@ -18,6 +18,8 @@ class TestWakeWordModeInitialization(unittest.TestCase):
         self.mock_config.wake_word_sensitivity = 0.5
         self.mock_config.porcupine_access_key = "test-key-123"
         self.mock_config.wake_confirmation_beep = True
+        self.mock_config.wake_confirmation_beep_freq = 800
+        self.mock_config.wake_confirmation_beep_duration = 0.1
         self.mock_config.tmp_files_path = "/tmp/test/"
         self.mock_config.visual_state_indicator = False
 
@@ -64,6 +66,8 @@ class TestWakeWordModeInitialize(unittest.TestCase):
         self.mock_config.porcupine_access_key = "test-key-123"
         self.mock_config.porcupine_keyword_paths = None
         self.mock_config.wake_confirmation_beep = True
+        self.mock_config.wake_confirmation_beep_freq = 800
+        self.mock_config.wake_confirmation_beep_duration = 0.1
         self.mock_config.tmp_files_path = "/tmp/test/"
 
         self.mock_ai = Mock()
@@ -116,6 +120,8 @@ class TestWakeWordModeInitialize(unittest.TestCase):
     def test_initialize_creates_ack_earcon_when_enabled(self, mock_beep, mock_ack, mock_porcupine_create):
         self.mock_config.bot_voice = True
         self.mock_config.voice_ack_earcon = True
+        self.mock_config.voice_ack_earcon_freq = 600
+        self.mock_config.voice_ack_earcon_duration = 0.06
 
         mock_porcupine = Mock()
         mock_porcupine.sample_rate = 16000
@@ -1024,6 +1030,7 @@ class TestWakeWordModeResponding(unittest.TestCase):
         self.mock_config.visual_state_indicator = False
         self.mock_config.barge_in = False
         self.mock_config.tmp_files_path = "/tmp/test/"
+        self.mock_config.stream_tts_first_chunk_target_s = 6
 
         self.mock_ai = Mock()
         self.mock_audio = Mock()

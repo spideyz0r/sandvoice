@@ -52,6 +52,8 @@ class Config:
             "bot_voice": "enabled",
             "api_timeout": 10,
             "api_retry_attempts": 3,
+            "enable_error_logging": "disabled",
+            "error_log_path": os.path.join(os.path.expanduser("~"), ".sandvoice", "error.log"),
 
             # LLM streaming (Phase 1: stream text assembly)
             "stream_responses": "disabled",
@@ -59,6 +61,7 @@ class Config:
             # Plan 08 Phase 2: streaming TTS (buffer then play)
             "stream_tts": "disabled",
             "stream_tts_boundary": "sentence",  # sentence|paragraph
+            "stream_tts_first_chunk_target_s": 6,
             # Wake word mode settings (only active with --wake-word flag)
             "wake_word_enabled": "enabled",
             "wake_phrase": "hey sandvoice",
@@ -73,12 +76,16 @@ class Config:
             "vad_timeout": 30,
             # Audio feedback
             "wake_confirmation_beep": "enabled",
+            "wake_confirmation_beep_freq": 800,
+            "wake_confirmation_beep_duration": 0.1,
             "visual_state_indicator": "enabled",
             # Barge-in feature (interrupt TTS with wake word)
             "barge_in": "disabled",
 
             # Voice UX
             "voice_ack_earcon": "disabled",
+            "voice_ack_earcon_freq": 600,
+            "voice_ack_earcon_duration": 0.06,
 
             # Background Cache (Plan 20)
             "cache_enabled": "disabled",
@@ -143,11 +150,16 @@ class Config:
         self.cli_input = self.get("cli_input").lower() == "enabled"
         self.api_timeout = self.get("api_timeout")
         self.api_retry_attempts = self.get("api_retry_attempts")
+        self.enable_error_logging = self.get("enable_error_logging").lower() == "enabled"
+        self.error_log_path = self.get("error_log_path")
 
         # Streaming
         self.stream_responses = self.get("stream_responses").lower() == "enabled"
         self.stream_tts = self.get("stream_tts").lower() == "enabled"
         self.stream_tts_boundary = str(self.get("stream_tts_boundary") or "sentence").strip().lower()
+        self.stream_tts_first_chunk_target_s = self.get("stream_tts_first_chunk_target_s")
+        if isinstance(self.stream_tts_first_chunk_target_s, float) and self.stream_tts_first_chunk_target_s.is_integer():
+            self.stream_tts_first_chunk_target_s = int(self.stream_tts_first_chunk_target_s)
 
         # Wake word mode settings
         self.wake_word_enabled = self.get("wake_word_enabled").lower() == "enabled"
@@ -163,6 +175,8 @@ class Config:
         self.vad_timeout = self.get("vad_timeout")
         # Audio feedback
         self.wake_confirmation_beep = self.get("wake_confirmation_beep").lower() == "enabled"
+        self.wake_confirmation_beep_freq = self.get("wake_confirmation_beep_freq")
+        self.wake_confirmation_beep_duration = self.get("wake_confirmation_beep_duration")
         self.visual_state_indicator = self.get("visual_state_indicator").lower() == "enabled"
         # Barge-in feature
         self.barge_in = self.get("barge_in").lower() == "enabled"
@@ -218,6 +232,8 @@ class Config:
             self.voice_ack_earcon = voice_ack_earcon != 0
         else:
             self.voice_ack_earcon = str(voice_ack_earcon or "disabled").lower() == "enabled"
+        self.voice_ack_earcon_freq = self.get("voice_ack_earcon_freq")
+        self.voice_ack_earcon_duration = self.get("voice_ack_earcon_duration")
 
         # Auto-detect channels if not explicitly configured
         if self.channels is None:
@@ -322,9 +338,25 @@ class Config:
         if not isinstance(self.vad_timeout, (int, float)) or self.vad_timeout <= 0:
             errors.append("vad_timeout must be a positive number")
 
+        # Validate audio feedback settings
+        if not isinstance(self.wake_confirmation_beep_freq, int) or self.wake_confirmation_beep_freq <= 0:
+            errors.append("wake_confirmation_beep_freq must be a positive integer")
+
+        if not isinstance(self.wake_confirmation_beep_duration, (int, float)) or self.wake_confirmation_beep_duration <= 0:
+            errors.append("wake_confirmation_beep_duration must be a positive number")
+
+        if self.voice_ack_earcon:
+            if not isinstance(self.voice_ack_earcon_freq, int) or self.voice_ack_earcon_freq <= 0:
+                errors.append("voice_ack_earcon_freq must be a positive integer")
+            if not isinstance(self.voice_ack_earcon_duration, (int, float)) or self.voice_ack_earcon_duration <= 0:
+                errors.append("voice_ack_earcon_duration must be a positive number")
+
         # Validate streaming TTS settings
         if self.stream_tts_boundary not in ["sentence", "paragraph"]:
             errors.append("stream_tts_boundary must be 'sentence' or 'paragraph'")
+
+        if isinstance(self.stream_tts_first_chunk_target_s, bool) or not isinstance(self.stream_tts_first_chunk_target_s, int) or self.stream_tts_first_chunk_target_s < 1:
+            errors.append("stream_tts_first_chunk_target_s must be an integer >= 1")
 
         # Report all errors
         if errors:

@@ -155,6 +155,34 @@ class TestConfigurationValidation(unittest.TestCase):
 
         self.assertIn("stream_tts_boundary must be", str(context.exception))
 
+    def test_stream_tts_first_chunk_target_s_must_be_positive_int(self):
+        self.write_config({"stream_tts_first_chunk_target_s": 0})
+        with self.assertRaises(ValueError) as context:
+            Config()
+        self.assertIn("stream_tts_first_chunk_target_s must be", str(context.exception))
+
+    def test_voice_ack_earcon_validation_only_when_enabled(self):
+        """Freq/duration are only validated when earcon is enabled."""
+        self.write_config({"voice_ack_earcon": "disabled", "voice_ack_earcon_freq": 0, "voice_ack_earcon_duration": 0})
+        Config()  # should not raise
+
+        self.write_config({"voice_ack_earcon": "enabled", "voice_ack_earcon_freq": 0, "voice_ack_earcon_duration": 0.06})
+        with self.assertRaises(ValueError) as context:
+            Config()
+        self.assertIn("voice_ack_earcon_freq must be a positive integer", str(context.exception))
+
+    def test_invalid_beep_freq(self):
+        self.write_config({"wake_confirmation_beep_freq": -100})
+        with self.assertRaises(ValueError) as context:
+            Config()
+        self.assertIn("wake_confirmation_beep_freq must be a positive integer", str(context.exception))
+
+    def test_invalid_beep_duration(self):
+        self.write_config({"wake_confirmation_beep_duration": -0.5})
+        with self.assertRaises(ValueError) as context:
+            Config()
+        self.assertIn("wake_confirmation_beep_duration must be a positive number", str(context.exception))
+
     def test_voice_ack_earcon_accepts_boolean_values(self):
         """Test that voice_ack_earcon can be specified as YAML boolean."""
         self.write_config({"voice_ack_earcon": True})
@@ -333,6 +361,8 @@ class TestConfigurationValidation(unittest.TestCase):
         self.assertEqual(config.vad_frame_duration, 30)
         self.assertEqual(config.vad_timeout, 30)
         self.assertTrue(config.wake_confirmation_beep)
+        self.assertEqual(config.wake_confirmation_beep_freq, 800)
+        self.assertEqual(config.wake_confirmation_beep_duration, 0.1)
         self.assertTrue(config.visual_state_indicator)
 
     def test_invalid_wake_word_sensitivity_high(self):
@@ -428,6 +458,8 @@ class TestConfigurationValidation(unittest.TestCase):
             "vad_frame_duration": 20,
             "vad_timeout": 45,
             "wake_confirmation_beep": "disabled",
+            "wake_confirmation_beep_freq": 1000,
+            "wake_confirmation_beep_duration": 0.2,
             "visual_state_indicator": "disabled"
         })
 
@@ -442,6 +474,8 @@ class TestConfigurationValidation(unittest.TestCase):
         self.assertEqual(config.vad_frame_duration, 20)
         self.assertEqual(config.vad_timeout, 45)
         self.assertFalse(config.wake_confirmation_beep)
+        self.assertEqual(config.wake_confirmation_beep_freq, 1000)
+        self.assertEqual(config.wake_confirmation_beep_duration, 0.2)
         self.assertFalse(config.visual_state_indicator)
 
 
