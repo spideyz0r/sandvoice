@@ -401,7 +401,9 @@ class TestWakeWordModeStateListening(unittest.TestCase):
         self.mock_config.vad_enabled = True
         self.mock_config.rate = 16000
         self.mock_config.channels = 1
+        self.mock_config.vad_aggressiveness = 3
         self.mock_config.vad_silence_duration = 1.5
+        self.mock_config.vad_frame_duration = 30
         self.mock_config.vad_timeout = 30
         self.mock_config.tmp_files_path = "/tmp/test/"
 

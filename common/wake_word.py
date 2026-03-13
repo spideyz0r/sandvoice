@@ -317,11 +317,11 @@ class WakeWordMode:
             self.audio.log_mixer_state("LISTENING state entered")
 
         # Initialize VAD
-        vad = webrtcvad.Vad(3)
+        vad = webrtcvad.Vad(self.config.vad_aggressiveness)
 
         # Audio parameters
         sample_rate = self.config.rate
-        frame_duration_ms = 30
+        frame_duration_ms = self.config.vad_frame_duration
 
         # VAD requires 16-bit PCM audio at 8kHz, 16kHz, 32kHz, or 48kHz
         # If config.rate doesn't match, we need to handle it

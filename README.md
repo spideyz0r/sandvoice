@@ -133,7 +133,9 @@ porcupine_access_key: ""
 porcupine_keyword_paths: null
 
 vad_enabled: enabled
+vad_aggressiveness: 3
 vad_silence_duration: 1.5
+vad_frame_duration: 30
 vad_timeout: 30
 
 wake_confirmation_beep: enabled
@@ -196,7 +198,9 @@ All configuration keys are loaded from `common/configuration.py` defaults and ca
 - `porcupine_keyword_paths`: custom Porcupine keyword model path(s) (`.ppn`) or `null`
 
 - `vad_enabled`: `enabled`/`disabled`; voice activity detection toggle
+- `vad_aggressiveness`: 0-3 (0=least aggressive, 3=most aggressive)
 - `vad_silence_duration`: seconds of silence before stopping recording
+- `vad_frame_duration`: 10, 20, or 30 (ms)
 - `vad_timeout`: max seconds to wait for speech
 
 - `wake_confirmation_beep`: `enabled`/`disabled`; play beep on wake (800 Hz, 100 ms)

@@ -67,7 +67,9 @@ class Config:
             "porcupine_keyword_paths": None,
             # Voice Activity Detection
             "vad_enabled": "enabled",
+            "vad_aggressiveness": 3,
             "vad_silence_duration": 1.5,
+            "vad_frame_duration": 30,
             "vad_timeout": 30,
             # Audio feedback
             "wake_confirmation_beep": "enabled",
@@ -155,7 +157,9 @@ class Config:
         self.porcupine_keyword_paths = self.get("porcupine_keyword_paths")
         # Voice Activity Detection
         self.vad_enabled = self.get("vad_enabled").lower() == "enabled"
+        self.vad_aggressiveness = self.get("vad_aggressiveness")
         self.vad_silence_duration = self.get("vad_silence_duration")
+        self.vad_frame_duration = self.get("vad_frame_duration")
         self.vad_timeout = self.get("vad_timeout")
         # Audio feedback
         self.wake_confirmation_beep = self.get("wake_confirmation_beep").lower() == "enabled"
@@ -306,8 +310,14 @@ class Config:
             errors.append("porcupine_access_key must be a string")
 
         # Validate VAD settings
+        if not isinstance(self.vad_aggressiveness, int) or not (0 <= self.vad_aggressiveness <= 3):
+            errors.append("vad_aggressiveness must be between 0 and 3")
+
         if not isinstance(self.vad_silence_duration, (int, float)) or self.vad_silence_duration <= 0:
             errors.append("vad_silence_duration must be a positive number")
+
+        if self.vad_frame_duration not in [10, 20, 30]:
+            errors.append("vad_frame_duration must be 10, 20, or 30")
 
         if not isinstance(self.vad_timeout, (int, float)) or self.vad_timeout <= 0:
             errors.append("vad_timeout must be a positive number")

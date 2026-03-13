@@ -328,7 +328,9 @@ class TestConfigurationValidation(unittest.TestCase):
         self.assertEqual(config.wake_word_sensitivity, 0.5)
         self.assertEqual(config.porcupine_access_key, "")
         self.assertTrue(config.vad_enabled)
+        self.assertEqual(config.vad_aggressiveness, 3)
         self.assertEqual(config.vad_silence_duration, 1.5)
+        self.assertEqual(config.vad_frame_duration, 30)
         self.assertEqual(config.vad_timeout, 30)
         self.assertTrue(config.wake_confirmation_beep)
         self.assertTrue(config.visual_state_indicator)
@@ -360,6 +362,24 @@ class TestConfigurationValidation(unittest.TestCase):
 
         self.assertIn("wake_phrase must be a non-empty string", str(context.exception))
 
+    def test_invalid_vad_aggressiveness_high(self):
+        """Test that vad_aggressiveness above 3 raises error"""
+        self.write_config({"vad_aggressiveness": 5})
+
+        with self.assertRaises(ValueError) as context:
+            Config()
+
+        self.assertIn("vad_aggressiveness must be between 0 and 3", str(context.exception))
+
+    def test_invalid_vad_aggressiveness_low(self):
+        """Test that vad_aggressiveness below 0 raises error"""
+        self.write_config({"vad_aggressiveness": -1})
+
+        with self.assertRaises(ValueError) as context:
+            Config()
+
+        self.assertIn("vad_aggressiveness must be between 0 and 3", str(context.exception))
+
     def test_invalid_vad_silence_duration(self):
         """Test that negative vad_silence_duration raises error"""
         self.write_config({"vad_silence_duration": -1.0})
@@ -368,6 +388,23 @@ class TestConfigurationValidation(unittest.TestCase):
             Config()
 
         self.assertIn("vad_silence_duration must be a positive number", str(context.exception))
+
+    def test_invalid_vad_frame_duration(self):
+        """Test that invalid vad_frame_duration raises error"""
+        self.write_config({"vad_frame_duration": 15})
+
+        with self.assertRaises(ValueError) as context:
+            Config()
+
+        self.assertIn("vad_frame_duration must be 10, 20, or 30", str(context.exception))
+
+    def test_valid_vad_frame_durations(self):
+        """Test that valid vad_frame_duration values are accepted"""
+        for duration in [10, 20, 30]:
+            with self.subTest(vad_frame_duration=duration):
+                self.write_config({"vad_frame_duration": duration})
+                config = Config()
+                self.assertEqual(config.vad_frame_duration, duration)
 
     def test_invalid_vad_timeout(self):
         """Test that negative vad_timeout raises error"""
@@ -386,7 +423,9 @@ class TestConfigurationValidation(unittest.TestCase):
             "wake_word_sensitivity": 0.7,
             "porcupine_access_key": "test_key_123",
             "vad_enabled": "disabled",
+            "vad_aggressiveness": 1,
             "vad_silence_duration": 2.0,
+            "vad_frame_duration": 20,
             "vad_timeout": 45,
             "wake_confirmation_beep": "disabled",
             "visual_state_indicator": "disabled"
@@ -398,7 +437,9 @@ class TestConfigurationValidation(unittest.TestCase):
         self.assertEqual(config.wake_word_sensitivity, 0.7)
         self.assertEqual(config.porcupine_access_key, "test_key_123")
         self.assertFalse(config.vad_enabled)
+        self.assertEqual(config.vad_aggressiveness, 1)
         self.assertEqual(config.vad_silence_duration, 2.0)
+        self.assertEqual(config.vad_frame_duration, 20)
         self.assertEqual(config.vad_timeout, 45)
         self.assertFalse(config.wake_confirmation_beep)
         self.assertFalse(config.visual_state_indicator)
