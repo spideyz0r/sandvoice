@@ -365,14 +365,14 @@ class Config:
             errors.append("vad_timeout must be a positive number")
 
         # Validate audio feedback settings
-        if not isinstance(self.wake_confirmation_beep_freq, int) or self.wake_confirmation_beep_freq <= 0:
+        if isinstance(self.wake_confirmation_beep_freq, bool) or not isinstance(self.wake_confirmation_beep_freq, int) or self.wake_confirmation_beep_freq <= 0:
             errors.append("wake_confirmation_beep_freq must be a positive integer")
 
         if not isinstance(self.wake_confirmation_beep_duration, (int, float)) or self.wake_confirmation_beep_duration <= 0:
             errors.append("wake_confirmation_beep_duration must be a positive number")
 
         if self.voice_ack_earcon:
-            if not isinstance(self.voice_ack_earcon_freq, int) or self.voice_ack_earcon_freq <= 0:
+            if isinstance(self.voice_ack_earcon_freq, bool) or not isinstance(self.voice_ack_earcon_freq, int) or self.voice_ack_earcon_freq <= 0:
                 errors.append("voice_ack_earcon_freq must be a positive integer")
             if not isinstance(self.voice_ack_earcon_duration, (int, float)) or self.voice_ack_earcon_duration <= 0:
                 errors.append("voice_ack_earcon_duration must be a positive number")
