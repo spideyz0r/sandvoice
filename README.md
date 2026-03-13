@@ -182,7 +182,7 @@ All configuration keys are loaded from `common/configuration.py` defaults and ca
 - `gpt_route_model`: model used for routing (`AI.define_route()`)
 - `gpt_response_model`: model used for normal responses (`AI.generate_response()`)
 
-- `stream_responses`: `enabled`/`disabled`; stream LLM responses and assemble final text from deltas. When `log_level: debug` is set, deltas are printed as they arrive.
+- `stream_responses`: `enabled`/`disabled`; stream LLM responses and assemble final text from deltas.
 
 - `stream_tts`: `enabled`/`disabled`; when streaming responses, generate and play TTS chunks before the full response completes (default route only)
 - `stream_tts_boundary`: `sentence` or `paragraph`; chunk boundary preference

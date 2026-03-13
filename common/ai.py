@@ -499,7 +499,6 @@ class AI:
             print(error_msg)
             return {"title": "Error", "text": "Unable to generate summary"}
 
-    @retry_with_backoff(max_attempts=3, initial_delay=1)
     def text_to_speech(self, text, model = None, voice = None):
         logger.debug(">>> TTS GENERATION CALLED from thread %s: text=%s...",
                      threading.current_thread().name, text[:50] if text else "empty")
