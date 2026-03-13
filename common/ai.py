@@ -9,6 +9,10 @@ logger = logging.getLogger(__name__)
 # OpenAI TTS rejects inputs above ~4096 characters. Use 3800 as a conservative
 # default to leave headroom for any encoding/edge-case variations in length.
 DEFAULT_TTS_MAX_CHARS = 3800
+DEFAULT_ROUTE_NAME = "default-route"
+_ROUTE_NAME_ALIASES = {
+    "default-rote": DEFAULT_ROUTE_NAME,
+}
 
 
 SENTENCE_BREAK_RE = re.compile(r"[.!?]\s+")
@@ -17,6 +21,14 @@ SENTENCE_BREAK_RE = re.compile(r"[.!?]\s+")
 # Streaming chunking defaults are intentionally smaller than DEFAULT_TTS_MAX_CHARS
 # to reduce time-to-first-audio and keep queued chunks short.
 DEFAULT_STREAM_MAX_CHARS = 1200
+
+
+def normalize_route_name(route_name):
+    """Map known legacy route names to the canonical identifier."""
+    if not isinstance(route_name, str):
+        return route_name
+    normalized = route_name.strip()
+    return _ROUTE_NAME_ALIASES.get(normalized, normalized)
 
 
 def pop_streaming_chunk(buffer, boundary="sentence", min_chars=200, max_chars=DEFAULT_STREAM_MAX_CHARS):
@@ -442,23 +454,26 @@ class AI:
                 {"role": "system", "content": system_role['route_role']},
                 {"role": "user", "content": user_input}
             ])
-            return json.loads(completion.choices[0].message.content)
+            route = json.loads(completion.choices[0].message.content)
+            if isinstance(route, dict) and "route" in route:
+                route["route"] = normalize_route_name(route["route"])
+            return route
         except FileNotFoundError as e:
             error_msg = handle_file_error(e, operation="read", filename="routes.yaml")
             logger.error("Routes file error: %s", e)
             print(error_msg)
             # Return default route as fallback
-            return {"route": "default-route", "reason": "Error loading routes"}
+            return {"route": DEFAULT_ROUTE_NAME, "reason": "Error loading routes"}
         except json.JSONDecodeError as e:
             error_msg = "Error parsing route response from AI. Using default route."
             logger.error("Route JSON parse error: %s", e)
             print(error_msg)
-            return {"route": "default-route", "reason": "Parse error"}
+            return {"route": DEFAULT_ROUTE_NAME, "reason": "Parse error"}
         except Exception as e:
             error_msg = handle_api_error(e, service_name="OpenAI GPT")
             logger.error("Route definition error: %s", e)
             print(error_msg)
-            return {"route": "default-route", "reason": "API error"}
+            return {"route": DEFAULT_ROUTE_NAME, "reason": "API error"}
 
     @retry_with_backoff(max_attempts=3, initial_delay=1)
     def text_summary(self, user_input, extra_info = None, words = "100", model = None):
