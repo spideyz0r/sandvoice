@@ -499,50 +499,51 @@ class AI:
             print(error_msg)
             return {"title": "Error", "text": "Unable to generate summary"}
 
-    def text_to_speech(self, text, model = None, voice = None):
+    @retry_with_backoff(max_attempts=3, initial_delay=1)
+    def _generate_tts_files(self, text, model, voice):
+        """Generate TTS audio files. Raises on failure so @retry_with_backoff can retry."""
+        warnings.filterwarnings("ignore", category=DeprecationWarning)
+        chunks = split_text_for_tts(text)
+        if not chunks:
+            return []
+
+        response_id = uuid.uuid4().hex
+        output_files = []
+
+        try:
+            for i, chunk in enumerate(chunks, start=1):
+                speech_file_path = os.path.join(
+                    self.config.tmp_files_path,
+                    f"tts-response-{response_id}-chunk-{i:03d}.mp3",
+                )
+                response = self.openai_client.audio.speech.create(
+                    model=model,
+                    voice=voice,
+                    input=chunk
+                )
+                output_files.append(speech_file_path)
+                response.stream_to_file(speech_file_path)
+                logger.debug(">>> TTS FILE CREATED: thread=%s, file=%s",
+                             threading.current_thread().name, os.path.basename(speech_file_path))
+        except Exception:
+            for f in output_files:
+                try:
+                    if os.path.exists(f):
+                        os.remove(f)
+                except Exception:
+                    pass  # best-effort cleanup
+            raise
+
+        return output_files
+
+    def text_to_speech(self, text, model=None, voice=None):
         logger.debug(">>> TTS GENERATION CALLED from thread %s: text=%s...",
                      threading.current_thread().name, text[:50] if text else "empty")
         logger.debug(">>> TTS GENERATION full text length: %d chars", len(text) if text else 0)
-        if not model:
-            model = self.config.text_to_speech_model
-        if not voice:
-            voice = self.config.bot_voice_model
-
+        model = model or self.config.text_to_speech_model
+        voice = voice or self.config.bot_voice_model
         try:
-            warnings.filterwarnings("ignore", category=DeprecationWarning)
-            chunks = split_text_for_tts(text)
-            if not chunks:
-                return []
-
-            response_id = uuid.uuid4().hex
-            output_files = []
-
-            try:
-                for i, chunk in enumerate(chunks, start=1):
-                    speech_file_path = os.path.join(
-                        self.config.tmp_files_path,
-                        f"tts-response-{response_id}-chunk-{i:03d}.mp3",
-                    )
-                    response = self.openai_client.audio.speech.create(
-                        model = model,
-                        voice = voice,
-                        input = chunk
-                    )
-                    output_files.append(speech_file_path)
-                    response.stream_to_file(speech_file_path)
-                    logger.debug(">>> TTS FILE CREATED: thread=%s, file=%s",
-                                 threading.current_thread().name, os.path.basename(speech_file_path))
-            except Exception:
-                for f in output_files:
-                    try:
-                        if os.path.exists(f):
-                            os.remove(f)
-                    except Exception:
-                        # Best-effort cleanup: ignore errors when deleting temporary files
-                        pass
-                raise
-
-            return output_files
+            return self._generate_tts_files(text, model, voice)
         except Exception as e:
             logger.exception("Text-to-speech error")
             print(handle_api_error(e, service_name="OpenAI TTS"))
