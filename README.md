@@ -186,7 +186,7 @@ All configuration keys are loaded from `common/configuration.py` defaults and ca
 
 - `stream_tts`: `enabled`/`disabled`; when streaming responses, generate and play TTS chunks before the full response completes (default route only)
 - `stream_tts_boundary`: `sentence` or `paragraph`; chunk boundary preference
-- `stream_tts_first_chunk_target_s`: target spoken duration (seconds) to accumulate before playing the first TTS chunk (default `6`; 0 = play immediately)
+- `stream_tts_first_chunk_target_s`: target spoken duration (seconds) to accumulate before playing the first TTS chunk (default `6`, minimum `1`)
 - `speech_to_text_model`: model used for speech-to-text
 - `speech_to_text_task`: `translate` or `transcribe` (translate outputs English; transcribe keeps the spoken language)
 - `speech_to_text_language`: optional ISO-639-1 hint for transcription (e.g. `pt`, `en`); empty means auto-detect

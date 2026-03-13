@@ -281,11 +281,7 @@ class SandVoice:
                             continue
                         if chunk is None:
                             break
-                        try:
-                            tts_files = self.ai.text_to_speech(chunk)
-                        except Exception as e:
-                            tts_files = []
-                            tts_error[0] = str(e)
+                        tts_files = self.ai.text_to_speech(chunk)
 
                         if not tts_files:
                             production_failed_event.set()

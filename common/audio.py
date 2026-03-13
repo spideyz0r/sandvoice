@@ -1,7 +1,7 @@
 #import re, os, pyaudio, wave
 #from pydub import AudioSegment
 import contextlib
-import re, os, time, threading, pyaudio, wave, lameenc, logging, queue
+import os, time, threading, pyaudio, wave, lameenc, logging, queue
 from pynput import keyboard
 from common.error_handling import handle_file_error
 
@@ -40,16 +40,10 @@ class Audio:
         try:
             self.audio = pyaudio.PyAudio()
         except OSError as e:
-            error_msg = "Audio hardware not found. Please connect audio device."
             logger.error("Audio initialization error: %s", e)
-            print(f"Error: {error_msg}")
-            print("Continuing in text-only mode. Use --cli flag for better experience.")
             self.audio = None
         except Exception as e:
-            error_msg = f"Failed to initialize audio: {str(e)}"
             logger.error("Audio initialization error: %s", e)
-            print(f"Error: {error_msg}")
-            print("Continuing in text-only mode. Use --cli flag for better experience.")
             self.audio = None
 
     def on_press(self, key):
