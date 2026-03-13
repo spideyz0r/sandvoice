@@ -547,6 +547,20 @@ class TestTaskScheduler(unittest.TestCase):
         }])
         self.assertIsNotNone(self.db.get_task(task_id))
 
+    def test_sync_tasks_invalid_schedule_does_not_trigger_db_deletions(self):
+        task_id = self.db.add_task(
+            name="existing", schedule_type="interval", schedule_value="60",
+            action_type="speak", action_payload={"text": "keep"}, next_run=self._future(),
+        )
+        self.scheduler.sync_tasks([{
+            "name": "bad-schedule",
+            "schedule_type": "interval",
+            "schedule_value": "0",
+            "action_type": "speak",
+            "action_payload": {"text": "hello"},
+        }])
+        self.assertIsNotNone(self.db.get_task(task_id))
+
     def test_close_stops_scheduler_and_closes_db(self):
         """close() must stop the scheduler thread and close the DB without errors."""
         self.scheduler.start()

@@ -305,6 +305,10 @@ class TaskScheduler:
                         "in action_payload"
                     )
 
+        # Validate schedule syntax/value during the first pass so malformed
+        # task files cannot trigger DB deletions before registration fails.
+        self._first_run(schedule_type, normalized_schedule_value)
+
         return normalized_name, schedule_type, normalized_schedule_value, action_type, normalized_action_payload
 
     def pause_task(self, task_id: str):
