@@ -897,11 +897,11 @@ class TestSyncTasksInputHandling(unittest.TestCase):
         self.scheduler.add_task = MagicMock(side_effect=[ValueError("bad config"), None])
         self.scheduler.sync_tasks([
             {"name": "bad", "schedule_type": "interval", "schedule_value": "60",
-             "action_type": "speak", "action_payload": {}},
+             "action_type": "speak", "action_payload": {"text": "bad"}},
             {"name": "good", "schedule_type": "interval", "schedule_value": "60",
              "action_type": "speak", "action_payload": {"text": "ok"}},
         ])
-        self.assertEqual(self.scheduler.add_task.call_count, 1)
+        self.assertEqual(self.scheduler.add_task.call_count, 2)
 
     def test_non_string_name_is_skipped(self):
         self.scheduler.add_task = MagicMock()

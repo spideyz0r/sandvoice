@@ -765,13 +765,12 @@ class TestTasksFileConfig(unittest.TestCase):
         self.assertIn("tasks_file_path must point to a file", str(context.exception))
         self.assertIn(tasks_dir, str(context.exception))
 
-    def test_legacy_tasks_key_prints_warning(self):
+    def test_legacy_tasks_key_logs_warning(self):
         self.write_config({"tasks": []})
-        with patch("builtins.print") as mock_print:
+        with self.assertLogs("common.configuration", level="WARNING") as cm:
             config = Config()
         self.assertEqual(config.tasks, [])
-        printed = [str(call) for call in mock_print.call_args_list]
-        self.assertTrue(any("tasks" in call and "ignored" in call for call in printed))
+        self.assertTrue(any("tasks" in line and "ignored" in line for line in cm.output))
 
 
 class TestCacheConfig(_TempHomeBase):

@@ -226,7 +226,7 @@ class Config:
         self.tasks_file_exists = os.path.isfile(self.tasks_file_path)
         self.tasks = self._load_tasks_file()
         if "tasks" in self.config:
-            print("WARNING: 'tasks' in config.yaml is ignored. Use tasks_file_path/tasks.yaml instead.")
+            logger.warning("'tasks' in config.yaml is ignored. Use tasks_file_path/tasks.yaml instead.")
 
         # Background Cache (Plan 20)
         raw_cache_enabled = self.get("cache_enabled")
