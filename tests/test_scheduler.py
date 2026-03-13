@@ -535,6 +535,18 @@ class TestTaskScheduler(unittest.TestCase):
         self.scheduler.sync_tasks(["oops"])
         self.assertIsNotNone(self.db.get_task(task_id))
 
+    def test_sync_tasks_invalid_named_dict_entry_does_not_trigger_db_deletions(self):
+        task_id = self.db.add_task(
+            name="existing", schedule_type="interval", schedule_value="60",
+            action_type="speak", action_payload={"text": "keep"}, next_run=self._future(),
+        )
+        self.scheduler.sync_tasks([{
+            "name": "broken-task",
+            "action_type": "speak",
+            "action_payload": {"text": "hello"},
+        }])
+        self.assertIsNotNone(self.db.get_task(task_id))
+
     def test_close_stops_scheduler_and_closes_db(self):
         """close() must stop the scheduler thread and close the DB without errors."""
         self.scheduler.start()
@@ -889,7 +901,7 @@ class TestSyncTasksInputHandling(unittest.TestCase):
             {"name": "good", "schedule_type": "interval", "schedule_value": "60",
              "action_type": "speak", "action_payload": {"text": "ok"}},
         ])
-        self.assertEqual(self.scheduler.add_task.call_count, 2)
+        self.assertEqual(self.scheduler.add_task.call_count, 1)
 
     def test_non_string_name_is_skipped(self):
         self.scheduler.add_task = MagicMock()
@@ -898,7 +910,7 @@ class TestSyncTasksInputHandling(unittest.TestCase):
                                     "action_payload": {"text": "hi"}}])
         self.scheduler.add_task.assert_not_called()
 
-    def test_null_action_payload_normalised_to_empty_dict(self):
+    def test_null_action_payload_for_speak_is_invalid(self):
         self.scheduler.add_task = MagicMock()
         self.scheduler.sync_tasks([{
             "name": "nullpayload",
@@ -907,10 +919,9 @@ class TestSyncTasksInputHandling(unittest.TestCase):
             "action_type": "speak",
             "action_payload": None,
         }])
-        self.scheduler.add_task.assert_called_once()
-        self.assertEqual(self.scheduler.add_task.call_args.kwargs["action_payload"], {})
+        self.scheduler.add_task.assert_not_called()
 
-    def test_non_dict_action_payload_normalised_to_empty_dict(self):
+    def test_non_dict_action_payload_for_speak_is_invalid(self):
         self.scheduler.add_task = MagicMock()
         self.scheduler.sync_tasks([{
             "name": "listpayload",
@@ -919,8 +930,7 @@ class TestSyncTasksInputHandling(unittest.TestCase):
             "action_type": "speak",
             "action_payload": ["not", "a", "dict"],
         }])
-        self.scheduler.add_task.assert_called_once()
-        self.assertEqual(self.scheduler.add_task.call_args.kwargs["action_payload"], {})
+        self.scheduler.add_task.assert_not_called()
 
     def test_name_whitespace_stripped_before_registration(self):
         self.scheduler.add_task = MagicMock()

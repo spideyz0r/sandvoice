@@ -754,6 +754,7 @@ class TestTasksFileConfig(unittest.TestCase):
         with self.assertRaises(ValueError) as context:
             Config()
         self.assertIn("tasks file must contain a YAML list", str(context.exception))
+        self.assertIn(tasks_path, str(context.exception))
 
     def test_tasks_file_path_directory_raises_value_error(self):
         tasks_dir = os.path.join(self.temp_dir, ".sandvoice", "tasks-dir")
@@ -762,6 +763,7 @@ class TestTasksFileConfig(unittest.TestCase):
         with self.assertRaises(ValueError) as context:
             Config()
         self.assertIn("tasks_file_path must point to a file", str(context.exception))
+        self.assertIn(tasks_dir, str(context.exception))
 
     def test_legacy_tasks_key_prints_warning(self):
         self.write_config({"tasks": []})

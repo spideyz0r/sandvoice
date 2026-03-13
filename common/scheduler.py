@@ -161,41 +161,13 @@ class TaskScheduler:
         action_type: str,
         action_payload: dict,
     ) -> str:
-        # Work on a copy so callers are not surprised by in-place mutations
-        # (e.g. plugin-name stripping, query normalization).
-        action_payload = dict(action_payload)
-        if action_type not in ("speak", "plugin"):
-            raise ValueError(f"Unsupported action_type: {action_type!r}")
-        if action_type == "speak":
-            text = action_payload.get("text")
-            if not isinstance(text, str) or not text.strip():
-                raise ValueError("'speak' action requires non-empty 'text' in action_payload")
-        if action_type == "plugin":
-            plugin_name = action_payload.get("plugin")
-            if not isinstance(plugin_name, str) or not plugin_name.strip():
-                raise ValueError("'plugin' action requires non-empty 'plugin' in action_payload")
-            action_payload["plugin"] = plugin_name.strip()
-            query = action_payload.get("query")
-            if query is not None and not isinstance(query, str):
-                raise ValueError("'plugin' action 'query' must be a string or None in action_payload")
-            if isinstance(query, str) and not query.strip():
-                action_payload["query"] = ""
-            refresh_only = action_payload.get("refresh_only")
-            if refresh_only is not None:
-                _valid_bool_strings = ("true", "1", "yes", "y", "on", "false", "0", "no", "n", "off", "")
-                if isinstance(refresh_only, bool):
-                    pass
-                elif isinstance(refresh_only, str):
-                    if refresh_only.strip().lower() not in _valid_bool_strings:
-                        raise ValueError(
-                            "'plugin' action 'refresh_only' must be a boolean or boolean-like string "
-                            "in action_payload"
-                        )
-                else:
-                    raise ValueError(
-                        "'plugin' action 'refresh_only' must be a bool or boolean-like string "
-                        "in action_payload"
-                    )
+        name, schedule_type, schedule_value, action_type, action_payload = self._normalize_task_definition(
+            name=name,
+            schedule_type=schedule_type,
+            schedule_value=schedule_value,
+            action_type=action_type,
+            action_payload=action_payload,
+        )
         first_run = self._first_run(schedule_type, schedule_value)
         task_id = self._db.add_task(
             name=name,
@@ -211,6 +183,7 @@ class TaskScheduler:
 
     def sync_tasks(self, loaded_tasks: Iterable[Any]):
         tasks_in_file = set()
+        validated_tasks = []
         saw_invalid_entry = False
         for task_def in loaded_tasks:
             if not isinstance(task_def, dict):
@@ -231,6 +204,24 @@ class TaskScheduler:
                 saw_invalid_entry = True
                 continue
             tasks_in_file.add(name)
+            try:
+                _, schedule_type, schedule_value, action_type, action_payload = self._normalize_task_definition(
+                    name=name,
+                    schedule_type=task_def["schedule_type"],
+                    schedule_value=task_def["schedule_value"],
+                    action_type=task_def["action_type"],
+                    action_payload=task_def.get("action_payload", {}),
+                )
+                validated_tasks.append({
+                    "name": name,
+                    "schedule_type": schedule_type,
+                    "schedule_value": schedule_value,
+                    "action_type": action_type,
+                    "action_payload": action_payload,
+                })
+            except Exception as e:
+                logger.warning("Skipping invalid task '%s' from tasks file: %s", name, e)
+                saw_invalid_entry = True
 
         db_tasks = self._db.get_all_tasks()
         db_task_names = {task.name for task in db_tasks}
@@ -243,36 +234,78 @@ class TaskScheduler:
                     self._db.delete_task(task.id)
                     logger.info("Task removed from DB: '%s' (%s)", task.name, task.id)
 
-        for task_def in loaded_tasks:
-            if not isinstance(task_def, dict):
-                continue
-            name = task_def.get("name")
-            if not isinstance(name, str):
-                continue
-            name = name.strip()
+        for task_def in validated_tasks:
+            name = task_def["name"]
             if not name or name in db_task_names:
                 continue
             try:
-                action_payload = task_def.get("action_payload", {})
-                if action_payload is None:
-                    action_payload = {}
-                elif not isinstance(action_payload, dict):
-                    logger.warning(
-                        "Task '%s' has non-mapping 'action_payload' of type %s; defaulting to {}",
-                        name,
-                        type(action_payload).__name__,
-                    )
-                    action_payload = {}
                 self.add_task(
                     name=name,
                     schedule_type=task_def["schedule_type"],
-                    schedule_value=str(task_def["schedule_value"]),
+                    schedule_value=task_def["schedule_value"],
                     action_type=task_def["action_type"],
-                    action_payload=action_payload,
+                    action_payload=task_def["action_payload"],
                 )
                 db_task_names.add(name)
             except Exception as e:
                 logger.warning("Failed to register task '%s' from tasks file: %s", name, e)
+
+    def _normalize_task_definition(
+        self,
+        name: str,
+        schedule_type: Any,
+        schedule_value: Any,
+        action_type: Any,
+        action_payload: Any,
+    ):
+        normalized_name = str(name).strip()
+        normalized_schedule_value = str(schedule_value)
+        if action_payload is None:
+            normalized_action_payload = {}
+        elif not isinstance(action_payload, dict):
+            logger.warning(
+                "Task '%s' has non-mapping 'action_payload' of type %s; defaulting to {}",
+                normalized_name,
+                type(action_payload).__name__,
+            )
+            normalized_action_payload = {}
+        else:
+            normalized_action_payload = dict(action_payload)
+
+        if action_type not in ("speak", "plugin"):
+            raise ValueError(f"Unsupported action_type: {action_type!r}")
+        if action_type == "speak":
+            text = normalized_action_payload.get("text")
+            if not isinstance(text, str) or not text.strip():
+                raise ValueError("'speak' action requires non-empty 'text' in action_payload")
+        if action_type == "plugin":
+            plugin_name = normalized_action_payload.get("plugin")
+            if not isinstance(plugin_name, str) or not plugin_name.strip():
+                raise ValueError("'plugin' action requires non-empty 'plugin' in action_payload")
+            normalized_action_payload["plugin"] = plugin_name.strip()
+            query = normalized_action_payload.get("query")
+            if query is not None and not isinstance(query, str):
+                raise ValueError("'plugin' action 'query' must be a string or None in action_payload")
+            if isinstance(query, str) and not query.strip():
+                normalized_action_payload["query"] = ""
+            refresh_only = normalized_action_payload.get("refresh_only")
+            if refresh_only is not None:
+                _valid_bool_strings = ("true", "1", "yes", "y", "on", "false", "0", "no", "n", "off", "")
+                if isinstance(refresh_only, bool):
+                    pass
+                elif isinstance(refresh_only, str):
+                    if refresh_only.strip().lower() not in _valid_bool_strings:
+                        raise ValueError(
+                            "'plugin' action 'refresh_only' must be a boolean or boolean-like string "
+                            "in action_payload"
+                        )
+                else:
+                    raise ValueError(
+                        "'plugin' action 'refresh_only' must be a bool or boolean-like string "
+                        "in action_payload"
+                    )
+
+        return normalized_name, schedule_type, normalized_schedule_value, action_type, normalized_action_payload
 
     def pause_task(self, task_id: str):
         self._db.set_status(task_id, "paused")
