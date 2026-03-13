@@ -687,8 +687,8 @@ class TestSchedulerEnabledFlag(_TempHomeBase):
         self.assertFalse(config.scheduler_enabled)
 
 
-class TestConfigTasks(unittest.TestCase):
-    """config.tasks must parse correctly from the YAML tasks: list."""
+class TestTasksFileConfig(unittest.TestCase):
+    """tasks_file_path and tasks.yaml loading must behave predictably."""
 
     def setUp(self):
         self.temp_dir = tempfile.mkdtemp()
@@ -710,39 +710,67 @@ class TestConfigTasks(unittest.TestCase):
         with open(self.config_path, 'w') as f:
             yaml.dump(data, f)
 
-    def test_tasks_default_is_empty_list(self):
+    def test_tasks_file_path_default(self):
         config = Config()
+        expected = os.path.join(self.temp_dir, ".sandvoice", "tasks.yaml")
+        self.assertEqual(config.tasks_file_path, expected)
+        self.assertFalse(config.tasks_file_exists)
         self.assertEqual(config.tasks, [])
 
-    def test_tasks_parses_list(self):
-        self.write_config({"tasks": [
-            {"name": "t1", "schedule_type": "interval", "schedule_value": "60",
-             "action_type": "speak", "action_payload": {"text": "hello"}},
-        ]})
+    def test_tasks_file_path_custom_value_is_expanded(self):
+        self.write_config({"tasks_file_path": "~/.sandvoice/custom-tasks.yaml"})
         config = Config()
+        expected = os.path.join(self.temp_dir, ".sandvoice", "custom-tasks.yaml")
+        self.assertEqual(config.tasks_file_path, expected)
+
+    def test_tasks_file_missing_returns_empty_list(self):
+        config = Config()
+        self.assertFalse(config.tasks_file_exists)
+        self.assertEqual(config.tasks, [])
+
+    def test_tasks_file_parses_yaml_list(self):
+        tasks_path = os.path.join(self.temp_dir, ".sandvoice", "tasks.yaml")
+        with open(tasks_path, "w") as f:
+            yaml.dump([
+                {"name": "t1", "schedule_type": "interval", "schedule_value": "60",
+                 "action_type": "speak", "action_payload": {"text": "hello"}},
+            ], f)
+        config = Config()
+        self.assertTrue(config.tasks_file_exists)
         self.assertEqual(len(config.tasks), 1)
         self.assertEqual(config.tasks[0]["name"], "t1")
 
-    def test_tasks_non_list_falls_back_to_empty(self):
-        self.write_config({"tasks": "bad-value"})
+    def test_tasks_file_null_yields_empty_list(self):
+        tasks_path = os.path.join(self.temp_dir, ".sandvoice", "tasks.yaml")
+        with open(tasks_path, "w") as f:
+            yaml.dump(None, f)
         config = Config()
         self.assertEqual(config.tasks, [])
 
-    def test_tasks_null_falls_back_to_empty(self):
-        self.write_config({"tasks": None})
-        config = Config()
-        self.assertEqual(config.tasks, [])
+    def test_tasks_file_non_list_raises_value_error(self):
+        tasks_path = os.path.join(self.temp_dir, ".sandvoice", "tasks.yaml")
+        with open(tasks_path, "w") as f:
+            yaml.dump({"name": "bad"}, f)
+        with self.assertRaises(ValueError) as context:
+            Config()
+        self.assertIn("tasks file must contain a YAML list", str(context.exception))
+        self.assertIn(tasks_path, str(context.exception))
 
-    def test_tasks_multiple_entries(self):
-        self.write_config({"tasks": [
-            {"name": "speak-task", "schedule_type": "cron", "schedule_value": "0 9 * * *",
-             "action_type": "speak", "action_payload": {"text": "morning"}},
-            {"name": "plugin-task", "schedule_type": "interval", "schedule_value": "3600",
-             "action_type": "plugin", "action_payload": {"plugin": "weather", "refresh_only": True}},
-        ]})
-        config = Config()
-        self.assertEqual(len(config.tasks), 2)
-        self.assertEqual(config.tasks[1]["action_payload"]["plugin"], "weather")
+    def test_tasks_file_path_directory_raises_value_error(self):
+        tasks_dir = os.path.join(self.temp_dir, ".sandvoice", "tasks-dir")
+        os.makedirs(tasks_dir, exist_ok=True)
+        self.write_config({"tasks_file_path": "~/.sandvoice/tasks-dir"})
+        with self.assertRaises(ValueError) as context:
+            Config()
+        self.assertIn("tasks_file_path must point to a file", str(context.exception))
+        self.assertIn(tasks_dir, str(context.exception))
+
+    def test_legacy_tasks_key_logs_warning(self):
+        self.write_config({"tasks": []})
+        with self.assertLogs("common.configuration", level="WARNING") as cm:
+            config = Config()
+        self.assertEqual(config.tasks, [])
+        self.assertTrue(any("tasks" in line and "ignored" in line for line in cm.output))
 
 
 class TestCacheConfig(_TempHomeBase):

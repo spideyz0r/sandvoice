@@ -239,6 +239,7 @@ All configuration keys are loaded from `common/configuration.py` defaults and ca
 - `scheduler_enabled`: `enabled`/`disabled`; enables the background task scheduler
 - `scheduler_poll_interval`: seconds between scheduler ticks (default `30`)
 - `scheduler_db_path`: path to the SQLite database used to persist tasks (default `~/.sandvoice/sandvoice.db`)
+- `tasks_file_path`: path to the YAML file that defines scheduled tasks (default `~/.sandvoice/tasks.yaml`)
 
 - `cache_enabled`: `enabled`/`disabled`; enables the background weather cache (default `disabled`)
 - `cache_weather_ttl_s`: seconds before a cached weather entry is considered stale (default `10800` — 3 hours)
@@ -267,37 +268,43 @@ scheduler_poll_interval: 30   # how often to check for due tasks (seconds)
 
 ### Defining tasks
 
-Add a `tasks:` list to your config. Tasks are registered on first startup and **persist in the SQLite DB across restarts** — so they won't be duplicated when you restart SandVoice.
+Tasks live in a dedicated YAML file, separate from `config.yaml`. By default SandVoice reads `~/.sandvoice/tasks.yaml`, or the path configured in `tasks_file_path`.
+
+In `~/.sandvoice/config.yaml`:
 
 ```yaml
 scheduler_enabled: enabled
+tasks_file_path: ~/.sandvoice/tasks.yaml
+```
 
-tasks:
-  # Speak a reminder every day at 9 AM (cron)
-  - name: morning-reminder
-    schedule_type: cron
-    schedule_value: "0 9 * * *"
-    action_type: speak
-    action_payload:
-      text: "Good morning! Don't forget to check your calendar."
+In `~/.sandvoice/tasks.yaml`:
 
-  # Fetch weather via plugin every hour (interval)
-  - name: hourly-weather
-    schedule_type: interval
-    schedule_value: "3600"
-    action_type: plugin
-    action_payload:
-      plugin: weather
-      query: weather
-      refresh_only: false     # false = speak the result; true = silent refresh
+```yaml
+# Speak a reminder every day at 9 AM (cron)
+- name: morning-reminder
+  schedule_type: cron
+  schedule_value: "0 9 * * *"
+  action_type: speak
+  action_payload:
+    text: "Good morning! Don't forget to check your calendar."
 
-  # One-shot reminder at a specific date and time (once)
-  - name: meeting-reminder
-    schedule_type: once
-    schedule_value: "2026-03-02T21:00:00-05:00"   # EST offset; also accepts UTC (+00:00 or Z)
-    action_type: speak
-    action_payload:
-      text: "Your meeting starts in 15 minutes."
+# Fetch weather via plugin every hour (interval)
+- name: hourly-weather
+  schedule_type: interval
+  schedule_value: "3600"
+  action_type: plugin
+  action_payload:
+    plugin: weather
+    query: weather
+    refresh_only: false     # false = speak the result; true = silent refresh
+
+# One-shot reminder at a specific date and time (once)
+- name: meeting-reminder
+  schedule_type: once
+  schedule_value: "2099-03-02T21:00:00-05:00"   # replace with your own time; also accepts UTC (+00:00 or Z)
+  action_type: speak
+  action_payload:
+    text: "Your meeting starts in 15 minutes."
 ```
 
 ### Cron expression quick reference
@@ -344,8 +351,12 @@ action_payload:
 
 ### Notes
 
-- Tasks with the same `name` that are already **active** or **paused** in the DB are skipped on startup. **Completed** tasks (including fired `once` tasks) are not deduped — they will be re-registered on the next restart if they remain in your config, and will run again.
-- To re-register an **active** or **paused** task after changing its config (e.g. new schedule or payload), delete `~/.sandvoice/sandvoice.db` and restart. The DB will be recreated automatically. Completed tasks pick up config changes on the next restart automatically.
+- `tasks.yaml` is the source of truth for scheduled tasks. On startup, tasks in the file are inserted into the DB if missing, and tasks present in the DB but missing from the file are deleted.
+- If `tasks.yaml` exists and is empty (`[]`), all scheduled tasks are removed from the DB on the next startup.
+- If `tasks.yaml` does not exist, startup still succeeds and task sync is skipped entirely. Existing DB tasks continue to run unchanged.
+- Invalid task entries are skipped, and DB deletions are suppressed for that startup so a malformed `tasks.yaml` cannot accidentally wipe persisted tasks.
+- Existing DB tasks are matched by `name` and left unchanged if that name is still present in `tasks.yaml`, even if the schedule or payload differs. Rename the task or delete its DB row to force re-registration.
+- Completed `once` tasks are also matched by name and will not be re-registered while a DB row with that name still exists.
 - `once` tasks that fail with a transient error (e.g. network timeout) are retried on the next scheduler tick. Permanent config errors (bad JSON, missing fields) mark the task completed immediately so they don't loop.
 - All timestamps are stored and compared in UTC internally. Log timestamps are displayed using your configured `timezone`, which should be an IANA timezone name (e.g. `America/New_York`) for correct offsets and DST handling. If the timezone cannot be resolved, the scheduler logs a warning and falls back to UTC.
 - The scheduler runs in a background daemon thread and shuts down cleanly on exit.
@@ -382,16 +393,20 @@ Pair the cache with the scheduler to pre-populate or refresh the cache silently 
 ```yaml
 cache_enabled: enabled
 scheduler_enabled: enabled
+tasks_file_path: ~/.sandvoice/tasks.yaml
+```
 
-tasks:
-  - name: weather-cache-refresh
-    schedule_type: interval
-    schedule_value: "10800"   # refresh every 3 hours
-    action_type: plugin
-    action_payload:
-      plugin: weather
-      query: weather
-      refresh_only: true      # silent refresh — does not speak the result
+In `~/.sandvoice/tasks.yaml`:
+
+```yaml
+- name: weather-cache-refresh
+  schedule_type: interval
+  schedule_value: "10800"   # refresh every 3 hours
+  action_type: plugin
+  action_payload:
+    plugin: weather
+    query: weather
+    refresh_only: true      # silent refresh — does not speak the result
 ```
 
 With `refresh_only: true` the scheduler fetches fresh weather data and updates the cache without playing any audio. Your next voice query will get an instant cached response.
