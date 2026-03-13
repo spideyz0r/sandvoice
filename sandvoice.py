@@ -170,7 +170,7 @@ class SandVoice:
         polluting the interactive conversation history."""
         normalized_route = dict(route)
         normalized_route["route"] = normalize_route_name(route.get("route"))
-        logger.debug("Route: %s", route)
+        logger.debug("Route: %s -> %s", route, normalized_route)
         logger.debug("Plugins: %s", self.plugins.keys())
         if normalized_route["route"] in self.plugins:
             ctx = _SchedulerContext(self, self._scheduler_ai)
@@ -181,7 +181,7 @@ class SandVoice:
     def route_message(self, user_input, route):
         normalized_route = dict(route)
         normalized_route["route"] = normalize_route_name(route.get("route"))
-        logger.debug("Route: %s", route)
+        logger.debug("Route: %s -> %s", route, normalized_route)
         logger.debug("Plugins: %s", self.plugins.keys())
         if normalized_route["route"] in self.plugins:
             return self.plugins[normalized_route["route"]](user_input, normalized_route, self)

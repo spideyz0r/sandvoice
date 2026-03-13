@@ -31,6 +31,26 @@ def normalize_route_name(route_name):
     return _ROUTE_NAME_ALIASES.get(normalized, normalized)
 
 
+def _normalize_route_response(route):
+    """Validate route response shape and normalize the route identifier."""
+    if not isinstance(route, dict):
+        logger.warning("Invalid route response type: %s", type(route).__name__)
+        return {"route": DEFAULT_ROUTE_NAME, "reason": "Invalid route response"}
+
+    normalized_route = normalize_route_name(route.get("route"))
+    reason = route.get("reason")
+    if not isinstance(normalized_route, str) or not normalized_route:
+        logger.warning("Invalid route name in response: %r", route)
+        return {"route": DEFAULT_ROUTE_NAME, "reason": "Invalid route response"}
+    if not isinstance(reason, str) or not reason:
+        logger.warning("Invalid route reason in response: %r", route)
+        return {"route": DEFAULT_ROUTE_NAME, "reason": "Invalid route response"}
+
+    normalized = dict(route)
+    normalized["route"] = normalized_route
+    return normalized
+
+
 def pop_streaming_chunk(buffer, boundary="sentence", min_chars=200, max_chars=DEFAULT_STREAM_MAX_CHARS):
     """Pop a speakable chunk from a growing streaming buffer.
 
@@ -455,9 +475,7 @@ class AI:
                 {"role": "user", "content": user_input}
             ])
             route = json.loads(completion.choices[0].message.content)
-            if isinstance(route, dict) and "route" in route:
-                route["route"] = normalize_route_name(route["route"])
-            return route
+            return _normalize_route_response(route)
         except FileNotFoundError as e:
             error_msg = handle_file_error(e, operation="read", filename="routes.yaml")
             logger.error("Routes file error: %s", e)

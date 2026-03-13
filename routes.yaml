@@ -8,7 +8,7 @@ route_role: |
             You MUST follow all the rules for the routes.
             Bellow follows each route name and it's description delimited by ":"
 
-            default-route: General knowledge. No real time information required. For example: "What is the recipe for a Capirinha?" or "How can I write a regex match in go?".
+            default-route: General knowledge. No real time information required. For example: "What is the recipe for a Caipirinha?" or "How can I write a regex match in go?".
 
             greeting: The user is greeting the bot. For example: "Hello" or "Hi".
 
