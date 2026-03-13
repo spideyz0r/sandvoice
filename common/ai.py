@@ -550,5 +550,4 @@ class AI:
             return self._generate_tts_files(text, model, voice)
         except Exception as e:
             logger.exception("Text-to-speech error")
-            print(handle_api_error(e, service_name="OpenAI TTS"))
             return []
