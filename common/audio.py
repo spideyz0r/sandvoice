@@ -15,13 +15,15 @@ import pygame
 # Kept at module scope so the ctypes callback is never garbage-collected
 # while ALSA may still invoke it (local variables would be GC'd on return).
 _ALSA_NOOP_HANDLER = None
+_alsa_suppression_attempted = False
 
 
 def _suppress_alsa_errors():
     """Silence noisy ALSA error messages on Linux/Pi. Best-effort: no-op if libasound is not found."""
-    global _ALSA_NOOP_HANDLER
-    if platform.system() != "Linux":
+    global _ALSA_NOOP_HANDLER, _alsa_suppression_attempted
+    if _alsa_suppression_attempted or platform.system() != "Linux":
         return
+    _alsa_suppression_attempted = True
     try:
         from ctypes import CFUNCTYPE, cdll, c_char_p, c_int
         _ALSA_NOOP_HANDLER = CFUNCTYPE(None, c_char_p, c_int, c_char_p, c_int, c_char_p)(lambda *_: None)
