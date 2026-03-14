@@ -3,7 +3,7 @@ import unittest
 from unittest.mock import Mock, patch
 
 
-hn_plugin = importlib.import_module('plugins.hacker-news')
+hn_plugin = importlib.import_module('plugins.hacker_news')
 
 
 class TestHackerNewsPlugin(unittest.TestCase):

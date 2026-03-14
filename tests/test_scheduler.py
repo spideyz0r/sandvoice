@@ -779,6 +779,65 @@ class TestSandVoiceSchedulerInit(unittest.TestCase):
         sv.ai.generate_response.assert_not_called()
         self.assertEqual(result, "plugin output")
 
+    def test_load_plugins_registers_hyphen_alias_for_underscore_module(self):
+        """load_plugins() must register both canonical underscore and hyphen aliases."""
+        from sandvoice import SandVoice
+
+        sv = object.__new__(SandVoice)
+        sv.config = MagicMock()
+        sv.config.plugin_path = "/tmp/plugins"
+        sv.plugins = {}
+
+        module = MagicMock(spec=["process"])
+        module.process = MagicMock()
+
+        with patch("sandvoice.os.path.exists", return_value=True), \
+             patch("sandvoice.os.listdir", return_value=["hacker_news.py"]), \
+             patch("sandvoice.importlib.import_module", return_value=module):
+            sv.load_plugins()
+
+        self.assertIs(sv.plugins["hacker_news"], module.process)
+        self.assertIs(sv.plugins["hacker-news"], module.process)
+
+    def test_route_message_normalizes_hyphenated_plugin_name(self):
+        """route_message() must normalize hacker-news to the hacker_news plugin key."""
+        sv = self._make_stub()
+        sv.ai = MagicMock()
+        mock_plugin = MagicMock(return_value="plugin output")
+        sv.plugins = {"hacker_news": mock_plugin}
+
+        result = sv.route_message("hn", {"route": "hacker-news", "reason": "news"})
+
+        mock_plugin.assert_called_once()
+        self.assertEqual(
+            mock_plugin.call_args[0][1],
+            {"route": "hacker_news", "reason": "news"},
+        )
+        sv.ai.generate_response.assert_not_called()
+        self.assertEqual(result, "plugin output")
+
+    def test_route_message_prefers_canonical_plugin_key_over_hyphen_alias(self):
+        """route_message() must dispatch to hacker_news even when hacker-news alias exists."""
+        sv = self._make_stub()
+        sv.ai = MagicMock()
+        canonical_plugin = MagicMock(return_value="canonical")
+        alias_plugin = MagicMock(return_value="alias")
+        sv.plugins = {
+            "hacker_news": canonical_plugin,
+            "hacker-news": alias_plugin,
+        }
+
+        result = sv.route_message("hn", {"route": "hacker-news", "reason": "news"})
+
+        canonical_plugin.assert_called_once()
+        self.assertEqual(
+            canonical_plugin.call_args[0][1],
+            {"route": "hacker_news", "reason": "news"},
+        )
+        alias_plugin.assert_not_called()
+        sv.ai.generate_response.assert_not_called()
+        self.assertEqual(result, "canonical")
+
     def test_route_message_normalizes_legacy_default_route_name(self):
         """route_message() must normalize default-rote to default-route before dispatch."""
         sv = self._make_stub()
@@ -814,6 +873,49 @@ class TestSandVoiceSchedulerInit(unittest.TestCase):
         sv._scheduler_ai.generate_response.assert_not_called()
         sv.ai.generate_response.assert_not_called()
         self.assertEqual(result, "plugin output")
+
+    def test_scheduler_route_message_normalizes_hyphenated_plugin_name(self):
+        """_scheduler_route_message() must normalize hacker-news to hacker_news."""
+        sv = self._make_stub()
+        sv._scheduler_ai = MagicMock()
+        sv.ai = MagicMock()
+        mock_plugin = MagicMock(return_value="plugin output")
+        sv.plugins = {"hacker_news": mock_plugin}
+
+        result = sv._scheduler_route_message("hn", {"route": "hacker-news", "reason": "news"})
+
+        mock_plugin.assert_called_once()
+        self.assertEqual(
+            mock_plugin.call_args[0][1],
+            {"route": "hacker_news", "reason": "news"},
+        )
+        sv._scheduler_ai.generate_response.assert_not_called()
+        sv.ai.generate_response.assert_not_called()
+        self.assertEqual(result, "plugin output")
+
+    def test_scheduler_route_message_prefers_canonical_plugin_key_over_hyphen_alias(self):
+        """_scheduler_route_message() must prefer hacker_news over hacker-news alias."""
+        sv = self._make_stub()
+        sv._scheduler_ai = MagicMock()
+        sv.ai = MagicMock()
+        canonical_plugin = MagicMock(return_value="canonical")
+        alias_plugin = MagicMock(return_value="alias")
+        sv.plugins = {
+            "hacker_news": canonical_plugin,
+            "hacker-news": alias_plugin,
+        }
+
+        result = sv._scheduler_route_message("hn", {"route": "hacker-news", "reason": "news"})
+
+        canonical_plugin.assert_called_once()
+        self.assertEqual(
+            canonical_plugin.call_args[0][1],
+            {"route": "hacker_news", "reason": "news"},
+        )
+        alias_plugin.assert_not_called()
+        sv._scheduler_ai.generate_response.assert_not_called()
+        sv.ai.generate_response.assert_not_called()
+        self.assertEqual(result, "canonical")
 
     def test_scheduler_context_route_message_uses_scheduler_route(self):
         """_SchedulerContext.route_message must delegate to _scheduler_route_message,
