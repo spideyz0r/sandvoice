@@ -779,6 +779,42 @@ class TestSandVoiceSchedulerInit(unittest.TestCase):
         sv.ai.generate_response.assert_not_called()
         self.assertEqual(result, "plugin output")
 
+    def test_route_message_normalizes_legacy_default_route_name(self):
+        """route_message() must normalize default-rote to default-route before dispatch."""
+        sv = self._make_stub()
+        sv.ai = MagicMock()
+        mock_plugin = MagicMock(return_value="plugin output")
+        sv.plugins = {"default-route": mock_plugin}
+
+        result = sv.route_message("hello", {"route": "default-rote", "reason": "legacy"})
+
+        mock_plugin.assert_called_once()
+        self.assertEqual(
+            mock_plugin.call_args[0][1],
+            {"route": "default-route", "reason": "legacy"},
+        )
+        sv.ai.generate_response.assert_not_called()
+        self.assertEqual(result, "plugin output")
+
+    def test_scheduler_route_message_normalizes_legacy_default_route_name(self):
+        """_scheduler_route_message() must normalize default-rote before plugin dispatch."""
+        sv = self._make_stub()
+        sv._scheduler_ai = MagicMock()
+        sv.ai = MagicMock()
+        mock_plugin = MagicMock(return_value="plugin output")
+        sv.plugins = {"default-route": mock_plugin}
+
+        result = sv._scheduler_route_message("hello", {"route": "default-rote", "reason": "legacy"})
+
+        mock_plugin.assert_called_once()
+        self.assertEqual(
+            mock_plugin.call_args[0][1],
+            {"route": "default-route", "reason": "legacy"},
+        )
+        sv._scheduler_ai.generate_response.assert_not_called()
+        sv.ai.generate_response.assert_not_called()
+        self.assertEqual(result, "plugin output")
+
     def test_scheduler_context_route_message_uses_scheduler_route(self):
         """_SchedulerContext.route_message must delegate to _scheduler_route_message,
         not SandVoice.route_message, so plugins calling ctx.route_message() still

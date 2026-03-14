@@ -480,6 +480,66 @@ route_role: |
 
     @patch('common.ai.OpenAI')
     @patch('common.ai.setup_error_logging')
+    @patch('builtins.open', new_callable=mock_open)
+    def test_define_route_normalizes_legacy_default_route_name(self, mock_file, mock_setup, mock_openai_class):
+        """Legacy default-rote output must normalize to default-route."""
+        mock_file.return_value.read.return_value = self.routes_yaml
+
+        mock_config = Mock()
+        mock_config.api_timeout = 10
+        mock_config.api_retry_attempts = 3
+        mock_config.gpt_route_model = 'gpt-3.5-turbo'
+        mock_config.location = 'Test City'
+        mock_config.sandvoice_path = '/test/path'
+        mock_config.debug = False
+
+        mock_client = Mock()
+        mock_openai_class.return_value = mock_client
+
+        mock_message = Mock()
+        mock_message.content = '{"route": "default-rote", "reason": "fallback"}'
+        mock_completion = Mock()
+        mock_completion.choices = [Mock(message=mock_message)]
+        mock_client.chat.completions.create.return_value = mock_completion
+
+        ai = AI(mock_config)
+        result = ai.define_route("Hello")
+
+        self.assertEqual(result["route"], "default-route")
+        self.assertEqual(result["reason"], "fallback")
+
+    @patch('common.ai.OpenAI')
+    @patch('common.ai.setup_error_logging')
+    @patch('builtins.open', new_callable=mock_open)
+    def test_define_route_invalid_shape_falls_back_to_default_route(self, mock_file, mock_setup, mock_openai_class):
+        """Non-dict JSON route output must fail closed to the default route."""
+        mock_file.return_value.read.return_value = self.routes_yaml
+
+        mock_config = Mock()
+        mock_config.api_timeout = 10
+        mock_config.api_retry_attempts = 3
+        mock_config.gpt_route_model = 'gpt-3.5-turbo'
+        mock_config.location = 'Test City'
+        mock_config.sandvoice_path = '/test/path'
+        mock_config.debug = False
+
+        mock_client = Mock()
+        mock_openai_class.return_value = mock_client
+
+        mock_message = Mock()
+        mock_message.content = '["default-rote", "fallback"]'
+        mock_completion = Mock()
+        mock_completion.choices = [Mock(message=mock_message)]
+        mock_client.chat.completions.create.return_value = mock_completion
+
+        ai = AI(mock_config)
+        result = ai.define_route("Hello")
+
+        self.assertEqual(result["route"], "default-route")
+        self.assertEqual(result["reason"], "Invalid route response")
+
+    @patch('common.ai.OpenAI')
+    @patch('common.ai.setup_error_logging')
     def test_define_route_file_not_found(self, mock_setup, mock_openai_class):
         """Test route definition with missing routes file"""
         mock_config = Mock()

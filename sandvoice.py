@@ -5,7 +5,7 @@ warnings.filterwarnings("ignore", message="pkg_resources is deprecated")
 
 from common.configuration import Config
 from common.audio import Audio
-from common.ai import AI, pop_streaming_chunk
+from common.ai import AI, normalize_route_name, pop_streaming_chunk
 from common.error_handling import handle_api_error
 from common.cache import VoiceCache
 from common.db import SchedulerDB
@@ -168,19 +168,23 @@ class SandVoice:
     def _scheduler_route_message(self, user_input, route):
         """Route a scheduler-triggered message using a dedicated AI instance to avoid
         polluting the interactive conversation history."""
-        logger.debug("Route: %s", route)
+        normalized_route = dict(route)
+        normalized_route["route"] = normalize_route_name(route.get("route"))
+        logger.debug("Route: %s -> %s", route, normalized_route)
         logger.debug("Plugins: %s", self.plugins.keys())
-        if route["route"] in self.plugins:
+        if normalized_route["route"] in self.plugins:
             ctx = _SchedulerContext(self, self._scheduler_ai)
-            return self.plugins[route["route"]](user_input, route, ctx)
+            return self.plugins[normalized_route["route"]](user_input, normalized_route, ctx)
         else:
             return self._scheduler_ai.generate_response(user_input).content
 
     def route_message(self, user_input, route):
-        logger.debug("Route: %s", route)
+        normalized_route = dict(route)
+        normalized_route["route"] = normalize_route_name(route.get("route"))
+        logger.debug("Route: %s -> %s", route, normalized_route)
         logger.debug("Plugins: %s", self.plugins.keys())
-        if route["route"] in self.plugins:
-            return self.plugins[route["route"]](user_input, route, self)
+        if normalized_route["route"] in self.plugins:
+            return self.plugins[normalized_route["route"]](user_input, normalized_route, self)
         else:
             return self.ai.generate_response(user_input).content
 
