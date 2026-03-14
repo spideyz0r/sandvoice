@@ -146,8 +146,6 @@ class TestWakeWordModeInitialize(unittest.TestCase):
     def test_initialize_does_not_create_ack_earcon_when_bot_voice_disabled(self, mock_beep, mock_ack, mock_porcupine_create):
         self.mock_config.bot_voice = False
         self.mock_config.voice_ack_earcon = True
-        self.mock_config.voice_ack_earcon_freq = 600
-        self.mock_config.voice_ack_earcon_duration = 0.06
 
         mock_porcupine = Mock()
         mock_porcupine.sample_rate = 16000
@@ -407,11 +405,11 @@ class TestWakeWordModeStateListening(unittest.TestCase):
         self.mock_config.debug = False
         self.mock_config.visual_state_indicator = False
         self.mock_config.vad_enabled = True
-        self.mock_config.vad_aggressiveness = 3
         self.mock_config.rate = 16000
         self.mock_config.channels = 1
-        self.mock_config.vad_frame_duration = 30
+        self.mock_config.vad_aggressiveness = 3
         self.mock_config.vad_silence_duration = 1.5
+        self.mock_config.vad_frame_duration = 30
         self.mock_config.vad_timeout = 30
         self.mock_config.tmp_files_path = "/tmp/test/"
 
@@ -929,8 +927,6 @@ class TestWakeWordModeProcessing(unittest.TestCase):
         self.mock_config.stream_responses = "enabled"
         self.mock_config.stream_tts = "enabled"
         self.mock_config.stream_tts_boundary = "sentence"
-        self.mock_config.stream_tts_first_chunk_target_s = 2
-        self.mock_config.stream_tts_buffer_chunks = 1
 
         self.mock_ai.transcribe_and_translate.return_value = "Tell me something long"
         self.mock_ai.define_route.return_value = {"route": "default-route", "reason": "default"}
@@ -1034,6 +1030,7 @@ class TestWakeWordModeResponding(unittest.TestCase):
         self.mock_config.visual_state_indicator = False
         self.mock_config.barge_in = False
         self.mock_config.tmp_files_path = "/tmp/test/"
+        self.mock_config.stream_tts_first_chunk_target_s = 6
 
         self.mock_ai = Mock()
         self.mock_audio = Mock()
@@ -1047,12 +1044,7 @@ class TestWakeWordModeResponding(unittest.TestCase):
         mock_exists.return_value = True
 
         self.mock_config.botname = "TestBot"
-        self.mock_config.stream_print_deltas = False
         self.mock_config.stream_tts_boundary = "sentence"
-        self.mock_config.stream_tts_first_chunk_target_s = 1
-        self.mock_config.stream_tts_buffer_chunks = 1
-        self.mock_config.stream_tts_tts_join_timeout_s = 1
-        self.mock_config.stream_tts_player_join_timeout_s = 1
 
         # Streaming yields a short response and completes
         self.mock_ai.stream_response_deltas.return_value = iter(["Hello world. "])
@@ -1078,12 +1070,7 @@ class TestWakeWordModeResponding(unittest.TestCase):
         mock_exists.return_value = True
 
         self.mock_config.botname = "TestBot"
-        self.mock_config.stream_print_deltas = False
         self.mock_config.stream_tts_boundary = "sentence"
-        self.mock_config.stream_tts_first_chunk_target_s = 1
-        self.mock_config.stream_tts_buffer_chunks = 1
-        self.mock_config.stream_tts_tts_join_timeout_s = 1
-        self.mock_config.stream_tts_player_join_timeout_s = 1
 
         consumed = []
 

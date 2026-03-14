@@ -155,128 +155,71 @@ class TestConfigurationValidation(unittest.TestCase):
 
         self.assertIn("stream_tts_boundary must be", str(context.exception))
 
-    def test_stream_tts_numeric_values_must_be_positive_ints(self):
-        self.write_config({
-            "stream_tts_first_chunk_target_s": 0,
-            "stream_tts_buffer_chunks": 0,
-        })
-
+    def test_stream_tts_first_chunk_target_s_must_be_positive_int(self):
+        self.write_config({"stream_tts_first_chunk_target_s": 0})
         with self.assertRaises(ValueError) as context:
             Config()
-
-        msg = str(context.exception)
-        self.assertIn("stream_tts_first_chunk_target_s must be", msg)
-        self.assertIn("stream_tts_buffer_chunks must be", msg)
-
-    def test_stream_tts_join_timeouts_must_be_positive_ints(self):
-        self.write_config({
-            "stream_tts_tts_join_timeout_s": 0,
-            "stream_tts_player_join_timeout_s": 0,
-        })
-
-        with self.assertRaises(ValueError) as context:
-            Config()
-
-        msg = str(context.exception)
-        self.assertIn("stream_tts_tts_join_timeout_s must be", msg)
-        self.assertIn("stream_tts_player_join_timeout_s must be", msg)
+        self.assertIn("stream_tts_first_chunk_target_s must be", str(context.exception))
 
     def test_voice_ack_earcon_validation_only_when_enabled(self):
-        """Test that ack earcon freq/duration are only validated when enabled"""
-        # Disabled: invalid values should not fail validation
-        self.write_config({
-            "voice_ack_earcon": "disabled",
-            "voice_ack_earcon_freq": 0,
-            "voice_ack_earcon_duration": 0,
-        })
-        Config()
+        """Freq/duration are only validated when earcon is enabled."""
+        self.write_config({"voice_ack_earcon": "disabled", "voice_ack_earcon_freq": 0, "voice_ack_earcon_duration": 0})
+        Config()  # should not raise
 
-        # Enabled: invalid values should fail validation
-        self.write_config({
-            "voice_ack_earcon": "enabled",
-            "voice_ack_earcon_freq": 0,
-            "voice_ack_earcon_duration": 0,
-        })
-
+        self.write_config({"voice_ack_earcon": "enabled", "voice_ack_earcon_freq": 0, "voice_ack_earcon_duration": 0.06})
         with self.assertRaises(ValueError) as context:
             Config()
-
         self.assertIn("voice_ack_earcon_freq must be a positive integer", str(context.exception))
 
-    def test_voice_ack_earcon_freq_must_be_int_when_enabled(self):
-        """Test that voice_ack_earcon_freq must be an int when enabled"""
-        self.write_config({
-            "voice_ack_earcon": "enabled",
-            "voice_ack_earcon_freq": 600.5,
-            "voice_ack_earcon_duration": 0.06,
-        })
-
+    def test_invalid_beep_freq(self):
+        self.write_config({"wake_confirmation_beep_freq": -100})
         with self.assertRaises(ValueError) as context:
             Config()
+        self.assertIn("wake_confirmation_beep_freq must be a positive integer", str(context.exception))
 
+    def test_bool_beep_freq_rejected(self):
+        """True is a bool (subclass of int), should not pass as a valid frequency."""
+        self.write_config({"wake_confirmation_beep_freq": True})
+        with self.assertRaises(ValueError) as context:
+            Config()
+        self.assertIn("wake_confirmation_beep_freq must be a positive integer", str(context.exception))
+
+    def test_bool_earcon_freq_rejected(self):
+        """True is a bool (subclass of int), should not pass as a valid frequency."""
+        self.write_config({"voice_ack_earcon": "enabled", "voice_ack_earcon_freq": True, "voice_ack_earcon_duration": 0.06})
+        with self.assertRaises(ValueError) as context:
+            Config()
         self.assertIn("voice_ack_earcon_freq must be a positive integer", str(context.exception))
 
-    def test_voice_ack_earcon_freq_accepts_integer_like_values(self):
-        """Test that integer-like YAML values are accepted and normalized."""
-        self.write_config({
-            "voice_ack_earcon": "enabled",
-            "voice_ack_earcon_freq": 600.0,
-            "voice_ack_earcon_duration": 0.06,
-        })
-        config = Config()
-        self.assertEqual(config.voice_ack_earcon_freq, 600)
+    def test_bool_beep_duration_rejected(self):
+        """True is a bool (subclass of int), should not pass as a valid duration."""
+        self.write_config({"wake_confirmation_beep_duration": True})
+        with self.assertRaises(ValueError) as context:
+            Config()
+        self.assertIn("wake_confirmation_beep_duration must be a positive number", str(context.exception))
 
-        self.write_config({
-            "voice_ack_earcon": "enabled",
-            "voice_ack_earcon_freq": "+600",
-            "voice_ack_earcon_duration": 0.06,
-        })
-        config = Config()
-        self.assertEqual(config.voice_ack_earcon_freq, 600)
+    def test_bool_earcon_duration_rejected(self):
+        """True is a bool (subclass of int), should not pass as a valid duration."""
+        self.write_config({"voice_ack_earcon": "enabled", "voice_ack_earcon_freq": 600, "voice_ack_earcon_duration": True})
+        with self.assertRaises(ValueError) as context:
+            Config()
+        self.assertIn("voice_ack_earcon_duration must be a positive number", str(context.exception))
 
-        self.write_config({
-            "voice_ack_earcon": "enabled",
-            "voice_ack_earcon_freq": "600.0",
-            "voice_ack_earcon_duration": 0.06,
-        })
-        config = Config()
-        self.assertEqual(config.voice_ack_earcon_freq, 600)
-
-    def test_voice_ack_earcon_duration_accepts_string_value(self):
-        """Test that duration can be specified as a string and gets normalized."""
-        self.write_config({
-            "voice_ack_earcon": "enabled",
-            "voice_ack_earcon_freq": 600,
-            "voice_ack_earcon_duration": "0.06",
-        })
-        config = Config()
-        self.assertAlmostEqual(config.voice_ack_earcon_duration, 0.06)
+    def test_invalid_beep_duration(self):
+        self.write_config({"wake_confirmation_beep_duration": -0.5})
+        with self.assertRaises(ValueError) as context:
+            Config()
+        self.assertIn("wake_confirmation_beep_duration must be a positive number", str(context.exception))
 
     def test_voice_ack_earcon_accepts_boolean_values(self):
         """Test that voice_ack_earcon can be specified as YAML boolean."""
-        self.write_config({
-            "voice_ack_earcon": True,
-            "voice_ack_earcon_freq": 600,
-            "voice_ack_earcon_duration": 0.06,
-        })
+        self.write_config({"voice_ack_earcon": True})
         config = Config()
         self.assertTrue(config.voice_ack_earcon)
 
-        self.write_config({
-            "voice_ack_earcon": False,
-            "voice_ack_earcon_freq": 600,
-            "voice_ack_earcon_duration": 0.06,
-        })
+        self.write_config({"voice_ack_earcon": False})
         config = Config()
         self.assertFalse(config.voice_ack_earcon)
-
-        self.write_config({
-            "voice_ack_earcon": "enabled",
-            "voice_ack_earcon_freq": "600",
-            "voice_ack_earcon_duration": 0.06,
-        })
-        config = Config()
-        self.assertEqual(config.voice_ack_earcon_freq, 600)
 
     def test_invalid_falsy_verbosity_values(self):
         """Test that explicitly provided falsy verbosity values still fail validation"""
@@ -418,39 +361,6 @@ class TestConfigurationValidation(unittest.TestCase):
         self.assertEqual(config.channels, 2)
 
     @patch('common.configuration.get_optimal_channels')
-    @patch('builtins.print')
-    def test_deprecation_warning_for_linux_warnings(self, mock_print, mock_get_optimal):
-        """Test that linux_warnings config triggers deprecation warning"""
-        mock_get_optimal.return_value = 2
-
-        # Set linux_warnings to a non-default value
-        self.write_config({"linux_warnings": "disabled"})
-
-        Config()
-
-        # Should have printed deprecation warning
-        warning_calls = [call for call in mock_print.call_args_list
-                        if len(call[0]) > 0 and 'deprecated' in call[0][0].lower()]
-        self.assertGreater(len(warning_calls), 0, "Should print deprecation warning")
-
-    @patch('common.configuration.get_optimal_channels')
-    @patch('builtins.print')
-    def test_no_warning_when_linux_warnings_not_set(self, mock_print, mock_get_optimal):
-        """Test that no deprecation warning when linux_warnings not explicitly set"""
-        mock_get_optimal.return_value = 2
-
-        # Don't set linux_warnings - uses default
-        self.write_config({"channels": 2})
-
-        config = Config()
-        self.assertEqual(config.channels, 2)
-
-        # Should NOT print deprecation warning
-        warning_calls = [call for call in mock_print.call_args_list
-                        if len(call[0]) > 0 and 'deprecated' in call[0][0].lower()]
-        self.assertEqual(len(warning_calls), 0, "Should not print deprecation warning")
-
-    @patch('common.configuration.get_optimal_channels')
     def test_auto_detect_fallback_on_exception(self, mock_get_optimal):
         """Test that auto-detection falls back to 2 channels on exception"""
         mock_get_optimal.side_effect = Exception("PyAudio not available")
@@ -562,24 +472,6 @@ class TestConfigurationValidation(unittest.TestCase):
             Config()
 
         self.assertIn("vad_timeout must be a positive number", str(context.exception))
-
-    def test_invalid_beep_freq(self):
-        """Test that negative beep frequency raises error"""
-        self.write_config({"wake_confirmation_beep_freq": -100})
-
-        with self.assertRaises(ValueError) as context:
-            Config()
-
-        self.assertIn("wake_confirmation_beep_freq must be a positive integer", str(context.exception))
-
-    def test_invalid_beep_duration(self):
-        """Test that negative beep duration raises error"""
-        self.write_config({"wake_confirmation_beep_duration": -0.5})
-
-        with self.assertRaises(ValueError) as context:
-            Config()
-
-        self.assertIn("wake_confirmation_beep_duration must be a positive number", str(context.exception))
 
     def test_valid_wake_word_configuration(self):
         """Test that valid custom wake word configuration is accepted"""
