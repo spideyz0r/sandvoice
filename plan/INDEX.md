@@ -51,6 +51,10 @@ plan/
 **Document**: [completed/09-barge-in-stop-tts-on-wake-word.md](./completed/09-barge-in-stop-tts-on-wake-word.md)
 **Description**: Allow users to interrupt SandVoice speech by saying the wake word, stopping TTS immediately and transitioning into command listening.
 
+### Priority 12: Route Definitions Default Route Alignment
+**Document**: [completed/12-route-definitions-default-route-alignment.md](./completed/12-route-definitions-default-route-alignment.md)
+**Description**: Fix default-rote typo and align default route naming across routes.yaml and routing fallbacks.
+
 ### Priority 16: Voice Ack Earcon
 **Document**: [completed/16-voice-ack-earcon.md](./completed/16-voice-ack-earcon.md)
 **Description**: Play a short ack earcon once per request (after recording, before processing) to reduce perceived latency in voice mode.
@@ -106,10 +110,6 @@ plan/
 ### Priority 11: Plugin Route Name Normalization
 **Document**: [backlog/11-plugin-route-name-normalization.md](./backlog/11-plugin-route-name-normalization.md)
 **Description**: Standardize plugin module naming (underscore) while supporting hyphenated route names (e.g., hacker-news) via normalization/aliases.
-
-### Priority 12: Route Definitions Default Route Alignment
-**Document**: [backlog/12-route-definitions-default-route-alignment.md](./backlog/12-route-definitions-default-route-alignment.md)
-**Description**: Fix default-rote typo and align default route naming across routes.yaml and routing fallbacks.
 
 ### Priority 13: VAD Robustness - Timeout and Tuning
 **Document**: [backlog/13-vad-robustness-timeout-tuning.md](./backlog/13-vad-robustness-timeout-tuning.md)
