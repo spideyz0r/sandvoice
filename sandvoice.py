@@ -34,12 +34,12 @@ def plugin_route_alias(name):
 def resolve_plugin_route_name(route_name, plugins):
     """Resolve a route name to the best matching plugin key."""
     normalized_route = normalize_route_name(route_name)
-    if normalized_route in plugins:
-        return normalized_route
-
     plugin_name = normalize_plugin_name(normalized_route)
     if plugin_name in plugins:
         return plugin_name
+
+    if normalized_route in plugins:
+        return normalized_route
 
     return normalized_route
 

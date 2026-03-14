@@ -816,6 +816,28 @@ class TestSandVoiceSchedulerInit(unittest.TestCase):
         sv.ai.generate_response.assert_not_called()
         self.assertEqual(result, "plugin output")
 
+    def test_route_message_prefers_canonical_plugin_key_over_hyphen_alias(self):
+        """route_message() must dispatch to hacker_news even when hacker-news alias exists."""
+        sv = self._make_stub()
+        sv.ai = MagicMock()
+        canonical_plugin = MagicMock(return_value="canonical")
+        alias_plugin = MagicMock(return_value="alias")
+        sv.plugins = {
+            "hacker_news": canonical_plugin,
+            "hacker-news": alias_plugin,
+        }
+
+        result = sv.route_message("hn", {"route": "hacker-news", "reason": "news"})
+
+        canonical_plugin.assert_called_once()
+        self.assertEqual(
+            canonical_plugin.call_args[0][1],
+            {"route": "hacker_news", "reason": "news"},
+        )
+        alias_plugin.assert_not_called()
+        sv.ai.generate_response.assert_not_called()
+        self.assertEqual(result, "canonical")
+
     def test_route_message_normalizes_legacy_default_route_name(self):
         """route_message() must normalize default-rote to default-route before dispatch."""
         sv = self._make_stub()
@@ -870,6 +892,30 @@ class TestSandVoiceSchedulerInit(unittest.TestCase):
         sv._scheduler_ai.generate_response.assert_not_called()
         sv.ai.generate_response.assert_not_called()
         self.assertEqual(result, "plugin output")
+
+    def test_scheduler_route_message_prefers_canonical_plugin_key_over_hyphen_alias(self):
+        """_scheduler_route_message() must prefer hacker_news over hacker-news alias."""
+        sv = self._make_stub()
+        sv._scheduler_ai = MagicMock()
+        sv.ai = MagicMock()
+        canonical_plugin = MagicMock(return_value="canonical")
+        alias_plugin = MagicMock(return_value="alias")
+        sv.plugins = {
+            "hacker_news": canonical_plugin,
+            "hacker-news": alias_plugin,
+        }
+
+        result = sv._scheduler_route_message("hn", {"route": "hacker-news", "reason": "news"})
+
+        canonical_plugin.assert_called_once()
+        self.assertEqual(
+            canonical_plugin.call_args[0][1],
+            {"route": "hacker_news", "reason": "news"},
+        )
+        alias_plugin.assert_not_called()
+        sv._scheduler_ai.generate_response.assert_not_called()
+        sv.ai.generate_response.assert_not_called()
+        self.assertEqual(result, "canonical")
 
     def test_scheduler_context_route_message_uses_scheduler_route(self):
         """_SchedulerContext.route_message must delegate to _scheduler_route_message,
