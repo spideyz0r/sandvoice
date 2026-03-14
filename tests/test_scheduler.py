@@ -779,6 +779,43 @@ class TestSandVoiceSchedulerInit(unittest.TestCase):
         sv.ai.generate_response.assert_not_called()
         self.assertEqual(result, "plugin output")
 
+    def test_load_plugins_registers_hyphen_alias_for_underscore_module(self):
+        """load_plugins() must register both canonical underscore and hyphen aliases."""
+        from sandvoice import SandVoice
+
+        sv = object.__new__(SandVoice)
+        sv.config = MagicMock()
+        sv.config.plugin_path = "/tmp/plugins"
+        sv.plugins = {}
+
+        module = MagicMock(spec=["process"])
+        module.process = MagicMock()
+
+        with patch("sandvoice.os.path.exists", return_value=True), \
+             patch("sandvoice.os.listdir", return_value=["hacker_news.py"]), \
+             patch("sandvoice.importlib.import_module", return_value=module):
+            sv.load_plugins()
+
+        self.assertIs(sv.plugins["hacker_news"], module.process)
+        self.assertIs(sv.plugins["hacker-news"], module.process)
+
+    def test_route_message_normalizes_hyphenated_plugin_name(self):
+        """route_message() must normalize hacker-news to the hacker_news plugin key."""
+        sv = self._make_stub()
+        sv.ai = MagicMock()
+        mock_plugin = MagicMock(return_value="plugin output")
+        sv.plugins = {"hacker_news": mock_plugin}
+
+        result = sv.route_message("hn", {"route": "hacker-news", "reason": "news"})
+
+        mock_plugin.assert_called_once()
+        self.assertEqual(
+            mock_plugin.call_args[0][1],
+            {"route": "hacker_news", "reason": "news"},
+        )
+        sv.ai.generate_response.assert_not_called()
+        self.assertEqual(result, "plugin output")
+
     def test_route_message_normalizes_legacy_default_route_name(self):
         """route_message() must normalize default-rote to default-route before dispatch."""
         sv = self._make_stub()
@@ -810,6 +847,25 @@ class TestSandVoiceSchedulerInit(unittest.TestCase):
         self.assertEqual(
             mock_plugin.call_args[0][1],
             {"route": "default-route", "reason": "legacy"},
+        )
+        sv._scheduler_ai.generate_response.assert_not_called()
+        sv.ai.generate_response.assert_not_called()
+        self.assertEqual(result, "plugin output")
+
+    def test_scheduler_route_message_normalizes_hyphenated_plugin_name(self):
+        """_scheduler_route_message() must normalize hacker-news to hacker_news."""
+        sv = self._make_stub()
+        sv._scheduler_ai = MagicMock()
+        sv.ai = MagicMock()
+        mock_plugin = MagicMock(return_value="plugin output")
+        sv.plugins = {"hacker_news": mock_plugin}
+
+        result = sv._scheduler_route_message("hn", {"route": "hacker-news", "reason": "news"})
+
+        mock_plugin.assert_called_once()
+        self.assertEqual(
+            mock_plugin.call_args[0][1],
+            {"route": "hacker_news", "reason": "news"},
         )
         sv._scheduler_ai.generate_response.assert_not_called()
         sv.ai.generate_response.assert_not_called()

@@ -16,6 +16,33 @@ import queue, threading, time
 
 logger = logging.getLogger(__name__)
 
+
+def normalize_plugin_name(name):
+    """Convert route/plugin names to the canonical Python module key."""
+    if not isinstance(name, str):
+        return name
+    return normalize_route_name(name).strip().replace("-", "_")
+
+
+def plugin_route_alias(name):
+    """Return the voice-friendly hyphenated alias for a plugin module key."""
+    if not isinstance(name, str):
+        return name
+    return name.replace("_", "-")
+
+
+def resolve_plugin_route_name(route_name, plugins):
+    """Resolve a route name to the best matching plugin key."""
+    normalized_route = normalize_route_name(route_name)
+    if normalized_route in plugins:
+        return normalized_route
+
+    plugin_name = normalize_plugin_name(normalized_route)
+    if plugin_name in plugins:
+        return plugin_name
+
+    return normalized_route
+
 class _SchedulerContext:
     """Proxy passed to plugins when invoked from the scheduler.
 
@@ -80,17 +107,25 @@ class SandVoice:
         for filename in os.listdir(plugins_dir):
             if filename.endswith(".py"):
                 try:
-                    module_name = os.path.splitext(filename)[0]
+                    raw_module_name = os.path.splitext(filename)[0]
+                    module_name = normalize_plugin_name(raw_module_name)
                     module = importlib.import_module(f"plugins.{module_name}")
                 except Exception as e:
-                    print(f"Error loading plugin {filename}: {e}")
+                    logger.warning("Error loading plugin %s: %s", filename, e)
                     continue
 
                 # Expect a class named 'Plugin' or a top-level 'process' function
                 if hasattr(module, 'Plugin'):
-                    self.plugins[module_name] = module.Plugin()
+                    plugin = module.Plugin()
                 elif hasattr(module, 'process'):
-                    self.plugins[module_name] = module.process
+                    plugin = module.process
+                else:
+                    continue
+
+                self.plugins[module_name] = plugin
+                alias = plugin_route_alias(module_name)
+                if alias != module_name:
+                    self.plugins[alias] = plugin
 
     def _init_cache(self):
         """Initialise VoiceCache if cache_enabled, using the same DB file as the scheduler."""
@@ -169,7 +204,7 @@ class SandVoice:
         """Route a scheduler-triggered message using a dedicated AI instance to avoid
         polluting the interactive conversation history."""
         normalized_route = dict(route)
-        normalized_route["route"] = normalize_route_name(route.get("route"))
+        normalized_route["route"] = resolve_plugin_route_name(route.get("route"), self.plugins)
         logger.debug("Route: %s -> %s", route, normalized_route)
         logger.debug("Plugins: %s", self.plugins.keys())
         if normalized_route["route"] in self.plugins:
@@ -180,7 +215,7 @@ class SandVoice:
 
     def route_message(self, user_input, route):
         normalized_route = dict(route)
-        normalized_route["route"] = normalize_route_name(route.get("route"))
+        normalized_route["route"] = resolve_plugin_route_name(route.get("route"), self.plugins)
         logger.debug("Route: %s -> %s", route, normalized_route)
         logger.debug("Plugins: %s", self.plugins.keys())
         if normalized_route["route"] in self.plugins:
