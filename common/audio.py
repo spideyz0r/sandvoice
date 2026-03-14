@@ -12,20 +12,25 @@ os.environ['PYGAME_HIDE_SUPPORT_PROMPT'] = "hide"
 import pygame
 
 
+# Kept at module scope so the ctypes callback is never garbage-collected
+# while ALSA may still invoke it (local variables would be GC'd on return).
+_ALSA_NOOP_HANDLER = None
+
+
 def _suppress_alsa_errors():
     """Silence noisy ALSA error messages on Linux/Pi. Best-effort: no-op if libasound is not found."""
+    global _ALSA_NOOP_HANDLER
     if platform.system() != "Linux":
         return
     try:
         from ctypes import CFUNCTYPE, cdll, c_char_p, c_int
-        _HANDLER = CFUNCTYPE(None, c_char_p, c_int, c_char_p, c_int, c_char_p)
-        _noop = _HANDLER(lambda *_: None)
+        _ALSA_NOOP_HANDLER = CFUNCTYPE(None, c_char_p, c_int, c_char_p, c_int, c_char_p)(lambda *_: None)
         for lib_dir in ("/usr/lib", "/usr/lib64", "/lib", "/lib64"):
             if not os.path.isdir(lib_dir):
                 continue
             for name in os.listdir(lib_dir):
                 if name.startswith("libasound.so."):
-                    cdll.LoadLibrary(os.path.join(lib_dir, name)).snd_lib_error_set_handler(_noop)
+                    cdll.LoadLibrary(os.path.join(lib_dir, name)).snd_lib_error_set_handler(_ALSA_NOOP_HANDLER)
                     return
     except Exception:
         pass  # best-effort: never raise from a noise-suppression helper
