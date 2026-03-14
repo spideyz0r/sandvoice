@@ -1,7 +1,7 @@
 #import re, os, pyaudio, wave
 #from pydub import AudioSegment
 import contextlib
-import os, time, threading, pyaudio, wave, lameenc, logging, queue
+import os, platform, time, threading, pyaudio, wave, lameenc, logging, queue
 from pynput import keyboard
 from common.error_handling import handle_file_error
 
@@ -10,6 +10,25 @@ logger = logging.getLogger(__name__)
 # this is necessary to mute some outputs from pygame
 os.environ['PYGAME_HIDE_SUPPORT_PROMPT'] = "hide"
 import pygame
+
+
+def _suppress_alsa_errors():
+    """Silence noisy ALSA error messages on Linux/Pi. Best-effort: no-op if libasound is not found."""
+    if platform.system() != "Linux":
+        return
+    try:
+        from ctypes import CFUNCTYPE, cdll, c_char_p, c_int
+        _HANDLER = CFUNCTYPE(None, c_char_p, c_int, c_char_p, c_int, c_char_p)
+        _noop = _HANDLER(lambda *_: None)
+        for lib_dir in ("/usr/lib", "/usr/lib64", "/lib", "/lib64"):
+            if not os.path.isdir(lib_dir):
+                continue
+            for name in os.listdir(lib_dir):
+                if name.startswith("libasound.so."):
+                    cdll.LoadLibrary(os.path.join(lib_dir, name)).snd_lib_error_set_handler(_noop)
+                    return
+    except Exception:
+        pass  # best-effort: never raise from a noise-suppression helper
 
 class Audio:
     def __init__(self, config):
@@ -37,6 +56,7 @@ class Audio:
         self.convert_to_mp3()
 
     def initialize_audio(self):
+        _suppress_alsa_errors()
         try:
             self.audio = pyaudio.PyAudio()
         except OSError as e:
