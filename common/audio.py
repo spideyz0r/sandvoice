@@ -56,9 +56,7 @@ class Audio:
 
     def start_recording(self):
         if self.audio is None:
-            error_msg = "Cannot record audio - audio hardware not initialized"
-            print(f"Error: {error_msg}")
-            raise RuntimeError(error_msg)
+            raise RuntimeError("Cannot record audio - audio hardware not initialized")
 
         try:
             self.is_recording = True
