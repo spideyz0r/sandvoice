@@ -805,6 +805,27 @@ class TestSandVoiceSchedulerInit(unittest.TestCase):
         self.assertIs(sv.plugins["hacker_news"], module.process)
         self.assertIs(sv.plugins["hacker-news"], module.process)
 
+    def test_load_plugins_warns_and_skips_non_underscore_safe_filename(self):
+        """load_plugins() must not import a normalized name different from the file on disk."""
+        from sandvoice import SandVoice
+
+        sv = object.__new__(SandVoice)
+        sv.config = MagicMock()
+        sv.config.plugin_path = "/tmp/plugins"
+        sv.plugins = {}
+
+        with patch("sandvoice.os.path.exists", return_value=True), \
+             patch("sandvoice.os.listdir", return_value=["hacker-news.py"]), \
+             patch("sandvoice.importlib.import_module") as import_module, \
+             self.assertLogs("sandvoice", level="WARNING") as logs:
+            sv.load_plugins()
+
+        import_module.assert_not_called()
+        self.assertEqual(sv.plugins, {})
+        self.assertTrue(
+            any("rename it to hacker_news.py" in message for message in logs.output)
+        )
+
     def test_route_message_normalizes_hyphenated_plugin_name(self):
         """route_message() must normalize hacker-news to the hacker_news plugin key."""
         sv = self._make_stub()

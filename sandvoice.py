@@ -109,6 +109,13 @@ class SandVoice:
                 try:
                     raw_module_name = os.path.splitext(filename)[0]
                     module_name = normalize_plugin_name(raw_module_name)
+                    if raw_module_name != module_name:
+                        logger.warning(
+                            "Plugin filename %s is not underscore-safe; rename it to %s.py",
+                            filename,
+                            module_name,
+                        )
+                        continue
                     module = importlib.import_module(f"plugins.{module_name}")
                 except Exception as e:
                     logger.warning("Error loading plugin %s: %s", filename, e)
