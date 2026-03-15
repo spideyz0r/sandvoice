@@ -21,7 +21,7 @@ def normalize_plugin_name(name):
     """Convert route/plugin names to the canonical Python module key."""
     if not isinstance(name, str):
         return name
-    return normalize_route_name(name).strip().replace("-", "_")
+    return name.strip().replace("-", "_")
 
 
 def plugin_route_alias(name):
@@ -112,6 +112,8 @@ class SandVoice:
                     module = importlib.import_module(f"plugins.{module_name}")
                 except Exception as e:
                     logger.warning("Error loading plugin %s: %s", filename, e)
+                    if logger.isEnabledFor(logging.DEBUG):
+                        logger.debug("Plugin load traceback for %s", filename, exc_info=True)
                     continue
 
                 # Expect a class named 'Plugin' or a top-level 'process' function

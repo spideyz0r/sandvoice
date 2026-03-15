@@ -737,6 +737,12 @@ class TestSandVoiceSchedulerInit(unittest.TestCase):
         sv.plugins = {}
         return sv
 
+    def test_normalize_plugin_name_does_not_apply_route_aliases(self):
+        """Plugin/module normalization must stay independent from route alias mapping."""
+        from sandvoice import normalize_plugin_name
+
+        self.assertEqual(normalize_plugin_name("default-rote"), "default_rote")
+
     def test_init_scheduler_disabled_returns_none(self):
         sv = self._make_stub(scheduler_enabled=False)
         self.assertIsNone(sv._init_scheduler())
