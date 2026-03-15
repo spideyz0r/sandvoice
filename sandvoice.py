@@ -539,7 +539,10 @@ if __name__ == "__main__":
         while True:
             logger.debug("Conversation history: %s", sandvoice.ai.conversation_history)
             logger.debug("SandVoice: %s", sandvoice)
-            sandvoice.runIt()
+            try:
+                sandvoice.runIt()
+            except RuntimeError as e:
+                sys.exit(str(e))
 
 ## TODO
 # Add some tests
