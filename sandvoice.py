@@ -220,10 +220,12 @@ class SandVoice:
             return self.ai.generate_response(user_input).content
 
     def runIt(self):
-        audio = Audio(self.config)
         if self.config.cli_input:
             user_input = input(f"You (press new line to finish): ")
+            # Audio only needed for TTS playback in CLI mode; skip init entirely if bot_voice is off.
+            audio = Audio(self.config) if self.config.bot_voice else None
         else:
+            audio = Audio(self.config)
             if audio.audio is None:
                 raise RuntimeError("Audio hardware not available. Restart with --cli for text-only mode.")
             audio.init_recording()
