@@ -285,7 +285,6 @@ class SandVoice:
 
                         if not tts_files:
                             production_failed_event.set()
-                            # Preserve the first error (if any) from text_to_speech.
                             if not tts_error[0]:
                                 tts_error[0] = "TTS returned no audio files"
                             break
