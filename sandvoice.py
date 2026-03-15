@@ -24,6 +24,11 @@ def normalize_plugin_name(name):
     return name.strip().replace("-", "_")
 
 
+def is_valid_plugin_module_name(name):
+    """Return True when a plugin filename maps to a valid Python module identifier."""
+    return isinstance(name, str) and bool(name) and name.isidentifier()
+
+
 def plugin_route_alias(name):
     """Return the voice-friendly hyphenated alias for a plugin module key."""
     if not isinstance(name, str):
@@ -106,7 +111,7 @@ class SandVoice:
                 try:
                     raw_module_name = os.path.splitext(filename)[0]
                     module_name = normalize_plugin_name(raw_module_name)
-                    if raw_module_name != module_name:
+                    if raw_module_name != module_name or not is_valid_plugin_module_name(module_name):
                         logger.warning(
                             "Plugin filename %s is not underscore-safe; rename it to %s.py",
                             filename,
@@ -122,10 +127,18 @@ class SandVoice:
 
                 # Expect a class named 'Plugin' or a top-level 'process' function
                 if hasattr(module, 'Plugin'):
-                    plugin = module.Plugin()
+                    plugin_instance = module.Plugin()
+                    plugin = getattr(plugin_instance, "process", None)
                 elif hasattr(module, 'process'):
                     plugin = module.process
                 else:
+                    continue
+
+                if not callable(plugin):
+                    logger.warning(
+                        "Plugin %s does not expose a callable process function; skipping",
+                        filename,
+                    )
                     continue
 
                 self.plugins[module_name] = plugin
