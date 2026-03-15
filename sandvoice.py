@@ -224,6 +224,8 @@ class SandVoice:
         if self.config.cli_input:
             user_input = input(f"You (press new line to finish): ")
         else:
+            if audio.audio is None:
+                raise RuntimeError("Audio hardware not available. Restart with --cli for text-only mode.")
             audio.init_recording()
             user_input = self.ai.transcribe_and_translate()
             print(f"You: {user_input}")

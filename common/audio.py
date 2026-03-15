@@ -82,9 +82,6 @@ class Audio:
             self.is_recording = False
 
     def start_recording(self):
-        if self.audio is None:
-            raise RuntimeError("Cannot record audio - audio hardware not initialized")
-
         try:
             self.is_recording = True
             print(">> Listening... press ^ to stop")
