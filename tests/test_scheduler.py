@@ -752,6 +752,14 @@ class TestSandVoiceSchedulerInit(unittest.TestCase):
         self.assertFalse(is_valid_plugin_module_name("123plugin"))
         self.assertFalse(is_valid_plugin_module_name("plugin.name"))
 
+    def test_suggested_plugin_module_name_returns_valid_identifier(self):
+        """Invalid plugin filenames should get a valid Python module suggestion."""
+        from sandvoice import suggested_plugin_module_name
+
+        self.assertEqual(suggested_plugin_module_name("123plugin"), "_123plugin")
+        self.assertEqual(suggested_plugin_module_name("plugin.name"), "plugin_name")
+        self.assertEqual(suggested_plugin_module_name("hacker-news"), "hacker_news")
+
     def test_init_scheduler_disabled_returns_none(self):
         sv = self._make_stub(scheduler_enabled=False)
         self.assertIsNone(sv._init_scheduler())
@@ -853,7 +861,11 @@ class TestSandVoiceSchedulerInit(unittest.TestCase):
         import_module.assert_not_called()
         self.assertEqual(sv.plugins, {})
         self.assertTrue(
-            any("rename it to 123plugin.py" in message for message in logs.output)
+            any(
+                "not a valid Python module identifier" in message and
+                "rename it to _123plugin.py" in message
+                for message in logs.output
+            )
         )
 
     def test_load_plugins_registers_plugin_process_method(self):

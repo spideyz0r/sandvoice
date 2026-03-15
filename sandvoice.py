@@ -13,6 +13,7 @@ from common.scheduler import TaskScheduler
 
 import argparse, atexit, importlib, logging, os, signal, sys
 import queue, threading, time
+import re
 
 logger = logging.getLogger(__name__)
 
@@ -27,6 +28,19 @@ def normalize_plugin_name(name):
 def is_valid_plugin_module_name(name):
     """Return True when a plugin filename maps to a valid Python module identifier."""
     return isinstance(name, str) and bool(name) and name.isidentifier()
+
+
+def suggested_plugin_module_name(name):
+    """Return a valid Python module name suggestion for an invalid plugin filename."""
+    if not isinstance(name, str):
+        return "plugin_module"
+    candidate = normalize_plugin_name(name)
+    candidate = re.sub(r"[^A-Za-z0-9_]", "_", candidate)
+    if not candidate:
+        return "plugin_module"
+    if candidate[0].isdigit():
+        candidate = "_" + candidate
+    return candidate
 
 
 def plugin_route_alias(name):
@@ -111,11 +125,19 @@ class SandVoice:
                 try:
                     raw_module_name = os.path.splitext(filename)[0]
                     module_name = normalize_plugin_name(raw_module_name)
-                    if raw_module_name != module_name or not is_valid_plugin_module_name(module_name):
+                    if raw_module_name != module_name:
                         logger.warning(
                             "Plugin filename %s is not underscore-safe; rename it to %s.py",
                             filename,
                             module_name,
+                        )
+                        continue
+                    if not is_valid_plugin_module_name(module_name):
+                        suggested_name = suggested_plugin_module_name(raw_module_name)
+                        logger.warning(
+                            "Plugin filename %s is not a valid Python module identifier; rename it to %s.py",
+                            filename,
+                            suggested_name,
                         )
                         continue
                     module = importlib.import_module(f"plugins.{module_name}")
