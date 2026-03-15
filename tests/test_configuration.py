@@ -205,6 +205,20 @@ class TestConfigurationValidation(unittest.TestCase):
             Config()
         self.assertIn("voice_ack_earcon_duration must be a positive number", str(context.exception))
 
+    def test_nan_beep_duration_rejected(self):
+        """NaN should not pass as a valid duration."""
+        self.write_config({"wake_confirmation_beep_duration": float("nan")})
+        with self.assertRaises(ValueError) as context:
+            Config()
+        self.assertIn("wake_confirmation_beep_duration must be a positive number", str(context.exception))
+
+    def test_inf_earcon_duration_rejected(self):
+        """Inf should not pass as a valid duration."""
+        self.write_config({"voice_ack_earcon": "enabled", "voice_ack_earcon_freq": 600, "voice_ack_earcon_duration": float("inf")})
+        with self.assertRaises(ValueError) as context:
+            Config()
+        self.assertIn("voice_ack_earcon_duration must be a positive number", str(context.exception))
+
     def test_invalid_beep_duration(self):
         self.write_config({"wake_confirmation_beep_duration": -0.5})
         with self.assertRaises(ValueError) as context:

@@ -1,4 +1,4 @@
-import os, yaml, logging
+import math, os, yaml, logging
 from common.platform_detection import log_platform_info
 from common.audio_device_detection import get_optimal_channels, log_device_info
 
@@ -6,11 +6,14 @@ logger = logging.getLogger(__name__)
 
 
 def _parse_exact_float(value):
-    """Convert value to float, but return booleans unchanged so validate_config() can reject them."""
+    """Convert value to float, but return booleans or non-finite values unchanged so validate_config() can reject them."""
     if isinstance(value, bool):
         return value  # bool is a subclass of int/float; let validation reject it
     try:
-        return float(value)
+        result = float(value)
+        if not math.isfinite(result):
+            return value  # reject NaN/Inf; let validation reject the original value
+        return result
     except (TypeError, ValueError):
         return value
 
@@ -372,13 +375,13 @@ class Config:
         if isinstance(self.wake_confirmation_beep_freq, bool) or not isinstance(self.wake_confirmation_beep_freq, int) or self.wake_confirmation_beep_freq <= 0:
             errors.append("wake_confirmation_beep_freq must be a positive integer")
 
-        if isinstance(self.wake_confirmation_beep_duration, bool) or not isinstance(self.wake_confirmation_beep_duration, (int, float)) or self.wake_confirmation_beep_duration <= 0:
+        if isinstance(self.wake_confirmation_beep_duration, bool) or not isinstance(self.wake_confirmation_beep_duration, (int, float)) or not math.isfinite(self.wake_confirmation_beep_duration) or self.wake_confirmation_beep_duration <= 0:
             errors.append("wake_confirmation_beep_duration must be a positive number")
 
         if self.voice_ack_earcon:
             if isinstance(self.voice_ack_earcon_freq, bool) or not isinstance(self.voice_ack_earcon_freq, int) or self.voice_ack_earcon_freq <= 0:
                 errors.append("voice_ack_earcon_freq must be a positive integer")
-            if isinstance(self.voice_ack_earcon_duration, bool) or not isinstance(self.voice_ack_earcon_duration, (int, float)) or self.voice_ack_earcon_duration <= 0:
+            if isinstance(self.voice_ack_earcon_duration, bool) or not isinstance(self.voice_ack_earcon_duration, (int, float)) or not math.isfinite(self.voice_ack_earcon_duration) or self.voice_ack_earcon_duration <= 0:
                 errors.append("voice_ack_earcon_duration must be a positive number")
 
         # Validate streaming TTS settings
