@@ -38,9 +38,6 @@ def resolve_plugin_route_name(route_name, plugins):
     if plugin_name in plugins:
         return plugin_name
 
-    if normalized_route in plugins:
-        return normalized_route
-
     return normalized_route
 
 class _SchedulerContext:
