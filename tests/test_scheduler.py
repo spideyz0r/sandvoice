@@ -914,6 +914,61 @@ class TestSandVoiceSchedulerInit(unittest.TestCase):
             any("does not expose a callable process function" in message for message in logs.output)
         )
 
+    def test_load_plugins_warns_when_plugin_has_no_supported_entrypoint(self):
+        """load_plugins() must warn when a module exposes neither Plugin nor process."""
+        from sandvoice import SandVoice
+
+        sv = object.__new__(SandVoice)
+        sv.config = MagicMock()
+        sv.config.plugin_path = "/tmp/plugins"
+        sv.plugins = {}
+
+        module = MagicMock(spec=[])
+
+        with patch("sandvoice.os.path.exists", return_value=True), \
+             patch("sandvoice.os.listdir", return_value=["weather_plugin.py"]), \
+             patch("sandvoice.importlib.import_module", return_value=module), \
+             self.assertLogs("sandvoice", level="WARNING") as logs:
+            sv.load_plugins()
+
+        self.assertEqual(sv.plugins, {})
+        self.assertTrue(
+            any("has no supported entrypoint" in message for message in logs.output)
+        )
+
+    def test_load_plugins_warns_and_continues_when_plugin_init_fails(self):
+        """load_plugins() must isolate Plugin instantiation failures to that plugin."""
+        from sandvoice import SandVoice
+
+        sv = object.__new__(SandVoice)
+        sv.config = MagicMock()
+        sv.config.plugin_path = "/tmp/plugins"
+        sv.plugins = {}
+
+        bad_module = MagicMock(spec=["Plugin"])
+        bad_module.Plugin = MagicMock(side_effect=RuntimeError("boom"))
+        good_module = MagicMock(spec=["process"])
+        good_module.process = MagicMock()
+
+        def import_side_effect(name):
+            if name == "plugins.bad_plugin":
+                return bad_module
+            if name == "plugins.good_plugin":
+                return good_module
+            raise AssertionError(name)
+
+        with patch("sandvoice.os.path.exists", return_value=True), \
+             patch("sandvoice.os.listdir", return_value=["bad_plugin.py", "good_plugin.py"]), \
+             patch("sandvoice.importlib.import_module", side_effect=import_side_effect), \
+             self.assertLogs("sandvoice", level="WARNING") as logs:
+            sv.load_plugins()
+
+        self.assertIs(sv.plugins["good_plugin"], good_module.process)
+        self.assertIs(sv.plugins["good-plugin"], good_module.process)
+        self.assertTrue(
+            any("Error initializing plugin bad_plugin.py: boom" in message for message in logs.output)
+        )
+
     def test_route_message_normalizes_hyphenated_plugin_name(self):
         """route_message() must normalize hacker-news to the hacker_news plugin key."""
         sv = self._make_stub()

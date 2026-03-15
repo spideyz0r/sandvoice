@@ -147,13 +147,23 @@ class SandVoice:
                         logger.debug("Plugin load traceback for %s", filename, exc_info=True)
                     continue
 
-                # Expect a class named 'Plugin' or a top-level 'process' function
-                if hasattr(module, 'Plugin'):
-                    plugin_instance = module.Plugin()
-                    plugin = getattr(plugin_instance, "process", None)
-                elif hasattr(module, 'process'):
-                    plugin = module.process
-                else:
+                try:
+                    # Expect a class named 'Plugin' or a top-level 'process' function
+                    if hasattr(module, 'Plugin'):
+                        plugin_instance = module.Plugin()
+                        plugin = getattr(plugin_instance, "process", None)
+                    elif hasattr(module, 'process'):
+                        plugin = module.process
+                    else:
+                        logger.warning(
+                            "Plugin %s has no supported entrypoint; expected Plugin or process",
+                            filename,
+                        )
+                        continue
+                except Exception as e:
+                    logger.warning("Error initializing plugin %s: %s", filename, e)
+                    if logger.isEnabledFor(logging.DEBUG):
+                        logger.debug("Plugin init traceback for %s", filename, exc_info=True)
                     continue
 
                 if not callable(plugin):
