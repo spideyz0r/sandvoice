@@ -375,10 +375,7 @@ class SandVoice:
                 boundary = str(getattr(self.config, "stream_tts_boundary", "sentence") or "sentence").strip().lower()
                 # Rough heuristic for English: ~35 characters/sec spoken.
                 chars_per_second = 35
-                try:
-                    target_s = int(getattr(self.config, "stream_tts_first_chunk_target_s", 6) or 6)
-                except Exception:
-                    target_s = 6
+                target_s = 6
                 first_min_chars = max(120, int(target_s * chars_per_second))
                 next_min_chars = 200
 
