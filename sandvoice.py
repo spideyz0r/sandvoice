@@ -126,10 +126,15 @@ class SandVoice:
                     raw_module_name = os.path.splitext(filename)[0]
                     module_name = normalize_plugin_name(raw_module_name)
                     if raw_module_name != module_name:
+                        suggested_name = (
+                            module_name
+                            if is_valid_plugin_module_name(module_name)
+                            else suggested_plugin_module_name(raw_module_name)
+                        )
                         logger.warning(
                             "Plugin filename %s is not underscore-safe; rename it to %s.py",
                             filename,
-                            module_name,
+                            suggested_name,
                         )
                         continue
                     if not is_valid_plugin_module_name(module_name):

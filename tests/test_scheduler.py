@@ -759,6 +759,7 @@ class TestSandVoiceSchedulerInit(unittest.TestCase):
         self.assertEqual(suggested_plugin_module_name("123plugin"), "_123plugin")
         self.assertEqual(suggested_plugin_module_name("plugin.name"), "plugin_name")
         self.assertEqual(suggested_plugin_module_name("hacker-news"), "hacker_news")
+        self.assertEqual(suggested_plugin_module_name("123-plugin"), "_123_plugin")
 
     def test_init_scheduler_disabled_returns_none(self):
         sv = self._make_stub(scheduler_enabled=False)
@@ -841,6 +842,27 @@ class TestSandVoiceSchedulerInit(unittest.TestCase):
         self.assertEqual(sv.plugins, {})
         self.assertTrue(
             any("rename it to hacker_news.py" in message for message in logs.output)
+        )
+
+    def test_load_plugins_warns_with_valid_suggestion_for_hyphenated_invalid_identifier(self):
+        """Hyphenated invalid identifiers must get an importable rename suggestion."""
+        from sandvoice import SandVoice
+
+        sv = object.__new__(SandVoice)
+        sv.config = MagicMock()
+        sv.config.plugin_path = "/tmp/plugins"
+        sv.plugins = {}
+
+        with patch("sandvoice.os.path.exists", return_value=True), \
+             patch("sandvoice.os.listdir", return_value=["123-plugin.py"]), \
+             patch("sandvoice.importlib.import_module") as import_module, \
+             self.assertLogs("sandvoice", level="WARNING") as logs:
+            sv.load_plugins()
+
+        import_module.assert_not_called()
+        self.assertEqual(sv.plugins, {})
+        self.assertTrue(
+            any("rename it to _123_plugin.py" in message for message in logs.output)
         )
 
     def test_load_plugins_warns_and_skips_non_identifier_filename(self):
