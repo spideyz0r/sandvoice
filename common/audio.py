@@ -1,9 +1,8 @@
 #import re, os, pyaudio, wave
 #from pydub import AudioSegment
 import contextlib
-import re, os, time, threading, pyaudio, wave, lameenc, logging, queue
+import os, platform, time, threading, pyaudio, wave, lameenc, logging, queue
 from pynput import keyboard
-from ctypes import *
 from common.error_handling import handle_file_error
 
 logger = logging.getLogger(__name__)
@@ -11,6 +10,30 @@ logger = logging.getLogger(__name__)
 # this is necessary to mute some outputs from pygame
 os.environ['PYGAME_HIDE_SUPPORT_PROMPT'] = "hide"
 import pygame
+
+
+# Kept at module scope so the ctypes callback is never garbage-collected
+# while ALSA may still invoke it (local variables would be GC'd on return).
+_ALSA_NOOP_HANDLER = None
+_alsa_suppression_attempted = False
+
+
+def _suppress_alsa_errors():
+    """Silence noisy ALSA error messages on Linux/Pi. Best-effort: no-op if libasound is not found."""
+    global _ALSA_NOOP_HANDLER, _alsa_suppression_attempted
+    if _alsa_suppression_attempted or platform.system() != "Linux":
+        return
+    _alsa_suppression_attempted = True
+    try:
+        from ctypes import CFUNCTYPE, cdll, c_char_p, c_int
+        from ctypes.util import find_library
+        lib_name = find_library("asound")
+        if lib_name is None:
+            return
+        _ALSA_NOOP_HANDLER = CFUNCTYPE(None, c_char_p, c_int, c_char_p, c_int, c_char_p)(lambda *_: None)
+        cdll.LoadLibrary(lib_name).snd_lib_error_set_handler(_ALSA_NOOP_HANDLER)
+    except Exception:
+        pass  # best-effort: never raise from a noise-suppression helper
 
 class Audio:
     def __init__(self, config):
@@ -38,56 +61,19 @@ class Audio:
         self.convert_to_mp3()
 
     def initialize_audio(self):
+        _suppress_alsa_errors()
         try:
-            if not self.config.linux_warnings:
-                ERROR_HANDLER_FUNC = CFUNCTYPE(None, c_char_p, c_int, c_char_p, c_int, c_char_p)
-                c_error_handler = ERROR_HANDLER_FUNC(self.py_error_handler)
-                f = self.get_libasound_path()
-                if f is None:
-                    error_msg = "libasound library not found. Please install ALSA (libasound2) or ensure it is available in a standard library path."
-                    logger.error("%s", error_msg)
-                    raise RuntimeError(error_msg)
-                logger.debug("Loading libasound from: %s", f)
-                asound = cdll.LoadLibrary(f)
-                asound.snd_lib_error_set_handler(c_error_handler)
             self.audio = pyaudio.PyAudio()
         except OSError as e:
-            error_msg = "Audio hardware not found. Please connect audio device."
             logger.error("Audio initialization error: %s", e)
-            print(f"Error: {error_msg}")
-            if self.config.fallback_to_text_on_audio_error:
-                print("Continuing in text-only mode. Use --cli flag for better experience.")
-                self.audio = None
-            else:
-                raise RuntimeError(error_msg)
+            print("Error: Audio device not found or unavailable.")
+            print("Use --cli flag for text-only mode.")
+            self.audio = None
         except Exception as e:
-            error_msg = f"Failed to initialize audio: {str(e)}"
             logger.error("Audio initialization error: %s", e)
-            print(f"Error: {error_msg}")
-            if self.config.fallback_to_text_on_audio_error:
-                print("Continuing in text-only mode. Use --cli flag for better experience.")
-                self.audio = None
-            else:
-                raise
-
-    def get_libasound_path(self):
-        lib_paths = [
-            '/usr/lib',
-            '/usr/lib64',
-            '/lib',
-            '/lib64',
-        ]
-        lib_pattern = re.compile(r'libasound\.so\..*')
-        for file in lib_paths:
-            if not os.path.isdir(file):
-                continue
-            for f in os.listdir(file):
-                if lib_pattern.match(f):
-                    return os.path.join(file, f)
-        return None
-
-    def py_error_handler(self, filename, line, function, err, fmt):
-        pass
+            print("Error: Audio initialization failed.")
+            print("Use --cli flag for text-only mode.")
+            self.audio = None
 
     def on_press(self, key):
         if key == keyboard.Key.esc:
@@ -95,10 +81,7 @@ class Audio:
 
     def start_recording(self):
         if self.audio is None:
-            error_msg = "Cannot record audio - audio hardware not initialized"
-            print(f"Error: {error_msg}")
-            raise RuntimeError(error_msg)
-
+            raise RuntimeError("Cannot record audio - audio hardware not initialized")
         try:
             self.is_recording = True
             print(">> Listening... press ^ to stop")

@@ -353,7 +353,6 @@ class TestGenerateResponse(unittest.TestCase):
         mock_config.location = 'Test City'
         mock_config.debug = False
         mock_config.stream_responses = True
-        mock_config.stream_print_deltas = False
 
         mock_client = Mock()
         mock_openai_class.return_value = mock_client
@@ -676,7 +675,6 @@ class TestStreamResponseDeltas(unittest.TestCase):
         mock_config.timezone = 'EST'
         mock_config.location = 'Test City'
         mock_config.debug = False
-        mock_config.stream_print_deltas = False
 
         mock_client = Mock()
         mock_openai_class.return_value = mock_client
@@ -708,7 +706,6 @@ class TestStreamResponseDeltas(unittest.TestCase):
         mock_config.timezone = 'EST'
         mock_config.location = 'Test City'
         mock_config.debug = False
-        mock_config.stream_print_deltas = False
 
         mock_client = Mock()
         mock_openai_class.return_value = mock_client
