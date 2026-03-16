@@ -20,6 +20,23 @@ from common.error_handling import handle_api_error
 logger = logging.getLogger(__name__)
 
 
+class _CompositeStopEvent:
+    """Stop event that fires when either an interrupt or a barge-in event is set."""
+
+    def __init__(self, interrupt_evt, barge_evt):
+        self._interrupt = interrupt_evt
+        self._barge = barge_evt
+
+    def is_set(self):
+        if self._interrupt.is_set():
+            return True
+        return bool(self._barge and self._barge.is_set())
+
+    def set(self):
+        # Only set the interrupt event (do not set barge-in).
+        self._interrupt.set()
+
+
 def _is_enabled_flag(value):
     """Interpret common enabled/disabled flag representations."""
     if isinstance(value, bool):
@@ -1074,20 +1091,6 @@ class WakeWordMode:
             barge_in_event = self.barge_in_event if (barge_in_enabled and self.barge_in_event) else None
             interrupt_event = threading.Event()
             production_failed_event = threading.Event()
-
-            class _CompositeStopEvent:
-                def __init__(self, interrupt_evt, barge_evt):
-                    self._interrupt = interrupt_evt
-                    self._barge = barge_evt
-
-                def is_set(self):
-                    if self._interrupt.is_set():
-                        return True
-                    return bool(self._barge and self._barge.is_set())
-
-                def set(self):
-                    # Only set the interrupt event (do not set barge-in).
-                    self._interrupt.set()
 
             stop_event = _CompositeStopEvent(interrupt_event, barge_in_event)
 
