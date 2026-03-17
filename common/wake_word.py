@@ -161,7 +161,7 @@ class WakeWordMode:
             print(f"Error: {error_msg}")
             raise RuntimeError(error_msg)
 
-        if not self.config.vad_enabled:
+        if not _is_enabled_flag(getattr(self.config, "vad_enabled", False)):
             error_msg = (
                 "Wake-word mode requires VAD-based recording. "
                 "Enable it in your config: vad_enabled: enabled"
@@ -941,7 +941,7 @@ class WakeWordMode:
 
         barge_in_enabled = getattr(self.config, "barge_in", False)
 
-        if self.streaming_user_input or self.streaming_response_text:
+        if self.streaming_user_input is not None or self.streaming_response_text is not None:
             self._respond_streaming(barge_in_enabled)
 
         # Signal barge-in thread to stop and wait for it to finish
@@ -992,11 +992,17 @@ class WakeWordMode:
             self.state = State.IDLE
 
     def _respond_streaming(self, barge_in_enabled):
-        """Streaming TTS response path (default route only).
+        """Streaming TTS response path for LLM and plugin responses.
 
-        Streams LLM deltas, chunks them, converts to audio via TTS worker, and
-        plays them via a player worker — all concurrently.  Resets streaming state
-        on return; barge-in cleanup and state transition remain in _state_responding.
+        For LLM default-route responses: streams deltas from ai.stream_response_deltas,
+        chunks them, converts to audio via TTS worker, and plays via player worker —
+        all concurrently.
+
+        For pre-computed plugin responses (streaming_response_text set): enqueues the
+        text directly to the TTS worker, bypassing LLM streaming.
+
+        Resets streaming state on return; barge-in cleanup and state transition remain
+        in _state_responding.
         """
         user_input = self.streaming_user_input
         self.streaming_user_input = None
