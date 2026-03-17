@@ -37,7 +37,7 @@ This pattern repeats across `_state_processing`, `_state_responding`, `_respond_
 
 ## Proposed Solution
 
-1. **Fail-fast in `_initialize()`**: if `barge_in` is not enabled in config, raise `ConfigurationError` with a message explaining that wake-word mode requires barge-in.
+1. **Fail-fast in `_initialize()`**: if `barge_in` is not enabled in config, raise `RuntimeError` with a message explaining that wake-word mode requires barge-in.
 2. **Remove all `barge_in_enabled` local variable assignments** (~4 occurrences).
 3. **Remove all `if barge_in_enabled:` / `elif barge_in_enabled:` conditional branches** — treat the enabled path as unconditional.
 4. **Simplify `_poll_op`**: remove the `barge_in_thread` parameter guard; always poll for barge-in.
@@ -50,8 +50,8 @@ Estimated net reduction: **~35 lines**.
 Add to `_initialize()`:
 
 ```python
-if not getattr(self.config, "barge_in", False):
-    raise ConfigurationError("wake-word mode requires barge_in: enabled")
+if not self.config.barge_in:
+    raise RuntimeError("wake-word mode requires barge_in: enabled")
 ```
 
 The `barge_in` config key is retained (users still set it explicitly), but wake-word mode will refuse to start without it.
@@ -77,7 +77,7 @@ The `barge_in` config key is retained (users still set it explicitly), but wake-
 
 ## Acceptance Criteria
 
-- [ ] `_initialize()` raises `ConfigurationError` if `barge_in` is not enabled
+- [ ] `_initialize()` raises `RuntimeError` if `barge_in` is not enabled
 - [ ] All `barge_in_enabled` local variables removed
 - [ ] All conditional branches on `barge_in_enabled` removed
 - [ ] `_poll_op` unconditionally polls barge-in

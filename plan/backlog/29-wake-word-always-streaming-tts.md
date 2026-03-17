@@ -14,7 +14,7 @@
 
 ## Overview
 
-Remove the pre-generated TTS playback path from `common/wake_word.py`. Wake-word mode already has a fully working streaming TTS pipeline (Plan 08). The pre-generated path — generate all TTS files up-front, then play sequentially — is now dead code that adds ~190 lines of complexity and three cleanup helper methods.
+Remove the pre-generated TTS playback path from `common/wake_word.py`. Wake-word mode already has a fully working streaming TTS pipeline (Plan 08). The pre-generated path — generate all TTS files up-front, then play sequentially — is now dead code that adds ~190 lines of complexity and four cleanup helper methods.
 
 ---
 
@@ -25,13 +25,13 @@ Remove the pre-generated TTS playback path from `common/wake_word.py`. Wake-word
 1. **Streaming path** (`_respond_streaming`): LLM deltas → TTS worker → audio queue → player worker, all concurrent. Lower latency, simpler cleanup (streaming handles it).
 2. **Pre-generated path** (`_respond_pregenerated_tts`): Generate all TTS MP3 files first via `ai.text_to_speech()`, then play them one-by-one. This was the original implementation before Plan 08 landed.
 
-Since Plan 08 merged, the pre-generated path is never the better choice. It adds ~190 lines that must be maintained, tested, and reasoned about. Three cleanup helpers (`_cleanup_remaining_tts_files`, `_cleanup_specific_tts_files`, `_cleanup_all_orphaned_tts_files`) and one scheduler helper (`_schedule_orphaned_tts_cleanup`) exist solely to manage pre-generated file lifecycle.
+Since Plan 08 merged, the pre-generated path is never the better choice. It adds ~190 lines that must be maintained, tested, and reasoned about. Four cleanup helpers (`_cleanup_remaining_tts_files`, `_cleanup_specific_tts_files`, `_cleanup_all_orphaned_tts_files`, `_schedule_orphaned_tts_cleanup`) exist solely to manage pre-generated file lifecycle.
 
 ---
 
 ## Proposed Solution
 
-1. **Fail-fast in `_initialize()`**: if `bot_voice` is disabled or streaming (`stream_responses`, `stream_tts`) is disabled, raise `ConfigurationError` with a clear message explaining wake-word mode requires streaming TTS.
+1. **Fail-fast in `_initialize()`**: if `bot_voice` is disabled or streaming (`stream_responses`, `stream_tts`) is disabled, raise `RuntimeError` with a clear message explaining wake-word mode requires streaming TTS.
 2. **Delete `_respond_pregenerated_tts()`** (~75 lines).
 3. **Delete the four cleanup helpers**: `_cleanup_remaining_tts_files`, `_cleanup_specific_tts_files`, `_cleanup_all_orphaned_tts_files`, `_schedule_orphaned_tts_cleanup` (~65 lines).
 4. **Delete the TTS generation block in `_state_processing`**: the `if self.config.bot_voice:` block that calls `self.ai.text_to_speech()`, stores `self.tts_files`, logs, and cleans up on barge-in (~35 lines).
@@ -46,12 +46,12 @@ Add a startup check so users get a clear error instead of silent fallback:
 
 ```python
 # In _initialize()
-if not getattr(self.config, "bot_voice", True):
-    raise ConfigurationError("wake-word mode requires bot_voice: enabled")
-if not getattr(self.config, "stream_responses", True):
-    raise ConfigurationError("wake-word mode requires stream_responses: enabled")
-if not getattr(self.config, "stream_tts", True):
-    raise ConfigurationError("wake-word mode requires stream_tts: enabled")
+if not self.config.bot_voice:
+    raise RuntimeError("wake-word mode requires bot_voice: enabled")
+if not self.config.stream_responses:
+    raise RuntimeError("wake-word mode requires stream_responses: enabled")
+if not self.config.stream_tts:
+    raise RuntimeError("wake-word mode requires stream_tts: enabled")
 ```
 
 ---
@@ -79,6 +79,6 @@ if not getattr(self.config, "stream_tts", True):
 - [ ] `_cleanup_remaining_tts_files`, `_cleanup_specific_tts_files`, `_cleanup_all_orphaned_tts_files`, `_schedule_orphaned_tts_cleanup` deleted
 - [ ] `self.tts_files` instance variable removed
 - [ ] TTS generation block in `_state_processing` deleted
-- [ ] `_initialize()` raises `ConfigurationError` if `bot_voice`, `stream_responses`, or `stream_tts` disabled
+- [ ] `_initialize()` raises `RuntimeError` if `bot_voice`, `stream_responses`, or `stream_tts` disabled
 - [ ] All tests pass; >80% coverage on changed code
 - [ ] `wake_word.py` reduced by ~190 lines

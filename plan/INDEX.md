@@ -153,7 +153,7 @@ plan/
 
 ### Priority 29: Wake Word Always-Streaming TTS
 **Document**: [backlog/29-wake-word-always-streaming-tts.md](./backlog/29-wake-word-always-streaming-tts.md)
-**Description**: Remove the pre-generated TTS playback path from wake_word.py — streaming TTS (Plan 08) supersedes it. Deletes `_respond_pregenerated_tts`, four cleanup helpers, `self.tts_files` state, and the TTS generation block in `_state_processing`. ~190 lines removed.
+**Description**: Remove the pre-generated TTS playback path from `common/wake_word.py` — streaming TTS (Plan 08) supersedes it. Deletes `_respond_pregenerated_tts`, four cleanup helpers, `self.tts_files` state, and the TTS generation block in `_state_processing`. ~190 lines removed.
 
 ### Priority 30: Wake Word Barge-In Always On
 **Document**: [backlog/30-wake-word-barge-in-always-on.md](./backlog/30-wake-word-barge-in-always-on.md)
