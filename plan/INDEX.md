@@ -151,7 +151,7 @@ plan/
 **Document**: [backlog/25-terminal-ui.md](./backlog/25-terminal-ui.md)
 **Description**: Replace flat emoji-based terminal output with a high-end CLI UI: ANSI colors, animated waiting dots, in-place status line updates, inline timing per phase, and clear conversation/status separation. Pure ANSI — no external dependencies, Pi-compatible.
 
-### Priority 29: Wake Word Always-Streaming TTS
+### Priority 29: Wake Word Always-Streaming TTS 🚧 In Progress
 **Document**: [backlog/29-wake-word-always-streaming-tts.md](./backlog/29-wake-word-always-streaming-tts.md)
 **Description**: Remove the pre-generated TTS playback path from `common/wake_word.py` — streaming TTS (Plan 08) supersedes it. Deletes `_respond_pregenerated_tts`, four cleanup helpers, `self.tts_files` state, and the TTS generation block in `_state_processing`. ~190 lines removed.
 
