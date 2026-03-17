@@ -37,6 +37,10 @@ class _CompositeStopEvent:
         self._interrupt.set()
 
 
+# Sentinel returned by _poll_op when barge-in interrupted the operation.
+_BARGE_IN = object()
+
+
 def _is_enabled_flag(value):
     """Interpret common enabled/disabled flag representations."""
     if isinstance(value, bool):
@@ -677,6 +681,28 @@ class WakeWordMode:
         # Go directly to LISTENING
         self.state = State.LISTENING
 
+    def _should_stream_default_route(self):
+        """Return True when all three streaming flags are enabled."""
+        return (
+            _is_enabled_flag(getattr(self.config, "bot_voice", False)) and
+            _is_enabled_flag(getattr(self.config, "stream_responses", False)) and
+            _is_enabled_flag(getattr(self.config, "stream_tts", False))
+        )
+
+    def _poll_op(self, operation, name, barge_in_thread):
+        """Run *operation* with barge-in polling when a barge-in thread is active.
+
+        If barge-in interrupts, calls _handle_immediate_barge_in and returns
+        the _BARGE_IN sentinel.  Otherwise returns the operation result directly.
+        """
+        if barge_in_thread:
+            completed, result = self._run_with_barge_in_polling(operation, name)
+            if not completed:
+                self._handle_immediate_barge_in(barge_in_thread)
+                return _BARGE_IN
+            return result
+        return operation()
+
     def _state_processing(self):
         """PROCESSING state: Transcribe audio and generate response.
 
@@ -709,22 +735,17 @@ class WakeWordMode:
             # Capture path locally to avoid race with barge-in clearing self.recorded_audio_path
             audio_path = self.recorded_audio_path
 
-            # Transcribe the audio (with immediate barge-in response if enabled)
+            # Transcribe the audio
             logger.debug("Transcribing audio from: %s", audio_path)
-
-            if barge_in_thread:
-                completed, user_input = self._run_with_barge_in_polling(
-                    lambda: self.ai.transcribe_and_translate(audio_file_path=audio_path),
-                    "transcription"
-                )
-                if not completed:
-                    self._handle_immediate_barge_in(barge_in_thread)
-                    return
-            else:
-                user_input = self.ai.transcribe_and_translate(audio_file_path=audio_path)
+            user_input = self._poll_op(
+                lambda: self.ai.transcribe_and_translate(audio_file_path=audio_path),
+                "transcription",
+                barge_in_thread,
+            )
+            if user_input is _BARGE_IN:
+                return
 
             logger.debug("Transcription: %s", user_input)
-
             print(f"You: {user_input}")
 
             # Check for barge-in before starting response generation
@@ -734,38 +755,29 @@ class WakeWordMode:
                 return
 
             # Generate response (prefer plugin routing when available)
-            # Both paths support barge-in polling for immediate interruption
             if self.route_message is not None:
-                # Route through plugin system (with barge-in support if enabled)
-                if barge_in_thread:
-                    completed, route = self._run_with_barge_in_polling(
-                        lambda: self.ai.define_route(user_input),
-                        "route definition"
-                    )
-                    if not completed:
-                        self._handle_immediate_barge_in(barge_in_thread)
-                        return
-                else:
-                    route = self.ai.define_route(user_input)
+                route = self._poll_op(
+                    lambda: self.ai.define_route(user_input),
+                    "route definition",
+                    barge_in_thread,
+                )
+                if route is _BARGE_IN:
+                    return
 
                 logger.debug("Route: %s", route)
 
                 stream_default_route = (
-                    _is_enabled_flag(getattr(self.config, "bot_voice", False)) and
-                    _is_enabled_flag(getattr(self.config, "stream_responses", False)) and
-                    _is_enabled_flag(getattr(self.config, "stream_tts", False)) and
+                    self._should_stream_default_route() and
                     (self.plugins is not None) and
                     (route.get("route") not in self.plugins)
                 )
 
                 if stream_default_route:
-                    # Skip non-streaming route_message() default behavior and stream in RESPONDING instead.
                     self.streaming_user_input = user_input
                     self.streaming_route = route
                     self.response_text = None
                     self.tts_files = None
 
-                    # Final barge-in check before transitioning to RESPONDING
                     if barge_in_thread and self._check_barge_in_interrupt():
                         logger.debug("Barge-in detected after route definition, before streaming")
                         self._handle_immediate_barge_in(barge_in_thread)
@@ -774,27 +786,17 @@ class WakeWordMode:
                     self.state = State.RESPONDING
                     return
 
-                if barge_in_thread:
-                    completed, response_text = self._run_with_barge_in_polling(
-                        lambda: self.route_message(user_input, route),
-                        "plugin response"
-                    )
-                    if not completed:
-                        self._handle_immediate_barge_in(barge_in_thread)
-                        return
-                else:
-                    response_text = self.route_message(user_input, route)
+                response_text = self._poll_op(
+                    lambda: self.route_message(user_input, route),
+                    "plugin response",
+                    barge_in_thread,
+                )
+                if response_text is _BARGE_IN:
+                    return
 
                 self.response_text = response_text
             else:
-                # Direct AI response (with barge-in support if enabled)
-                stream_default_route = (
-                    _is_enabled_flag(getattr(self.config, "bot_voice", False)) and
-                    _is_enabled_flag(getattr(self.config, "stream_responses", False)) and
-                    _is_enabled_flag(getattr(self.config, "stream_tts", False))
-                )
-
-                if stream_default_route:
+                if self._should_stream_default_route():
                     self.streaming_user_input = user_input
                     self.streaming_route = {"route": "default-route", "reason": "direct"}
                     self.response_text = None
@@ -808,21 +810,17 @@ class WakeWordMode:
                     self.state = State.RESPONDING
                     return
 
-                if barge_in_thread:
-                    completed, response = self._run_with_barge_in_polling(
-                        lambda: self.ai.generate_response(user_input),
-                        "response generation"
-                    )
-                    if not completed:
-                        self._handle_immediate_barge_in(barge_in_thread)
-                        return
-                else:
-                    response = self.ai.generate_response(user_input)
+                response = self._poll_op(
+                    lambda: self.ai.generate_response(user_input),
+                    "response generation",
+                    barge_in_thread,
+                )
+                if response is _BARGE_IN:
+                    return
 
                 self.response_text = response.content if hasattr(response, 'content') else str(response)
 
             logger.debug("Response: %s", self.response_text)
-
             print(f"{self.config.botname}: {self.response_text}\n")
 
             # Check for barge-in before starting TTS generation
@@ -831,24 +829,20 @@ class WakeWordMode:
                 self._handle_immediate_barge_in(barge_in_thread)
                 return
 
-            # Generate TTS if bot_voice is enabled (with immediate barge-in response if enabled)
+            # Generate TTS if bot_voice is enabled
             if self.config.bot_voice:
                 # Clean up any orphaned TTS files from interrupted previous requests
-                # This prevents leftover files from affecting the new response
                 self._cleanup_all_orphaned_tts_files()
 
                 # Capture response text locally to avoid race with barge-in clearing self.response_text
                 response_text_for_tts = self.response_text
-                if barge_in_thread:
-                    completed, tts_files = self._run_with_barge_in_polling(
-                        lambda: self.ai.text_to_speech(response_text_for_tts),
-                        "TTS generation"
-                    )
-                    if not completed:
-                        self._handle_immediate_barge_in(barge_in_thread)
-                        return
-                else:
-                    tts_files = self.ai.text_to_speech(response_text_for_tts)
+                tts_files = self._poll_op(
+                    lambda: self.ai.text_to_speech(response_text_for_tts),
+                    "TTS generation",
+                    barge_in_thread,
+                )
+                if tts_files is _BARGE_IN:
+                    return
 
                 self.tts_files = tts_files
 
@@ -1068,335 +1062,10 @@ class WakeWordMode:
 
         barge_in_enabled = getattr(self.config, "barge_in", False)
 
-        # Plan 08 Phase 3: streaming TTS for wake word mode (default route only)
         if self.streaming_user_input:
-            user_input = self.streaming_user_input
-            self.streaming_user_input = None
-
-            # Ensure barge-in detection is running (if enabled)
-            thread_already_running = (
-                self.barge_in_thread is not None and
-                self.barge_in_thread.is_alive()
-            )
-
-            if not thread_already_running:
-                if barge_in_enabled and self.porcupine:
-                    self._start_barge_in_detection()
-                elif barge_in_enabled and not self.porcupine:
-                    logger.warning(
-                        "Barge-in is enabled in configuration, but Porcupine is not initialized. "
-                        "Barge-in will be disabled for this response."
-                    )
-
-            barge_in_event = self.barge_in_event if (barge_in_enabled and self.barge_in_event) else None
-            interrupt_event = threading.Event()
-            production_failed_event = threading.Event()
-
-            stop_event = _CompositeStopEvent(interrupt_event, barge_in_event)
-
-            # Clean up any orphaned TTS files from interrupted previous requests
-            self._cleanup_all_orphaned_tts_files()
-
-            stream_tts_buffer_chunks = 2
-            text_queue = queue.Queue(maxsize=stream_tts_buffer_chunks)
-            audio_queue_max_files = max(4, stream_tts_buffer_chunks * 4)
-            audio_queue = queue.Queue(maxsize=audio_queue_max_files)
-
-            tts_error = [""]
-            queue_put_max_wait_s = 10.0
-
-            def _put_text_queue(item, allow_when_stopped=False):
-                deadline = time.monotonic() + queue_put_max_wait_s
-                while True:
-                    if stop_event.is_set() and not allow_when_stopped:
-                        return False
-                    try:
-                        text_queue.put(item, timeout=0.1)
-                        return True
-                    except queue.Full:
-                        if time.monotonic() >= deadline:
-                            logger.warning("Timed out enqueueing streaming text chunk")
-                            return False
-
-            def tts_worker():
-                try:
-                    while not stop_event.is_set():
-                        if production_failed_event.is_set():
-                            break
-                        try:
-                            chunk = text_queue.get(timeout=0.1)
-                        except queue.Empty:
-                            continue
-
-                        if chunk is None:
-                            break
-
-                        tts_files = self.ai.text_to_speech(chunk)
-
-                        if not tts_files:
-                            production_failed_event.set()
-                            if not tts_error[0]:
-                                tts_error[0] = "TTS returned no audio files"
-                            break
-
-                        last_idx = -1
-                        for idx, f in enumerate(tts_files):
-                            last_idx = idx
-                            if stop_event.is_set():
-                                try:
-                                    if os.path.exists(f):
-                                        os.remove(f)
-                                except OSError:
-                                    pass
-                                continue
-
-                            if production_failed_event.is_set():
-                                break
-
-                            deadline = time.monotonic() + queue_put_max_wait_s
-                            while not stop_event.is_set():
-                                try:
-                                    audio_queue.put(f, timeout=0.1)
-                                    break
-                                except queue.Full:
-                                    if time.monotonic() >= deadline:
-                                        production_failed_event.set()
-                                        if not tts_error[0]:
-                                            tts_error[0] = "Timed out enqueueing streaming audio chunk"
-                                        try:
-                                            if os.path.exists(f):
-                                                os.remove(f)
-                                        except OSError:
-                                            pass
-                                        break
-
-                            if production_failed_event.is_set():
-                                break
-
-                        if production_failed_event.is_set() and last_idx != -1 and last_idx < (len(tts_files) - 1):
-                            for remaining_file in tts_files[last_idx + 1:]:
-                                try:
-                                    if os.path.exists(remaining_file):
-                                        os.remove(remaining_file)
-                                except OSError:
-                                    pass
-
-                        if production_failed_event.is_set():
-                            break
-
-                finally:
-                    try:
-                        audio_queue.put(None, timeout=0.1)
-                    except queue.Full:
-                        interrupt_event.set()
-
-            player_success = [True]
-            player_failed_file = [""]
-            player_error = [""]
-
-            def player_worker():
-                # Pass the lock so it is acquired per-file, not across the
-                # entire queue-drain loop (which blocks on queue.get() between files).
-                success, failed_file, error = self.audio.play_audio_queue(
-                    audio_queue, stop_event=stop_event, playback_lock=self._audio_lock
-                )
-                player_success[0] = bool(success)
-                if failed_file:
-                    player_failed_file[0] = str(failed_file)
-                if error:
-                    player_error[0] = str(error)
-                if not success:
-                    interrupt_event.set()
-
-            tts_thread = threading.Thread(target=tts_worker, name="wake-stream-tts-worker", daemon=True)
-            player_thread = threading.Thread(target=player_worker, name="wake-stream-audio-player", daemon=True)
-            tts_thread.start()
-            player_thread.start()
-
-            boundary = str(getattr(self.config, "stream_tts_boundary", "sentence") or "sentence").strip().lower()
-            # Rough heuristic for English: ~35 characters/sec spoken.
-            chars_per_second = 35
-            target_s = 6
-            first_min_chars = max(120, int(target_s * chars_per_second))
-            next_min_chars = 200
-
-            buffer = ""
-            full_parts = []
-            is_first = True
-            stream_completed = False
-
-            if self.config.debug:
-                print(f"{self.config.botname}: ", end="", flush=True)
-
-            try:
-                for delta in self.ai.stream_response_deltas(user_input):
-                    full_parts.append(delta)
-
-                    # Stop immediately on barge-in (user is starting a new request).
-                    if barge_in_event and barge_in_event.is_set():
-                        break
-
-                    # If playback is interrupted (player failure), keep collecting deltas so
-                    # the text fallback can still print a full response, but stop producing audio.
-                    if interrupt_event.is_set():
-                        continue
-
-                    if production_failed_event.is_set():
-                        continue
-
-                    buffer += delta
-                    while not stop_event.is_set():
-                        min_chars = first_min_chars if is_first else next_min_chars
-                        chunk, buffer = pop_streaming_chunk(buffer, boundary=boundary, min_chars=min_chars)
-                        if chunk is None:
-                            break
-                        is_first = False
-                        if not _put_text_queue(chunk):
-                            interrupt_event.set()
-                            break
-
-                else:
-                    stream_completed = True
-
-            except Exception as e:
-                interrupt_event.set()
-                if self.config.debug:
-                    print()
-                print(handle_api_error(e, service_name="OpenAI GPT (streaming)"))
-
-            # If streaming did not complete, remove the last user turn to avoid dangling history.
-            if not stream_completed:
-                try:
-                    last_user = "User: " + user_input
-                    if getattr(self.ai, "conversation_history", None) and self.ai.conversation_history[-1] == last_user:
-                        self.ai.conversation_history.pop()
-                except Exception:
-                    pass
-
-            if stream_completed and (not production_failed_event.is_set()) and (not stop_event.is_set()):
-                final_chunk = buffer.strip()
-                if final_chunk:
-                    if not _put_text_queue(final_chunk):
-                        interrupt_event.set()
-
-            # Always attempt to enqueue sentinel to allow TTS worker to exit.
-            sentinel_enqueued = _put_text_queue(None, allow_when_stopped=True)
-            if not sentinel_enqueued:
-                logger.warning("Failed to enqueue wake-word streaming sentinel")
-                interrupt_event.set()
-
-            tts_join_timeout = 30
-            player_join_timeout = 60
-            tts_thread.join(timeout=tts_join_timeout)
-            player_thread.join(timeout=player_join_timeout)
-
-            if tts_thread.is_alive():
-                logger.warning(
-                    "Wake-word streaming TTS thread did not exit within %s seconds",
-                    tts_join_timeout,
-                )
-            if player_thread.is_alive():
-                logger.warning(
-                    "Wake-word streaming player thread did not exit within %s seconds",
-                    player_join_timeout,
-                )
-
-            response_text = "".join(full_parts).strip()
-            # Print final text (unless we are in debug mode or barge-in occurred)
-            if response_text and not self.config.debug:
-                if not (barge_in_event and barge_in_event.is_set()):
-                    print(f"{self.config.botname}: {response_text}\n")
-
-            if production_failed_event.is_set() and tts_error[0]:
-                logger.warning("Wake-word streaming TTS production failed: %s", tts_error[0])
-
-            if not player_success[0]:
-                if barge_in_event and barge_in_event.is_set():
-                    # Expected interruption; avoid logging as a playback failure.
-                    pass
-                else:
-                    logger.warning(
-                        "Wake-word streaming audio playback failed for file '%s': %s",
-                        player_failed_file[0], player_error[0]
-                    )
-
-            # Reset streaming metadata
-            self.streaming_route = None
-
-            # Note: do not set self.tts_files; audio_queue playback already handled cleanup.
-            self.tts_files = None
-            self.response_text = None
-
-        # Play TTS audio if available
-        if self.tts_files and len(self.tts_files) > 0:
-            # Check if barge-in thread is already running from PROCESSING state
-            thread_already_running = (
-                self.barge_in_thread is not None and
-                self.barge_in_thread.is_alive()
-            )
-
-            # Start barge-in detection thread if not already running
-            if not thread_already_running:
-                if barge_in_enabled and self.porcupine:
-                    self._start_barge_in_detection()
-                elif barge_in_enabled and not self.porcupine:
-                    logger.warning(
-                        "Barge-in is enabled in configuration, but Porcupine is not initialized. "
-                        "Barge-in will be disabled for this response."
-                    )
-            else:
-                logger.debug("Barge-in thread already running from PROCESSING, reusing it")
-            try:
-                logger.debug("Playing %s TTS files", len(self.tts_files))
-
-                # Play files with barge-in support via stop_event in play_audio_file()
-                with (self._audio_lock or contextlib.nullcontext()):
-                    for idx, file_path in enumerate(self.tts_files):
-                        # Play the file, passing stop_event for mid-playback interruption
-                        try:
-                            self.audio.play_audio_file(
-                                file_path,
-                                stop_event=self.barge_in_event if barge_in_enabled else None
-                            )
-                        except Exception as e:
-                            logger.error("Audio playback failed for file '%s': %s", file_path, e)
-                            if self.config.debug:
-                                # In debug mode, preserve the failed file itself for diagnostics.
-                                # The failed file will remain in the temp directory for manual inspection.
-                                # Only clean up unplayed files after it (start at idx + 1).
-                                self._cleanup_remaining_tts_files(self.tts_files[idx + 1:])
-                            else:
-                                print("Audio playback failed. Continuing with text only.")
-                                # In non-debug mode, clean up the failed file and all remaining files
-                                # by starting cleanup at the failed file (start at idx).
-                                self._cleanup_remaining_tts_files(self.tts_files[idx:])
-                            break
-
-                        # Check for barge-in after playing file (might have interrupted mid-playback)
-                        # Note: barge_in_event may be None if Porcupine failed to initialize
-                        if barge_in_enabled and self.barge_in_event and self.barge_in_event.is_set():
-                            logger.debug("Barge-in detected, interrupted during playback")
-                            # First, clean up the file we just played successfully
-                            try:
-                                if os.path.exists(file_path):
-                                    os.remove(file_path)
-                            except OSError as e:
-                                logger.warning("Failed to delete TTS file after barge-in: %s", e)
-                            # Then, clean up remaining unplayed files
-                            self._cleanup_remaining_tts_files(self.tts_files[idx + 1:])
-                            break
-
-                        # Clean up the file we just played successfully
-                        try:
-                            if os.path.exists(file_path):
-                                os.remove(file_path)
-                        except OSError as e:
-                            logger.warning("Failed to delete TTS file: %s", e)
-
-            except Exception as e:
-                logger.error("TTS playback error: %s", e)
-                print(f"Error playing TTS: {str(e)}")
-
+            self._respond_streaming(barge_in_enabled)
+        elif self.tts_files:
+            self._respond_pregenerated_tts(barge_in_enabled)
         else:
             logger.debug("No TTS files to play (bot_voice disabled or TTS generation failed)")
 
@@ -1447,6 +1116,346 @@ class WakeWordMode:
             self.barge_in_event = None
             self.barge_in_stop_flag = None
             self.state = State.IDLE
+
+    def _respond_streaming(self, barge_in_enabled):
+        """Streaming TTS response path (default route only).
+
+        Streams LLM deltas, chunks them, converts to audio via TTS worker, and
+        plays them via a player worker — all concurrently.  Resets streaming state
+        on return; barge-in cleanup and state transition remain in _state_responding.
+        """
+        user_input = self.streaming_user_input
+        self.streaming_user_input = None
+
+        # Ensure barge-in detection is running (if enabled)
+        thread_already_running = (
+            self.barge_in_thread is not None and
+            self.barge_in_thread.is_alive()
+        )
+
+        if not thread_already_running:
+            if barge_in_enabled and self.porcupine:
+                self._start_barge_in_detection()
+            elif barge_in_enabled and not self.porcupine:
+                logger.warning(
+                    "Barge-in is enabled in configuration, but Porcupine is not initialized. "
+                    "Barge-in will be disabled for this response."
+                )
+
+        barge_in_event = self.barge_in_event if (barge_in_enabled and self.barge_in_event) else None
+        interrupt_event = threading.Event()
+        production_failed_event = threading.Event()
+
+        stop_event = _CompositeStopEvent(interrupt_event, barge_in_event)
+
+        # Clean up any orphaned TTS files from interrupted previous requests
+        self._cleanup_all_orphaned_tts_files()
+
+        stream_tts_buffer_chunks = 2
+        text_queue = queue.Queue(maxsize=stream_tts_buffer_chunks)
+        audio_queue_max_files = max(4, stream_tts_buffer_chunks * 4)
+        audio_queue = queue.Queue(maxsize=audio_queue_max_files)
+
+        tts_error = [""]
+        queue_put_max_wait_s = 10.0
+
+        def _put_text_queue(item, allow_when_stopped=False):
+            deadline = time.monotonic() + queue_put_max_wait_s
+            while True:
+                if stop_event.is_set() and not allow_when_stopped:
+                    return False
+                try:
+                    text_queue.put(item, timeout=0.1)
+                    return True
+                except queue.Full:
+                    if time.monotonic() >= deadline:
+                        logger.warning("Timed out enqueueing streaming text chunk")
+                        return False
+
+        def tts_worker():
+            try:
+                while not stop_event.is_set():
+                    if production_failed_event.is_set():
+                        break
+                    try:
+                        chunk = text_queue.get(timeout=0.1)
+                    except queue.Empty:
+                        continue
+
+                    if chunk is None:
+                        break
+
+                    tts_files = self.ai.text_to_speech(chunk)
+
+                    if not tts_files:
+                        production_failed_event.set()
+                        if not tts_error[0]:
+                            tts_error[0] = "TTS returned no audio files"
+                        break
+
+                    last_idx = -1
+                    for idx, f in enumerate(tts_files):
+                        last_idx = idx
+                        if stop_event.is_set():
+                            try:
+                                if os.path.exists(f):
+                                    os.remove(f)
+                            except OSError:
+                                pass
+                            continue
+
+                        if production_failed_event.is_set():
+                            break
+
+                        deadline = time.monotonic() + queue_put_max_wait_s
+                        while not stop_event.is_set():
+                            try:
+                                audio_queue.put(f, timeout=0.1)
+                                break
+                            except queue.Full:
+                                if time.monotonic() >= deadline:
+                                    production_failed_event.set()
+                                    if not tts_error[0]:
+                                        tts_error[0] = "Timed out enqueueing streaming audio chunk"
+                                    try:
+                                        if os.path.exists(f):
+                                            os.remove(f)
+                                    except OSError:
+                                        pass
+                                    break
+
+                        if production_failed_event.is_set():
+                            break
+
+                    if production_failed_event.is_set() and last_idx != -1 and last_idx < (len(tts_files) - 1):
+                        for remaining_file in tts_files[last_idx + 1:]:
+                            try:
+                                if os.path.exists(remaining_file):
+                                    os.remove(remaining_file)
+                            except OSError:
+                                pass
+
+                    if production_failed_event.is_set():
+                        break
+
+            finally:
+                try:
+                    audio_queue.put(None, timeout=0.1)
+                except queue.Full:
+                    interrupt_event.set()
+
+        player_success = [True]
+        player_failed_file = [""]
+        player_error = [""]
+
+        def player_worker():
+            # Pass the lock so it is acquired per-file, not across the
+            # entire queue-drain loop (which blocks on queue.get() between files).
+            success, failed_file, error = self.audio.play_audio_queue(
+                audio_queue, stop_event=stop_event, playback_lock=self._audio_lock
+            )
+            player_success[0] = bool(success)
+            if failed_file:
+                player_failed_file[0] = str(failed_file)
+            if error:
+                player_error[0] = str(error)
+            if not success:
+                interrupt_event.set()
+
+        tts_thread = threading.Thread(target=tts_worker, name="wake-stream-tts-worker", daemon=True)
+        player_thread = threading.Thread(target=player_worker, name="wake-stream-audio-player", daemon=True)
+        tts_thread.start()
+        player_thread.start()
+
+        boundary = str(getattr(self.config, "stream_tts_boundary", "sentence") or "sentence").strip().lower()
+        # Rough heuristic for English: ~35 characters/sec spoken.
+        chars_per_second = 35
+        target_s = 6
+        first_min_chars = max(120, int(target_s * chars_per_second))
+        next_min_chars = 200
+
+        buffer = ""
+        full_parts = []
+        is_first = True
+        stream_completed = False
+
+        if self.config.debug:
+            print(f"{self.config.botname}: ", end="", flush=True)
+
+        try:
+            for delta in self.ai.stream_response_deltas(user_input):
+                full_parts.append(delta)
+
+                # Stop immediately on barge-in (user is starting a new request).
+                if barge_in_event and barge_in_event.is_set():
+                    break
+
+                # If playback is interrupted (player failure), keep collecting deltas so
+                # the text fallback can still print a full response, but stop producing audio.
+                if interrupt_event.is_set():
+                    continue
+
+                if production_failed_event.is_set():
+                    continue
+
+                buffer += delta
+                while not stop_event.is_set():
+                    min_chars = first_min_chars if is_first else next_min_chars
+                    chunk, buffer = pop_streaming_chunk(buffer, boundary=boundary, min_chars=min_chars)
+                    if chunk is None:
+                        break
+                    is_first = False
+                    if not _put_text_queue(chunk):
+                        interrupt_event.set()
+                        break
+
+            else:
+                stream_completed = True
+
+        except Exception as e:
+            interrupt_event.set()
+            if self.config.debug:
+                print()
+            print(handle_api_error(e, service_name="OpenAI GPT (streaming)"))
+
+        # If streaming did not complete, remove the last user turn to avoid dangling history.
+        if not stream_completed:
+            try:
+                last_user = "User: " + user_input
+                if getattr(self.ai, "conversation_history", None) and self.ai.conversation_history[-1] == last_user:
+                    self.ai.conversation_history.pop()
+            except Exception:
+                pass
+
+        if stream_completed and (not production_failed_event.is_set()) and (not stop_event.is_set()):
+            final_chunk = buffer.strip()
+            if final_chunk:
+                if not _put_text_queue(final_chunk):
+                    interrupt_event.set()
+
+        # Always attempt to enqueue sentinel to allow TTS worker to exit.
+        sentinel_enqueued = _put_text_queue(None, allow_when_stopped=True)
+        if not sentinel_enqueued:
+            logger.warning("Failed to enqueue wake-word streaming sentinel")
+            interrupt_event.set()
+
+        tts_join_timeout = 30
+        player_join_timeout = 60
+        tts_thread.join(timeout=tts_join_timeout)
+        player_thread.join(timeout=player_join_timeout)
+
+        if tts_thread.is_alive():
+            logger.warning(
+                "Wake-word streaming TTS thread did not exit within %s seconds",
+                tts_join_timeout,
+            )
+        if player_thread.is_alive():
+            logger.warning(
+                "Wake-word streaming player thread did not exit within %s seconds",
+                player_join_timeout,
+            )
+
+        response_text = "".join(full_parts).strip()
+        # Print final text (unless we are in debug mode or barge-in occurred)
+        if response_text and not self.config.debug:
+            if not (barge_in_event and barge_in_event.is_set()):
+                print(f"{self.config.botname}: {response_text}\n")
+
+        if production_failed_event.is_set() and tts_error[0]:
+            logger.warning("Wake-word streaming TTS production failed: %s", tts_error[0])
+
+        if not player_success[0]:
+            if barge_in_event and barge_in_event.is_set():
+                # Expected interruption; avoid logging as a playback failure.
+                pass
+            else:
+                logger.warning(
+                    "Wake-word streaming audio playback failed for file '%s': %s",
+                    player_failed_file[0], player_error[0]
+                )
+
+        # Reset streaming metadata
+        self.streaming_route = None
+
+        # Note: do not set self.tts_files; audio_queue playback already handled cleanup.
+        self.tts_files = None
+        self.response_text = None
+
+    def _respond_pregenerated_tts(self, barge_in_enabled):
+        """Pre-generated TTS playback path.
+
+        Plays self.tts_files one by one, checking for barge-in after each file.
+        File cleanup happens inline.  Barge-in cleanup and state transition remain
+        in _state_responding.
+        """
+        # Check if barge-in thread is already running from PROCESSING state
+        thread_already_running = (
+            self.barge_in_thread is not None and
+            self.barge_in_thread.is_alive()
+        )
+
+        if not thread_already_running:
+            if barge_in_enabled and self.porcupine:
+                self._start_barge_in_detection()
+            elif barge_in_enabled and not self.porcupine:
+                logger.warning(
+                    "Barge-in is enabled in configuration, but Porcupine is not initialized. "
+                    "Barge-in will be disabled for this response."
+                )
+        else:
+            logger.debug("Barge-in thread already running from PROCESSING, reusing it")
+
+        try:
+            logger.debug("Playing %s TTS files", len(self.tts_files))
+
+            # Play files with barge-in support via stop_event in play_audio_file()
+            with (self._audio_lock or contextlib.nullcontext()):
+                for idx, file_path in enumerate(self.tts_files):
+                    # Play the file, passing stop_event for mid-playback interruption
+                    try:
+                        self.audio.play_audio_file(
+                            file_path,
+                            stop_event=self.barge_in_event if barge_in_enabled else None
+                        )
+                    except Exception as e:
+                        logger.error("Audio playback failed for file '%s': %s", file_path, e)
+                        if self.config.debug:
+                            # In debug mode, preserve the failed file itself for diagnostics.
+                            # The failed file will remain in the temp directory for manual inspection.
+                            # Only clean up unplayed files after it (start at idx + 1).
+                            self._cleanup_remaining_tts_files(self.tts_files[idx + 1:])
+                        else:
+                            print("Audio playback failed. Continuing with text only.")
+                            # In non-debug mode, clean up the failed file and all remaining files
+                            # by starting cleanup at the failed file (start at idx).
+                            self._cleanup_remaining_tts_files(self.tts_files[idx:])
+                        break
+
+                    # Check for barge-in after playing file (might have interrupted mid-playback)
+                    # Note: barge_in_event may be None if Porcupine failed to initialize
+                    if barge_in_enabled and self.barge_in_event and self.barge_in_event.is_set():
+                        logger.debug("Barge-in detected, interrupted during playback")
+                        # First, clean up the file we just played successfully
+                        try:
+                            if os.path.exists(file_path):
+                                os.remove(file_path)
+                        except OSError as e:
+                            logger.warning("Failed to delete TTS file after barge-in: %s", e)
+                        # Then, clean up remaining unplayed files
+                        self._cleanup_remaining_tts_files(self.tts_files[idx + 1:])
+                        break
+
+                    # Clean up the file we just played successfully
+                    try:
+                        if os.path.exists(file_path):
+                            os.remove(file_path)
+                    except OSError as e:
+                        logger.warning("Failed to delete TTS file: %s", e)
+
+        except Exception as e:
+            logger.error("TTS playback error: %s", e)
+            print(f"Error playing TTS: {str(e)}")
+
 
     def _cleanup(self):
         """Clean up Porcupine, VAD, barge-in thread, and audio resources."""
