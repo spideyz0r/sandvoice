@@ -109,6 +109,7 @@ class WakeWordMode:
         self.response_text = None
         self.streaming_user_input = None
         self.streaming_route = None
+        self.streaming_response_text = None  # Pre-computed plugin response for TTS
         self.barge_in_event = None  # Event to signal barge-in during TTS
         self.barge_in_stop_flag = None  # Flag to stop barge-in thread immediately
         self.barge_in_thread = None  # Thread for barge-in detection
@@ -168,17 +169,17 @@ class WakeWordMode:
             print(f"Error: {error_msg}")
             raise RuntimeError(error_msg)
 
-        if not self.config.bot_voice:
+        if not _is_enabled_flag(getattr(self.config, "bot_voice", False)):
             error_msg = "wake-word mode requires bot_voice: enabled"
             print(f"Error: {error_msg}")
             raise RuntimeError(error_msg)
 
-        if not self.config.stream_responses:
+        if not _is_enabled_flag(getattr(self.config, "stream_responses", False)):
             error_msg = "wake-word mode requires stream_responses: enabled"
             print(f"Error: {error_msg}")
             raise RuntimeError(error_msg)
 
-        if not self.config.stream_tts:
+        if not _is_enabled_flag(getattr(self.config, "stream_tts", False)):
             error_msg = "wake-word mode requires stream_tts: enabled"
             print(f"Error: {error_msg}")
             raise RuntimeError(error_msg)
@@ -674,6 +675,7 @@ class WakeWordMode:
                 logger.debug("Failed to remove recorded audio file '%s': %s", self.recorded_audio_path, e)
         self.recorded_audio_path = None
         self.response_text = None
+        self.streaming_response_text = None
 
         # Play confirmation beep
         if self.config.wake_confirmation_beep and self.confirmation_beep_path:
@@ -721,6 +723,7 @@ class WakeWordMode:
 
         # Reset response data
         self.response_text = None
+        self.streaming_response_text = None
 
         # Check if we have a recorded audio file before starting barge-in detection
         if not self.recorded_audio_path or not os.path.exists(self.recorded_audio_path):
@@ -795,6 +798,7 @@ class WakeWordMode:
                     return
 
                 self.response_text = response_text
+                self.streaming_response_text = response_text
             else:
                 # No route_message: streaming is always active (required by Plan 29)
                 self.streaming_user_input = user_input
@@ -851,6 +855,7 @@ class WakeWordMode:
             self.barge_in_stop_flag = None
             self.recorded_audio_path = None
             self.response_text = None
+            self.streaming_response_text = None
 
             # Return to IDLE on error
             self.state = State.IDLE
@@ -936,7 +941,7 @@ class WakeWordMode:
 
         barge_in_enabled = getattr(self.config, "barge_in", False)
 
-        if self.streaming_user_input:
+        if self.streaming_user_input or self.streaming_response_text:
             self._respond_streaming(barge_in_enabled)
 
         # Signal barge-in thread to stop and wait for it to finish
@@ -995,6 +1000,8 @@ class WakeWordMode:
         """
         user_input = self.streaming_user_input
         self.streaming_user_input = None
+        precomputed_text = self.streaming_response_text
+        self.streaming_response_text = None
 
         # Ensure barge-in detection is running (if enabled)
         thread_already_running = (
@@ -1145,59 +1152,67 @@ class WakeWordMode:
         is_first = True
         stream_completed = False
 
-        if self.config.debug:
-            print(f"{self.config.botname}: ", end="", flush=True)
-
-        try:
-            for delta in self.ai.stream_response_deltas(user_input):
-                full_parts.append(delta)
-
-                # Stop immediately on barge-in (user is starting a new request).
-                if barge_in_event and barge_in_event.is_set():
-                    break
-
-                # If playback is interrupted (player failure), keep collecting deltas so
-                # the text fallback can still print a full response, but stop producing audio.
-                if interrupt_event.is_set():
-                    continue
-
-                if production_failed_event.is_set():
-                    continue
-
-                buffer += delta
-                while not stop_event.is_set():
-                    min_chars = first_min_chars if is_first else next_min_chars
-                    chunk, buffer = pop_streaming_chunk(buffer, boundary=boundary, min_chars=min_chars)
-                    if chunk is None:
-                        break
-                    is_first = False
-                    if not _put_text_queue(chunk):
-                        interrupt_event.set()
-                        break
-
-            else:
-                stream_completed = True
-
-        except Exception as e:
-            interrupt_event.set()
-            if self.config.debug:
-                print()
-            print(handle_api_error(e, service_name="OpenAI GPT (streaming)"))
-
-        # If streaming did not complete, remove the last user turn to avoid dangling history.
-        if not stream_completed:
-            try:
-                last_user = "User: " + user_input
-                if getattr(self.ai, "conversation_history", None) and self.ai.conversation_history[-1] == last_user:
-                    self.ai.conversation_history.pop()
-            except Exception:
-                pass
-
-        if stream_completed and (not production_failed_event.is_set()) and (not stop_event.is_set()):
-            final_chunk = buffer.strip()
-            if final_chunk:
-                if not _put_text_queue(final_chunk):
+        if precomputed_text is not None:
+            # Pre-computed plugin response — enqueue directly without LLM streaming.
+            if not (barge_in_event and barge_in_event.is_set()) and not stop_event.is_set():
+                if _put_text_queue(precomputed_text):
+                    stream_completed = True
+                else:
                     interrupt_event.set()
+        else:
+            if self.config.debug:
+                print(f"{self.config.botname}: ", end="", flush=True)
+
+            try:
+                for delta in self.ai.stream_response_deltas(user_input):
+                    full_parts.append(delta)
+
+                    # Stop immediately on barge-in (user is starting a new request).
+                    if barge_in_event and barge_in_event.is_set():
+                        break
+
+                    # If playback is interrupted (player failure), keep collecting deltas so
+                    # the text fallback can still print a full response, but stop producing audio.
+                    if interrupt_event.is_set():
+                        continue
+
+                    if production_failed_event.is_set():
+                        continue
+
+                    buffer += delta
+                    while not stop_event.is_set():
+                        min_chars = first_min_chars if is_first else next_min_chars
+                        chunk, buffer = pop_streaming_chunk(buffer, boundary=boundary, min_chars=min_chars)
+                        if chunk is None:
+                            break
+                        is_first = False
+                        if not _put_text_queue(chunk):
+                            interrupt_event.set()
+                            break
+
+                else:
+                    stream_completed = True
+
+            except Exception as e:
+                interrupt_event.set()
+                if self.config.debug:
+                    print()
+                print(handle_api_error(e, service_name="OpenAI GPT (streaming)"))
+
+            # If LLM streaming did not complete, remove the last user turn to avoid dangling history.
+            if not stream_completed:
+                try:
+                    last_user = "User: " + user_input
+                    if getattr(self.ai, "conversation_history", None) and self.ai.conversation_history[-1] == last_user:
+                        self.ai.conversation_history.pop()
+                except Exception:
+                    pass
+
+            if stream_completed and (not production_failed_event.is_set()) and (not stop_event.is_set()):
+                final_chunk = buffer.strip()
+                if final_chunk:
+                    if not _put_text_queue(final_chunk):
+                        interrupt_event.set()
 
         # Always attempt to enqueue sentinel to allow TTS worker to exit.
         sentinel_enqueued = _put_text_queue(None, allow_when_stopped=True)

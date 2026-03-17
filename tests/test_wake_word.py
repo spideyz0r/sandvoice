@@ -339,6 +339,10 @@ class TestWakeWordModeRun(unittest.TestCase):
         self.mock_config = Mock()
         self.mock_config.debug = False
         self.mock_config.visual_state_indicator = False
+        self.mock_config.vad_enabled = True
+        self.mock_config.bot_voice = True
+        self.mock_config.stream_responses = True
+        self.mock_config.stream_tts = True
 
         self.mock_ai = Mock()
         self.mock_audio = Mock()
@@ -937,6 +941,8 @@ class TestWakeWordModeProcessing(unittest.TestCase):
         # TTS no longer pre-generated in _state_processing
         self.mock_ai.text_to_speech.assert_not_called()
         self.assertEqual(mode.response_text, "It's sunny today!")
+        # streaming_response_text set so RESPONDING can speak it via TTS worker
+        self.assertEqual(mode.streaming_response_text, "It's sunny today!")
         self.assertEqual(mode.state, State.RESPONDING)
 
     @patch('common.wake_word.os.path.exists')
@@ -1194,6 +1200,32 @@ class TestWakeWordModeResponding(unittest.TestCase):
         # Should still transition to IDLE despite cleanup error
         self.assertEqual(mode.state, State.IDLE)
 
+    @patch('common.wake_word.os.remove')
+    @patch('common.wake_word.os.path.exists')
+    def test_state_responding_speaks_plugin_response_via_tts(self, mock_exists, mock_remove):
+        """Plugin response (streaming_response_text set) is fed directly to streaming TTS."""
+        mock_exists.return_value = False
+
+        tts_file = "/tmp/tts-plugin.mp3"
+        self.mock_ai.text_to_speech.return_value = [tts_file]
+        self.mock_audio.play_audio_queue.return_value = (True, None, None)
+        self.mock_config.botname = "TestBot"
+        self.mock_config.stream_tts_boundary = "sentence"
+
+        mode = WakeWordMode(self.mock_config, self.mock_ai, self.mock_audio)
+        mode.streaming_response_text = "Plugin said this."
+        mode.streaming_user_input = None
+        mode.state = State.RESPONDING
+
+        mode._state_responding()
+
+        # TTS worker should have been called with the plugin response text
+        self.mock_ai.text_to_speech.assert_called_once_with("Plugin said this.")
+        self.mock_audio.play_audio_queue.assert_called()
+        self.assertEqual(mode.state, State.IDLE)
+        # streaming_response_text cleared after responding
+        self.assertIsNone(mode.streaming_response_text)
+
 
 class TestBargeIn(unittest.TestCase):
     """Test barge-in functionality (interrupt TTS with wake word)."""
@@ -1250,6 +1282,12 @@ class TestBargeIn(unittest.TestCase):
         # The streaming path creates threads (tts_worker + player_worker)
         self.assertTrue(mock_thread_class.called)
         mock_thread.start.assert_called()
+        # _start_barge_in_detection must also create a thread targeting _listen_for_barge_in
+        thread_targets = [call.kwargs.get('target') for call in mock_thread_class.call_args_list]
+        self.assertTrue(
+            any(getattr(t, '__name__', '') == '_listen_for_barge_in' for t in thread_targets),
+            "Expected _listen_for_barge_in to be registered as a thread target"
+        )
 
     @patch('common.wake_word.threading.Thread')
     @patch('common.wake_word.threading.Event')
