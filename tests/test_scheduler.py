@@ -737,6 +737,30 @@ class TestSandVoiceSchedulerInit(unittest.TestCase):
         sv.plugins = {}
         return sv
 
+    def test_normalize_plugin_name_does_not_apply_route_aliases(self):
+        """Plugin/module normalization must stay independent from route alias mapping."""
+        from sandvoice import normalize_plugin_name
+
+        self.assertEqual(normalize_plugin_name("default-rote"), "default_rote")
+
+    def test_is_valid_plugin_module_name_accepts_python_identifiers(self):
+        """Plugin module validation must match Python identifier rules."""
+        from sandvoice import is_valid_plugin_module_name
+
+        self.assertTrue(is_valid_plugin_module_name("hacker_news"))
+        self.assertFalse(is_valid_plugin_module_name("hacker news"))
+        self.assertFalse(is_valid_plugin_module_name("123plugin"))
+        self.assertFalse(is_valid_plugin_module_name("plugin.name"))
+
+    def test_suggested_plugin_module_name_returns_valid_identifier(self):
+        """Invalid plugin filenames should get a valid Python module suggestion."""
+        from sandvoice import suggested_plugin_module_name
+
+        self.assertEqual(suggested_plugin_module_name("123plugin"), "_123plugin")
+        self.assertEqual(suggested_plugin_module_name("plugin.name"), "plugin_name")
+        self.assertEqual(suggested_plugin_module_name("hacker-news"), "hacker_news")
+        self.assertEqual(suggested_plugin_module_name("123-plugin"), "_123_plugin")
+
     def test_init_scheduler_disabled_returns_none(self):
         sv = self._make_stub(scheduler_enabled=False)
         self.assertIsNone(sv._init_scheduler())
@@ -779,6 +803,233 @@ class TestSandVoiceSchedulerInit(unittest.TestCase):
         sv.ai.generate_response.assert_not_called()
         self.assertEqual(result, "plugin output")
 
+    def test_load_plugins_registers_hyphen_alias_for_underscore_module(self):
+        """load_plugins() must register both canonical underscore and hyphen aliases."""
+        from sandvoice import SandVoice
+
+        sv = object.__new__(SandVoice)
+        sv.config = MagicMock()
+        sv.config.plugin_path = "/tmp/plugins"
+        sv.plugins = {}
+
+        module = MagicMock(spec=["process"])
+        module.process = MagicMock()
+
+        with patch("sandvoice.os.path.exists", return_value=True), \
+             patch("sandvoice.os.listdir", return_value=["hacker_news.py"]), \
+             patch("sandvoice.importlib.import_module", return_value=module):
+            sv.load_plugins()
+
+        self.assertIs(sv.plugins["hacker_news"], module.process)
+        self.assertIs(sv.plugins["hacker-news"], module.process)
+
+    def test_load_plugins_warns_and_skips_non_underscore_safe_filename(self):
+        """load_plugins() must not import a normalized name different from the file on disk."""
+        from sandvoice import SandVoice
+
+        sv = object.__new__(SandVoice)
+        sv.config = MagicMock()
+        sv.config.plugin_path = "/tmp/plugins"
+        sv.plugins = {}
+
+        with patch("sandvoice.os.path.exists", return_value=True), \
+             patch("sandvoice.os.listdir", return_value=["hacker-news.py"]), \
+             patch("sandvoice.importlib.import_module") as import_module, \
+             self.assertLogs("sandvoice", level="WARNING") as logs:
+            sv.load_plugins()
+
+        import_module.assert_not_called()
+        self.assertEqual(sv.plugins, {})
+        self.assertTrue(
+            any("rename it to hacker_news.py" in message for message in logs.output)
+        )
+
+    def test_load_plugins_warns_with_valid_suggestion_for_hyphenated_invalid_identifier(self):
+        """Hyphenated invalid identifiers must get an importable rename suggestion."""
+        from sandvoice import SandVoice
+
+        sv = object.__new__(SandVoice)
+        sv.config = MagicMock()
+        sv.config.plugin_path = "/tmp/plugins"
+        sv.plugins = {}
+
+        with patch("sandvoice.os.path.exists", return_value=True), \
+             patch("sandvoice.os.listdir", return_value=["123-plugin.py"]), \
+             patch("sandvoice.importlib.import_module") as import_module, \
+             self.assertLogs("sandvoice", level="WARNING") as logs:
+            sv.load_plugins()
+
+        import_module.assert_not_called()
+        self.assertEqual(sv.plugins, {})
+        self.assertTrue(
+            any("rename it to _123_plugin.py" in message for message in logs.output)
+        )
+
+    def test_load_plugins_warns_and_skips_non_identifier_filename(self):
+        """load_plugins() must skip filenames that are not valid Python identifiers."""
+        from sandvoice import SandVoice
+
+        sv = object.__new__(SandVoice)
+        sv.config = MagicMock()
+        sv.config.plugin_path = "/tmp/plugins"
+        sv.plugins = {}
+
+        with patch("sandvoice.os.path.exists", return_value=True), \
+             patch("sandvoice.os.listdir", return_value=["123plugin.py"]), \
+             patch("sandvoice.importlib.import_module") as import_module, \
+             self.assertLogs("sandvoice", level="WARNING") as logs:
+            sv.load_plugins()
+
+        import_module.assert_not_called()
+        self.assertEqual(sv.plugins, {})
+        self.assertTrue(
+            any(
+                "not a valid Python module identifier" in message and
+                "rename it to _123plugin.py" in message
+                for message in logs.output
+            )
+        )
+
+    def test_load_plugins_registers_plugin_process_method(self):
+        """load_plugins() must register Plugin().process rather than the instance itself."""
+        from sandvoice import SandVoice
+
+        sv = object.__new__(SandVoice)
+        sv.config = MagicMock()
+        sv.config.plugin_path = "/tmp/plugins"
+        sv.plugins = {}
+
+        plugin_instance = MagicMock()
+        plugin_instance.process = MagicMock()
+        module = MagicMock(spec=["Plugin"])
+        module.Plugin = MagicMock(return_value=plugin_instance)
+
+        with patch("sandvoice.os.path.exists", return_value=True), \
+             patch("sandvoice.os.listdir", return_value=["weather_plugin.py"]), \
+             patch("sandvoice.importlib.import_module", return_value=module):
+            sv.load_plugins()
+
+        self.assertIs(sv.plugins["weather_plugin"], plugin_instance.process)
+        self.assertIs(sv.plugins["weather-plugin"], plugin_instance.process)
+
+    def test_load_plugins_skips_plugin_without_callable_process_method(self):
+        """load_plugins() must skip Plugin classes that do not expose callable process."""
+        from sandvoice import SandVoice
+
+        sv = object.__new__(SandVoice)
+        sv.config = MagicMock()
+        sv.config.plugin_path = "/tmp/plugins"
+        sv.plugins = {}
+
+        plugin_instance = MagicMock(spec=[])
+        module = MagicMock(spec=["Plugin"])
+        module.Plugin = MagicMock(return_value=plugin_instance)
+
+        with patch("sandvoice.os.path.exists", return_value=True), \
+             patch("sandvoice.os.listdir", return_value=["weather_plugin.py"]), \
+             patch("sandvoice.importlib.import_module", return_value=module), \
+             self.assertLogs("sandvoice", level="WARNING") as logs:
+            sv.load_plugins()
+
+        self.assertEqual(sv.plugins, {})
+        self.assertTrue(
+            any("does not expose a callable process function" in message for message in logs.output)
+        )
+
+    def test_load_plugins_warns_when_plugin_has_no_supported_entrypoint(self):
+        """load_plugins() must warn when a module exposes neither Plugin nor process."""
+        from sandvoice import SandVoice
+
+        sv = object.__new__(SandVoice)
+        sv.config = MagicMock()
+        sv.config.plugin_path = "/tmp/plugins"
+        sv.plugins = {}
+
+        module = MagicMock(spec=[])
+
+        with patch("sandvoice.os.path.exists", return_value=True), \
+             patch("sandvoice.os.listdir", return_value=["weather_plugin.py"]), \
+             patch("sandvoice.importlib.import_module", return_value=module), \
+             self.assertLogs("sandvoice", level="WARNING") as logs:
+            sv.load_plugins()
+
+        self.assertEqual(sv.plugins, {})
+        self.assertTrue(
+            any("has no supported entrypoint" in message for message in logs.output)
+        )
+
+    def test_load_plugins_warns_and_continues_when_plugin_init_fails(self):
+        """load_plugins() must isolate Plugin instantiation failures to that plugin."""
+        from sandvoice import SandVoice
+
+        sv = object.__new__(SandVoice)
+        sv.config = MagicMock()
+        sv.config.plugin_path = "/tmp/plugins"
+        sv.plugins = {}
+
+        bad_module = MagicMock(spec=["Plugin"])
+        bad_module.Plugin = MagicMock(side_effect=RuntimeError("boom"))
+        good_module = MagicMock(spec=["process"])
+        good_module.process = MagicMock()
+
+        def import_side_effect(name):
+            if name == "plugins.bad_plugin":
+                return bad_module
+            if name == "plugins.good_plugin":
+                return good_module
+            raise AssertionError(name)
+
+        with patch("sandvoice.os.path.exists", return_value=True), \
+             patch("sandvoice.os.listdir", return_value=["bad_plugin.py", "good_plugin.py"]), \
+             patch("sandvoice.importlib.import_module", side_effect=import_side_effect), \
+             self.assertLogs("sandvoice", level="WARNING") as logs:
+            sv.load_plugins()
+
+        self.assertIs(sv.plugins["good_plugin"], good_module.process)
+        self.assertIs(sv.plugins["good-plugin"], good_module.process)
+        self.assertTrue(
+            any("Error initializing plugin bad_plugin.py: boom" in message for message in logs.output)
+        )
+
+    def test_route_message_normalizes_hyphenated_plugin_name(self):
+        """route_message() must normalize hacker-news to the hacker_news plugin key."""
+        sv = self._make_stub()
+        sv.ai = MagicMock()
+        mock_plugin = MagicMock(return_value="plugin output")
+        sv.plugins = {"hacker_news": mock_plugin}
+
+        result = sv.route_message("hn", {"route": "hacker-news", "reason": "news"})
+
+        mock_plugin.assert_called_once()
+        self.assertEqual(
+            mock_plugin.call_args[0][1],
+            {"route": "hacker_news", "reason": "news"},
+        )
+        sv.ai.generate_response.assert_not_called()
+        self.assertEqual(result, "plugin output")
+
+    def test_route_message_prefers_canonical_plugin_key_over_hyphen_alias(self):
+        """route_message() must dispatch to hacker_news even when hacker-news alias exists."""
+        sv = self._make_stub()
+        sv.ai = MagicMock()
+        canonical_plugin = MagicMock(return_value="canonical")
+        alias_plugin = MagicMock(return_value="alias")
+        sv.plugins = {
+            "hacker_news": canonical_plugin,
+            "hacker-news": alias_plugin,
+        }
+
+        result = sv.route_message("hn", {"route": "hacker-news", "reason": "news"})
+
+        canonical_plugin.assert_called_once()
+        self.assertEqual(
+            canonical_plugin.call_args[0][1],
+            {"route": "hacker_news", "reason": "news"},
+        )
+        alias_plugin.assert_not_called()
+        sv.ai.generate_response.assert_not_called()
+        self.assertEqual(result, "canonical")
+
     def test_route_message_normalizes_legacy_default_route_name(self):
         """route_message() must normalize default-rote to default-route before dispatch."""
         sv = self._make_stub()
@@ -814,6 +1065,49 @@ class TestSandVoiceSchedulerInit(unittest.TestCase):
         sv._scheduler_ai.generate_response.assert_not_called()
         sv.ai.generate_response.assert_not_called()
         self.assertEqual(result, "plugin output")
+
+    def test_scheduler_route_message_normalizes_hyphenated_plugin_name(self):
+        """_scheduler_route_message() must normalize hacker-news to hacker_news."""
+        sv = self._make_stub()
+        sv._scheduler_ai = MagicMock()
+        sv.ai = MagicMock()
+        mock_plugin = MagicMock(return_value="plugin output")
+        sv.plugins = {"hacker_news": mock_plugin}
+
+        result = sv._scheduler_route_message("hn", {"route": "hacker-news", "reason": "news"})
+
+        mock_plugin.assert_called_once()
+        self.assertEqual(
+            mock_plugin.call_args[0][1],
+            {"route": "hacker_news", "reason": "news"},
+        )
+        sv._scheduler_ai.generate_response.assert_not_called()
+        sv.ai.generate_response.assert_not_called()
+        self.assertEqual(result, "plugin output")
+
+    def test_scheduler_route_message_prefers_canonical_plugin_key_over_hyphen_alias(self):
+        """_scheduler_route_message() must prefer hacker_news over hacker-news alias."""
+        sv = self._make_stub()
+        sv._scheduler_ai = MagicMock()
+        sv.ai = MagicMock()
+        canonical_plugin = MagicMock(return_value="canonical")
+        alias_plugin = MagicMock(return_value="alias")
+        sv.plugins = {
+            "hacker_news": canonical_plugin,
+            "hacker-news": alias_plugin,
+        }
+
+        result = sv._scheduler_route_message("hn", {"route": "hacker-news", "reason": "news"})
+
+        canonical_plugin.assert_called_once()
+        self.assertEqual(
+            canonical_plugin.call_args[0][1],
+            {"route": "hacker_news", "reason": "news"},
+        )
+        alias_plugin.assert_not_called()
+        sv._scheduler_ai.generate_response.assert_not_called()
+        sv.ai.generate_response.assert_not_called()
+        self.assertEqual(result, "canonical")
 
     def test_scheduler_context_route_message_uses_scheduler_route(self):
         """_SchedulerContext.route_message must delegate to _scheduler_route_message,

@@ -13,8 +13,51 @@ from common.scheduler import TaskScheduler
 
 import argparse, atexit, importlib, logging, os, signal, sys
 import queue, threading, time
+import re
 
 logger = logging.getLogger(__name__)
+
+
+def normalize_plugin_name(name):
+    """Convert route/plugin names to the canonical Python module key."""
+    if not isinstance(name, str):
+        return name
+    return name.strip().replace("-", "_")
+
+
+def is_valid_plugin_module_name(name):
+    """Return True when a plugin filename maps to a valid Python module identifier."""
+    return isinstance(name, str) and bool(name) and name.isidentifier()
+
+
+def suggested_plugin_module_name(name):
+    """Return a valid Python module name suggestion for an invalid plugin filename."""
+    if not isinstance(name, str):
+        return "plugin_module"
+    candidate = normalize_plugin_name(name)
+    candidate = re.sub(r"[^A-Za-z0-9_]", "_", candidate)
+    if not candidate:
+        return "plugin_module"
+    if candidate[0].isdigit():
+        candidate = "_" + candidate
+    return candidate
+
+
+def plugin_route_alias(name):
+    """Return the voice-friendly hyphenated alias for a plugin module key."""
+    if not isinstance(name, str):
+        return name
+    return name.replace("_", "-")
+
+
+def resolve_plugin_route_name(route_name, plugins):
+    """Resolve a route name to the best matching plugin key."""
+    normalized_route = normalize_route_name(route_name)
+    plugin_name = normalize_plugin_name(normalized_route)
+    if plugin_name in plugins:
+        return plugin_name
+
+    return normalized_route
 
 class _SchedulerContext:
     """Proxy passed to plugins when invoked from the scheduler.
@@ -80,17 +123,65 @@ class SandVoice:
         for filename in os.listdir(plugins_dir):
             if filename.endswith(".py"):
                 try:
-                    module_name = os.path.splitext(filename)[0]
+                    raw_module_name = os.path.splitext(filename)[0]
+                    module_name = normalize_plugin_name(raw_module_name)
+                    if raw_module_name != module_name:
+                        suggested_name = (
+                            module_name
+                            if is_valid_plugin_module_name(module_name)
+                            else suggested_plugin_module_name(raw_module_name)
+                        )
+                        logger.warning(
+                            "Plugin filename %s is not underscore-safe; rename it to %s.py",
+                            filename,
+                            suggested_name,
+                        )
+                        continue
+                    if not is_valid_plugin_module_name(module_name):
+                        suggested_name = suggested_plugin_module_name(raw_module_name)
+                        logger.warning(
+                            "Plugin filename %s is not a valid Python module identifier; rename it to %s.py",
+                            filename,
+                            suggested_name,
+                        )
+                        continue
                     module = importlib.import_module(f"plugins.{module_name}")
                 except Exception as e:
-                    print(f"Error loading plugin {filename}: {e}")
+                    logger.warning("Error loading plugin %s: %s", filename, e)
+                    if logger.isEnabledFor(logging.DEBUG):
+                        logger.debug("Plugin load traceback for %s", filename, exc_info=True)
                     continue
 
-                # Expect a class named 'Plugin' or a top-level 'process' function
-                if hasattr(module, 'Plugin'):
-                    self.plugins[module_name] = module.Plugin()
-                elif hasattr(module, 'process'):
-                    self.plugins[module_name] = module.process
+                try:
+                    # Expect a class named 'Plugin' or a top-level 'process' function
+                    if hasattr(module, 'Plugin'):
+                        plugin_instance = module.Plugin()
+                        plugin = getattr(plugin_instance, "process", None)
+                    elif hasattr(module, 'process'):
+                        plugin = module.process
+                    else:
+                        logger.warning(
+                            "Plugin %s has no supported entrypoint; expected Plugin or process",
+                            filename,
+                        )
+                        continue
+                except Exception as e:
+                    logger.warning("Error initializing plugin %s: %s", filename, e)
+                    if logger.isEnabledFor(logging.DEBUG):
+                        logger.debug("Plugin init traceback for %s", filename, exc_info=True)
+                    continue
+
+                if not callable(plugin):
+                    logger.warning(
+                        "Plugin %s does not expose a callable process function; skipping",
+                        filename,
+                    )
+                    continue
+
+                self.plugins[module_name] = plugin
+                alias = plugin_route_alias(module_name)
+                if alias != module_name:
+                    self.plugins[alias] = plugin
 
     def _init_cache(self):
         """Initialise VoiceCache if cache_enabled, using the same DB file as the scheduler."""
@@ -169,7 +260,7 @@ class SandVoice:
         """Route a scheduler-triggered message using a dedicated AI instance to avoid
         polluting the interactive conversation history."""
         normalized_route = dict(route)
-        normalized_route["route"] = normalize_route_name(route.get("route"))
+        normalized_route["route"] = resolve_plugin_route_name(route.get("route"), self.plugins)
         logger.debug("Route: %s -> %s", route, normalized_route)
         logger.debug("Plugins: %s", self.plugins.keys())
         if normalized_route["route"] in self.plugins:
@@ -180,7 +271,7 @@ class SandVoice:
 
     def route_message(self, user_input, route):
         normalized_route = dict(route)
-        normalized_route["route"] = normalize_route_name(route.get("route"))
+        normalized_route["route"] = resolve_plugin_route_name(route.get("route"), self.plugins)
         logger.debug("Route: %s -> %s", route, normalized_route)
         logger.debug("Plugins: %s", self.plugins.keys())
         if normalized_route["route"] in self.plugins:
