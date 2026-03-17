@@ -148,7 +148,9 @@ class WakeWordMode:
         """Initialize Porcupine, VAD, and confirmation beep.
 
         Raises:
-            RuntimeError: If Porcupine access key is missing or invalid, or if VAD is disabled
+            RuntimeError: If Porcupine access key is missing or invalid; if vad_enabled,
+                bot_voice, stream_responses, or stream_tts is disabled; or if the
+                Porcupine instance cannot be created.
         """
         logger.debug("Initializing wake word detection and VAD")
 
@@ -676,6 +678,8 @@ class WakeWordMode:
         self.recorded_audio_path = None
         self.response_text = None
         self.streaming_response_text = None
+        self.streaming_user_input = None
+        self.streaming_route = None
 
         # Play confirmation beep
         if self.config.wake_confirmation_beep and self.confirmation_beep_path:
@@ -724,6 +728,8 @@ class WakeWordMode:
         # Reset response data
         self.response_text = None
         self.streaming_response_text = None
+        self.streaming_user_input = None
+        self.streaming_route = None
 
         # Check if we have a recorded audio file before starting barge-in detection
         if not self.recorded_audio_path or not os.path.exists(self.recorded_audio_path):
