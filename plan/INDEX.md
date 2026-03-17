@@ -67,6 +67,10 @@ plan/
 **Document**: [completed/27-tasks-file-and-lifecycle.md](./completed/27-tasks-file-and-lifecycle.md)
 **Description**: Move scheduled task definitions to a dedicated `~/.sandvoice/tasks.yaml` file and make it the sole source of truth — tasks removed from the file are automatically deleted from the DB on startup. `tasks.yaml` replaces the `tasks:` key in `config.yaml` with no backwards compatibility.
 
+### Priority 24: Wake Word Refactor
+**Document**: [completed/24-wake-word-refactor.md](./completed/24-wake-word-refactor.md)
+**Description**: Structural cleanup of `common/wake_word.py`: lift `_CompositeStopEvent` to module level, extract `_respond_streaming()` and `_respond_pregenerated_tts()` from `_state_responding`, add `_poll_op()` to deduplicate the barge-in polling pattern, and add `_should_stream_default_route()` to replace a duplicated three-flag boolean.
+
 ### Priority 28: Logging Level Refactor
 **Document**: [completed/28-logging-level-refactor.md](./completed/28-logging-level-refactor.md)
 **Description**: Replace `debug: enabled/disabled` with a standard `log_level: warning|info|debug` config key and remove ~200 scattered `if self.config.debug: logger.*()` guards — the logging framework is the filter, not the code. Prerequisite for Plan 23 (timing summary).
@@ -138,10 +142,6 @@ plan/
 ### Priority 23: Request Timing Summary Log
 **Document**: [backlog/23-request-timing-summary-log.md](./backlog/23-request-timing-summary-log.md)
 **Description**: Emit a single INFO line per request summarising transcription, routing, plugin, and TTS timing plus cache status. Enables clean benchmarking without enabling `log_level: debug`. Requires Plan 28.
-
-### Priority 24: Wake Word Refactor
-**Document**: [backlog/24-wake-word-refactor.md](./backlog/24-wake-word-refactor.md)
-**Description**: Structural cleanup of common/wake_word.py: fix logging pattern violation, extract _respond_streaming() and _respond_pregenerated_tts() from the 310-line _state_responding(), lift _CompositeStopEvent to module level, and deduplicate the barge-in polling pattern in _state_processing.
 
 ### Priority 25: Terminal UI
 **Document**: [backlog/25-terminal-ui.md](./backlog/25-terminal-ui.md)
