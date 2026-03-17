@@ -151,6 +151,18 @@ plan/
 **Document**: [backlog/25-terminal-ui.md](./backlog/25-terminal-ui.md)
 **Description**: Replace flat emoji-based terminal output with a high-end CLI UI: ANSI colors, animated waiting dots, in-place status line updates, inline timing per phase, and clear conversation/status separation. Pure ANSI — no external dependencies, Pi-compatible.
 
+### Priority 29: Wake Word Always-Streaming TTS
+**Document**: [backlog/29-wake-word-always-streaming-tts.md](./backlog/29-wake-word-always-streaming-tts.md)
+**Description**: Remove the pre-generated TTS playback path from `common/wake_word.py` — streaming TTS (Plan 08) supersedes it. Deletes `_respond_pregenerated_tts`, four cleanup helpers, `self.tts_files` state, and the TTS generation block in `_state_processing`. ~190 lines removed.
+
+### Priority 30: Wake Word Barge-In Always On
+**Document**: [backlog/30-wake-word-barge-in-always-on.md](./backlog/30-wake-word-barge-in-always-on.md)
+**Description**: Make barge-in unconditionally active in wake-word mode. Fail-fast at startup if disabled; remove all `barge_in_enabled` conditional branches throughout `_state_processing`, `_state_responding`, `_respond_streaming`, and `_poll_op`. ~35 lines removed.
+
+### Priority 31: Wake Word Route Always Required
+**Document**: [backlog/31-wake-word-route-always-required.md](./backlog/31-wake-word-route-always-required.md)
+**Description**: Remove the dead-code `else` branch in `_state_processing` that handles a `None` route_message. sandvoice.py always provides this callback; the fallback path is unreachable. Fail-fast in `__init__` if None. ~30 lines removed.
+
 ### Future Enhancements
 **Document**: [backlog/FUTURE.md](./backlog/FUTURE.md)
 **Description**: Long-term feature ideas including API Cost Management, Conversation History Management, Code Deduplication, Timers & Reminders, Music Control, Smart Home Integration, Calendar Integration, Todo List Management, Multi-User Support, and Conversation Memory.
