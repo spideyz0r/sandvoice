@@ -71,6 +71,10 @@ plan/
 **Document**: [completed/24-wake-word-refactor.md](./completed/24-wake-word-refactor.md)
 **Description**: Structural cleanup of `common/wake_word.py`: lift `_CompositeStopEvent` to module level, extract `_respond_streaming()` and `_respond_pregenerated_tts()` from `_state_responding`, add `_poll_op()` to deduplicate the barge-in polling pattern, and add `_should_stream_default_route()` to replace a duplicated three-flag boolean.
 
+### Priority 26: Configuration Audit and Simplification
+**Document**: [completed/26-config-audit-simplification.md](./completed/26-config-audit-simplification.md)
+**Description**: Removed 15 config keys — deprecated keys, internal streaming/TTS knobs, beep/earcon fine-tuning, and VAD internals — hardcoding their former defaults at call sites. No behavior change. ~30% reduction in user-facing config surface.
+
 ### Priority 28: Logging Level Refactor
 **Document**: [completed/28-logging-level-refactor.md](./completed/28-logging-level-refactor.md)
 **Description**: Replace `debug: enabled/disabled` with a standard `log_level: warning|info|debug` config key and remove ~200 scattered `if self.config.debug: logger.*()` guards — the logging framework is the filter, not the code. Prerequisite for Plan 23 (timing summary).
@@ -146,10 +150,6 @@ plan/
 ### Priority 25: Terminal UI
 **Document**: [backlog/25-terminal-ui.md](./backlog/25-terminal-ui.md)
 **Description**: Replace flat emoji-based terminal output with a high-end CLI UI: ANSI colors, animated waiting dots, in-place status line updates, inline timing per phase, and clear conversation/status separation. Pure ANSI — no external dependencies, Pi-compatible.
-
-### Priority 26: Configuration Audit and Simplification
-**Document**: [backlog/26-config-audit-simplification.md](./backlog/26-config-audit-simplification.md)
-**Description**: Audit all ~50 config keys, remove already-deprecated keys (linux_warnings), hardcode internal implementation knobs, and subsume stream_print_deltas into debug. Targets ~30-40% reduction in user-facing config surface with no behavior change.
 
 ### Future Enhancements
 **Document**: [backlog/FUTURE.md](./backlog/FUTURE.md)
