@@ -144,8 +144,7 @@ class TestWakeWordModeInitialize(unittest.TestCase):
         )
         self.assertEqual(mode.ack_earcon_path, "/tmp/test/ack.mp3")
 
-    @patch('common.wake_word.pvporcupine.create')
-    def test_initialize_raises_when_bot_voice_disabled(self, mock_porcupine_create):
+    def test_initialize_raises_when_bot_voice_disabled(self):
         self.mock_config.bot_voice = False
         self.mock_config.stream_responses = True
         self.mock_config.stream_tts = True
@@ -157,8 +156,7 @@ class TestWakeWordModeInitialize(unittest.TestCase):
 
         self.assertIn("bot_voice", str(context.exception))
 
-    @patch('common.wake_word.pvporcupine.create')
-    def test_initialize_raises_when_stream_responses_disabled(self, mock_porcupine_create):
+    def test_initialize_raises_when_stream_responses_disabled(self):
         self.mock_config.bot_voice = True
         self.mock_config.stream_responses = False
         self.mock_config.stream_tts = True
@@ -170,8 +168,7 @@ class TestWakeWordModeInitialize(unittest.TestCase):
 
         self.assertIn("stream_responses", str(context.exception))
 
-    @patch('common.wake_word.pvporcupine.create')
-    def test_initialize_raises_when_stream_tts_disabled(self, mock_porcupine_create):
+    def test_initialize_raises_when_stream_tts_disabled(self):
         self.mock_config.bot_voice = True
         self.mock_config.stream_responses = True
         self.mock_config.stream_tts = False
@@ -892,14 +889,10 @@ class TestWakeWordModeProcessing(unittest.TestCase):
         logging.disable(logging.NOTSET)
 
     @patch('common.wake_word.os.path.exists')
-    def test_state_processing_transcribes_and_generates_response(self, mock_exists):
+    def test_state_processing_transcribes_and_sets_up_streaming(self, mock_exists):
         mock_exists.return_value = True
 
-        # Mock AI methods
         self.mock_ai.transcribe_and_translate.return_value = "What's the weather?"
-        mock_response = Mock()
-        mock_response.content = "It's sunny today!"
-        self.mock_ai.generate_response.return_value = mock_response
 
         mode = WakeWordMode(self.mock_config, self.mock_ai, self.mock_audio)
         mode.recorded_audio_path = "/tmp/recording.wav"
@@ -910,8 +903,8 @@ class TestWakeWordModeProcessing(unittest.TestCase):
         # Verify transcription was called with correct file path
         self.mock_ai.transcribe_and_translate.assert_called_once_with(audio_file_path="/tmp/recording.wav")
 
-        # Verify response generation was called (no route_message → streaming path used)
-        # With no route_message, the else-branch sets up streaming and returns early
+        # No route_message → streaming path; generate_response is never called directly
+        self.mock_ai.generate_response.assert_not_called()
         self.assertEqual(mode.state, State.RESPONDING)
         self.assertEqual(mode.streaming_user_input, "What's the weather?")
 

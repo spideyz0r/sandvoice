@@ -148,9 +148,9 @@ class WakeWordMode:
         """Initialize Porcupine, VAD, and confirmation beep.
 
         Raises:
-            RuntimeError: If Porcupine access key is missing or invalid; if vad_enabled,
-                bot_voice, stream_responses, or stream_tts is disabled; or if the
-                Porcupine instance cannot be created.
+            RuntimeError: If Porcupine access key is missing or invalid; if any of
+                vad_enabled, bot_voice, stream_responses, or stream_tts is disabled;
+                or if the Porcupine instance cannot be created.
         """
         logger.debug("Initializing wake word detection and VAD")
 
@@ -172,17 +172,26 @@ class WakeWordMode:
             raise RuntimeError(error_msg)
 
         if not _is_enabled_flag(getattr(self.config, "bot_voice", False)):
-            error_msg = "wake-word mode requires bot_voice: enabled"
+            error_msg = (
+                "Wake-word mode requires voice output to be enabled. "
+                "Enable it in your config: bot_voice: enabled"
+            )
             print(f"Error: {error_msg}")
             raise RuntimeError(error_msg)
 
         if not _is_enabled_flag(getattr(self.config, "stream_responses", False)):
-            error_msg = "wake-word mode requires stream_responses: enabled"
+            error_msg = (
+                "Wake-word mode requires streaming responses. "
+                "Enable it in your config: stream_responses: enabled"
+            )
             print(f"Error: {error_msg}")
             raise RuntimeError(error_msg)
 
         if not _is_enabled_flag(getattr(self.config, "stream_tts", False)):
-            error_msg = "wake-word mode requires stream_tts: enabled"
+            error_msg = (
+                "Wake-word mode requires streaming TTS. "
+                "Enable it in your config: stream_tts: enabled"
+            )
             print(f"Error: {error_msg}")
             raise RuntimeError(error_msg)
 
