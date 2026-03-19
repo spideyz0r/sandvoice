@@ -73,6 +73,7 @@ class TestWakeWordModeInitialize(unittest.TestCase):
         self.mock_config.stream_responses = True
         self.mock_config.stream_tts = True
         self.mock_config.vad_enabled = True
+        self.mock_config.barge_in = True
 
         self.mock_ai = Mock()
         self.mock_audio = Mock()
@@ -179,6 +180,19 @@ class TestWakeWordModeInitialize(unittest.TestCase):
             mode._initialize()
 
         self.assertIn("stream_tts", str(context.exception))
+
+    def test_initialize_raises_when_barge_in_disabled(self):
+        self.mock_config.bot_voice = True
+        self.mock_config.stream_responses = True
+        self.mock_config.stream_tts = True
+        self.mock_config.barge_in = False
+
+        mode = WakeWordMode(self.mock_config, self.mock_ai, self.mock_audio)
+
+        with self.assertRaises(RuntimeError) as context:
+            mode._initialize()
+
+        self.assertIn("barge_in", str(context.exception))
 
     @patch('common.wake_word.pvporcupine.create')
     def test_initialize_raises_on_missing_access_key(self, mock_porcupine_create):
@@ -340,6 +354,7 @@ class TestWakeWordModeRun(unittest.TestCase):
         self.mock_config.bot_voice = True
         self.mock_config.stream_responses = True
         self.mock_config.stream_tts = True
+        self.mock_config.barge_in = True
 
         self.mock_ai = Mock()
         self.mock_audio = Mock()
@@ -1044,7 +1059,7 @@ class TestWakeWordModeResponding(unittest.TestCase):
         self.mock_config = Mock()
         self.mock_config.debug = False
         self.mock_config.visual_state_indicator = False
-        self.mock_config.barge_in = False
+        self.mock_config.barge_in = True
         self.mock_config.tmp_files_path = "/tmp/test/"
         self.mock_config.stream_tts_first_chunk_target_s = 6
 
@@ -1325,26 +1340,6 @@ class TestBargeIn(unittest.TestCase):
         # Should transition to LISTENING, not IDLE
         self.assertEqual(mode.state, State.LISTENING)
     
-    @patch('common.wake_word.os.path.exists')
-    @patch('common.wake_word.os.remove')
-    def test_barge_in_disabled_transitions_to_idle(self, mock_remove, mock_exists):
-        """Test that without barge-in, state transitions to IDLE after streaming."""
-        mock_exists.return_value = False
-
-        self.mock_config.barge_in = False
-        self.mock_config.botname = "TestBot"
-        self.mock_config.stream_tts_boundary = "sentence"
-        self.mock_ai.stream_response_deltas.return_value = iter([])
-        self.mock_audio.play_audio_queue.return_value = (True, None, None)
-
-        mode = WakeWordMode(self.mock_config, self.mock_ai, self.mock_audio)
-        mode.streaming_user_input = "Hey"
-        mode.state = State.RESPONDING
-
-        mode._state_responding()
-
-        self.assertEqual(mode.state, State.IDLE)
-
     @patch('common.wake_word.os.path.exists')
     @patch('common.wake_word.os.remove')
     def test_barge_in_stops_playback_on_wake_word(self, mock_remove, mock_exists):

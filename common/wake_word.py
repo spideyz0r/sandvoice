@@ -149,8 +149,8 @@ class WakeWordMode:
 
         Raises:
             RuntimeError: If Porcupine access key is missing or invalid; if any of
-                vad_enabled, bot_voice, stream_responses, or stream_tts is disabled;
-                or if the Porcupine instance cannot be created.
+                vad_enabled, bot_voice, stream_responses, stream_tts, or barge_in is
+                disabled; or if the Porcupine instance cannot be created.
         """
         logger.debug("Initializing wake word detection and VAD")
 
@@ -191,6 +191,14 @@ class WakeWordMode:
             error_msg = (
                 "Wake-word mode requires streaming TTS. "
                 "Enable it in your config: stream_tts: enabled"
+            )
+            print(f"Error: {error_msg}")
+            raise RuntimeError(error_msg)
+
+        if not _is_enabled_flag(getattr(self.config, "barge_in", False)):
+            error_msg = (
+                "Wake-word mode requires barge-in to be enabled. "
+                "Enable it in your config: barge_in: enabled"
             )
             print(f"Error: {error_msg}")
             raise RuntimeError(error_msg)
@@ -539,13 +547,11 @@ class WakeWordMode:
         Returns:
             threading.Thread or None: The barge-in thread if started, None otherwise
         """
-        barge_in_enabled = getattr(self.config, "barge_in", False)
-        if not barge_in_enabled or not self.porcupine:
-            if barge_in_enabled and not self.porcupine:
-                logger.warning(
-                    "Barge-in is enabled in configuration, but Porcupine is not initialized. "
-                    "Barge-in will be disabled."
-                )
+        if not self.porcupine:
+            logger.warning(
+                "Barge-in is enabled in configuration, but Porcupine is not initialized. "
+                "Barge-in will be disabled."
+            )
             return None
 
         self.barge_in_event = threading.Event()
@@ -570,8 +576,7 @@ class WakeWordMode:
         # Note: barge_in_event may be None if Porcupine failed to initialize or if
         # this method is called before _start_barge_in_detection(). The None check
         # provides defensive programming against race conditions or unexpected states.
-        barge_in_enabled = getattr(self.config, "barge_in", False)
-        if barge_in_enabled and self.barge_in_event and self.barge_in_event.is_set():
+        if self.barge_in_event and self.barge_in_event.is_set():
             logger.debug("Barge-in interrupt detected")
             return True
         return False
@@ -712,13 +717,11 @@ class WakeWordMode:
         If barge-in interrupts, calls _handle_immediate_barge_in and returns
         the _BARGE_IN sentinel.  Otherwise returns the operation result directly.
         """
-        if barge_in_thread:
-            completed, result = self._run_with_barge_in_polling(operation, name)
-            if not completed:
-                self._handle_immediate_barge_in(barge_in_thread)
-                return _BARGE_IN
-            return result
-        return operation()
+        completed, result = self._run_with_barge_in_polling(operation, name)
+        if not completed:
+            self._handle_immediate_barge_in(barge_in_thread)
+            return _BARGE_IN
+        return result
 
     def _state_processing(self):
         """PROCESSING state: Transcribe audio and generate response.
@@ -954,10 +957,8 @@ class WakeWordMode:
         if self.config.visual_state_indicator:
             print("🔊 Responding...")
 
-        barge_in_enabled = getattr(self.config, "barge_in", False)
-
         if self.streaming_user_input is not None or self.streaming_response_text is not None:
-            self._respond_streaming(barge_in_enabled)
+            self._respond_streaming()
 
         # Signal barge-in thread to stop and wait for it to finish
         if self.barge_in_stop_flag is not None:
@@ -984,7 +985,7 @@ class WakeWordMode:
 
         # Transition to LISTENING if barge-in occurred, otherwise back to IDLE
         # Note: barge_in_event may be None if Porcupine failed to initialize
-        if barge_in_enabled and self.barge_in_event and self.barge_in_event.is_set():
+        if self.barge_in_event and self.barge_in_event.is_set():
             logger.debug("Transitioning to LISTENING after barge-in")
 
             # Play confirmation beep (consistent with _handle_immediate_barge_in)
@@ -1006,7 +1007,7 @@ class WakeWordMode:
             self.barge_in_stop_flag = None
             self.state = State.IDLE
 
-    def _respond_streaming(self, barge_in_enabled):
+    def _respond_streaming(self):
         """Streaming TTS response path for LLM and plugin responses.
 
         For LLM default-route responses: streams deltas from ai.stream_response_deltas,
@@ -1031,15 +1032,9 @@ class WakeWordMode:
         )
 
         if not thread_already_running:
-            if barge_in_enabled and self.porcupine:
-                self._start_barge_in_detection()
-            elif barge_in_enabled and not self.porcupine:
-                logger.warning(
-                    "Barge-in is enabled in configuration, but Porcupine is not initialized. "
-                    "Barge-in will be disabled for this response."
-                )
+            self._start_barge_in_detection()
 
-        barge_in_event = self.barge_in_event if (barge_in_enabled and self.barge_in_event) else None
+        barge_in_event = self.barge_in_event
         interrupt_event = threading.Event()
         production_failed_event = threading.Event()
 
