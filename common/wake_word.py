@@ -1187,6 +1187,8 @@ class WakeWordMode:
             try:
                 for delta in self.ai.stream_response_deltas(user_input):
                     full_parts.append(delta)
+                    if self.config.debug:
+                        print(delta, end="", flush=True)
 
                     # Stop immediately on barge-in (user is starting a new request).
                     if barge_in_event and barge_in_event.is_set():
@@ -1213,6 +1215,8 @@ class WakeWordMode:
 
                 else:
                     stream_completed = True
+                    if self.config.debug:
+                        print()  # terminate the debug delta line
 
             except Exception as e:
                 interrupt_event.set()
