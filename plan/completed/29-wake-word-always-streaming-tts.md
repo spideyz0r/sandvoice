@@ -75,10 +75,10 @@ if not self.config.stream_tts:
 
 ## Acceptance Criteria
 
-- [ ] `_respond_pregenerated_tts` deleted
-- [ ] `_cleanup_remaining_tts_files`, `_cleanup_specific_tts_files`, `_cleanup_all_orphaned_tts_files`, `_schedule_orphaned_tts_cleanup` deleted
-- [ ] `self.tts_files` instance variable removed
-- [ ] TTS generation block in `_state_processing` deleted
-- [ ] `_initialize()` raises `RuntimeError` if `bot_voice`, `stream_responses`, or `stream_tts` disabled
-- [ ] All tests pass; >80% coverage on changed code
-- [ ] `wake_word.py` reduced by ~190 lines
+- [x] `_respond_pregenerated_tts` deleted
+- [x] `_cleanup_remaining_tts_files`, `_cleanup_specific_tts_files`, `_cleanup_all_orphaned_tts_files`, `_schedule_orphaned_tts_cleanup` deleted
+- [x] `self.tts_files` instance variable removed
+- [x] TTS generation block in `_state_processing` deleted
+- [x] `_initialize()` raises `RuntimeError` if `bot_voice`, `stream_responses`, or `stream_tts` disabled
+- [x] All tests pass; >80% coverage on changed code
+- [x] `wake_word.py` reduced by ~190 lines
