@@ -910,6 +910,7 @@ class TestWakeWordModeProcessing(unittest.TestCase):
         self.mock_ai.transcribe_and_translate.return_value = "What's the weather?"
 
         mode = WakeWordMode(self.mock_config, self.mock_ai, self.mock_audio)
+        mode._start_barge_in_detection = Mock(return_value=Mock())
         mode.recorded_audio_path = "/tmp/recording.wav"
         mode.state = State.PROCESSING
 
@@ -937,6 +938,7 @@ class TestWakeWordModeProcessing(unittest.TestCase):
         plugins = {"weather": Mock()}
 
         mode = WakeWordMode(self.mock_config, self.mock_ai, self.mock_audio, route_message=route_message, plugins=plugins)
+        mode._start_barge_in_detection = Mock(return_value=Mock())
         mode.recorded_audio_path = "/tmp/recording.wav"
         mode.state = State.PROCESSING
 
@@ -1000,6 +1002,7 @@ class TestWakeWordModeProcessing(unittest.TestCase):
         plugins = {"echo": Mock()}
 
         mode = WakeWordMode(self.mock_config, self.mock_ai, self.mock_audio, route_message=route_message, plugins=plugins)
+        mode._start_barge_in_detection = Mock(return_value=Mock())
         mode.recorded_audio_path = "/tmp/recording.wav"
         mode.state = State.PROCESSING
 
@@ -1037,6 +1040,7 @@ class TestWakeWordModeProcessing(unittest.TestCase):
         self.mock_ai.transcribe_and_translate.side_effect = Exception("Transcription failed")
 
         mode = WakeWordMode(self.mock_config, self.mock_ai, self.mock_audio)
+        mode._start_barge_in_detection = Mock(return_value=Mock())
         mode.recorded_audio_path = "/tmp/recording.wav"
         mode.state = State.PROCESSING
 
@@ -1085,6 +1089,7 @@ class TestWakeWordModeResponding(unittest.TestCase):
         self.mock_audio.play_audio_queue.return_value = (True, None, None)
 
         mode = WakeWordMode(self.mock_config, self.mock_ai, self.mock_audio)
+        mode._start_barge_in_detection = Mock(return_value=Mock())
         mode.streaming_user_input = "Hi"
         mode.recorded_audio_path = "/tmp/recording.wav"
         mode.state = State.RESPONDING
@@ -1116,6 +1121,7 @@ class TestWakeWordModeResponding(unittest.TestCase):
         self.mock_audio.play_audio_queue.return_value = (False, "/tmp/fail.mp3", Exception("boom"))
 
         mode = WakeWordMode(self.mock_config, self.mock_ai, self.mock_audio)
+        mode._start_barge_in_detection = Mock(return_value=Mock())
         mode.streaming_user_input = "Hi"
         mode.recorded_audio_path = "/tmp/recording.wav"
         mode.state = State.RESPONDING
@@ -1137,6 +1143,7 @@ class TestWakeWordModeResponding(unittest.TestCase):
         self.mock_audio.play_audio_queue.return_value = (True, None, None)
 
         mode = WakeWordMode(self.mock_config, self.mock_ai, self.mock_audio)
+        mode._start_barge_in_detection = Mock(return_value=Mock())
         mode.streaming_user_input = "Hi"
         mode.recorded_audio_path = "/tmp/recording.wav"
         mode.state = State.RESPONDING
@@ -1161,6 +1168,7 @@ class TestWakeWordModeResponding(unittest.TestCase):
         self.mock_audio.play_audio_queue.return_value = (False, "/tmp/tts1.mp3", Exception("boom"))
 
         mode = WakeWordMode(self.mock_config, self.mock_ai, self.mock_audio)
+        mode._start_barge_in_detection = Mock(return_value=Mock())
         mode.streaming_user_input = "Hi"
         mode.recorded_audio_path = "/tmp/recording.wav"
         mode.state = State.RESPONDING
@@ -1199,6 +1207,7 @@ class TestWakeWordModeResponding(unittest.TestCase):
         self.mock_audio.play_audio_queue.return_value = (True, None, None)
 
         mode = WakeWordMode(self.mock_config, self.mock_ai, self.mock_audio)
+        mode._start_barge_in_detection = Mock(return_value=Mock())
         mode.streaming_user_input = "Hey"
         mode.recorded_audio_path = "/tmp/recording.wav"
         mode.state = State.RESPONDING
@@ -1221,6 +1230,7 @@ class TestWakeWordModeResponding(unittest.TestCase):
         self.mock_config.stream_tts_boundary = "sentence"
 
         mode = WakeWordMode(self.mock_config, self.mock_ai, self.mock_audio)
+        mode._start_barge_in_detection = Mock(return_value=Mock())
         mode.streaming_response_text = "Plugin said this."
         mode.streaming_user_input = None
         mode.state = State.RESPONDING

@@ -545,14 +545,18 @@ class WakeWordMode:
         """Start barge-in detection thread.
 
         Returns:
-            threading.Thread or None: The barge-in thread if started, None otherwise
+            threading.Thread: The barge-in detection thread.
+
+        Raises:
+            RuntimeError: If Porcupine is not initialized (invariant violation —
+                _initialize() must be called before entering the state machine).
         """
         if not self.porcupine:
-            logger.warning(
-                "Barge-in is enabled in configuration, but Porcupine is not initialized. "
-                "Barge-in will be disabled."
+            raise RuntimeError(
+                "Cannot start barge-in detection: Porcupine is not initialized. "
+                "Wake-word mode requires barge-in and Porcupine must be initialized "
+                "by _initialize() before the state machine runs."
             )
-            return None
 
         self.barge_in_event = threading.Event()
         self.barge_in_stop_flag = threading.Event()
@@ -712,10 +716,12 @@ class WakeWordMode:
         return True
 
     def _poll_op(self, operation, name, barge_in_thread):
-        """Run *operation* with barge-in polling when a barge-in thread is active.
+        """Run *operation* with barge-in polling.
 
-        If barge-in interrupts, calls _handle_immediate_barge_in and returns
-        the _BARGE_IN sentinel.  Otherwise returns the operation result directly.
+        Always polls for barge-in interruption (barge-in is unconditionally
+        active in wake-word mode).  If barge-in interrupts, calls
+        _handle_immediate_barge_in and returns the _BARGE_IN sentinel.
+        Otherwise returns the operation result directly.
         """
         completed, result = self._run_with_barge_in_polling(operation, name)
         if not completed:
@@ -1025,7 +1031,7 @@ class WakeWordMode:
         precomputed_text = self.streaming_response_text
         self.streaming_response_text = None
 
-        # Ensure barge-in detection is running (if enabled)
+        # Ensure barge-in detection is running (always required in wake-word mode)
         thread_already_running = (
             self.barge_in_thread is not None and
             self.barge_in_thread.is_alive()
