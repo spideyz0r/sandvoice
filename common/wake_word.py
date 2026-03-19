@@ -149,7 +149,7 @@ class WakeWordMode:
 
         Raises:
             RuntimeError: If Porcupine access key is missing or invalid; if any of
-                vad_enabled, bot_voice, stream_responses, stream_tts, or barge_in is
+                vad_enabled, bot_voice, stream_responses, or stream_tts is
                 disabled; or if the Porcupine instance cannot be created.
         """
         logger.debug("Initializing wake word detection and VAD")
@@ -191,14 +191,6 @@ class WakeWordMode:
             error_msg = (
                 "Wake-word mode requires streaming TTS. "
                 "Enable it in your config: stream_tts: enabled"
-            )
-            print(f"Error: {error_msg}")
-            raise RuntimeError(error_msg)
-
-        if not _is_enabled_flag(getattr(self.config, "barge_in", False)):
-            error_msg = (
-                "Wake-word mode requires barge-in to be enabled. "
-                "Enable it in your config: barge_in: enabled"
             )
             print(f"Error: {error_msg}")
             raise RuntimeError(error_msg)

@@ -84,7 +84,6 @@ Wake word mode requires the following options to be enabled in `~/.sandvoice/con
 bot_voice: enabled
 stream_responses: enabled
 stream_tts: enabled
-barge_in: enabled
 ```
 
 ## Configuration file
@@ -155,8 +154,6 @@ wake_confirmation_beep_freq: 800
 wake_confirmation_beep_duration: 0.1
 visual_state_indicator: enabled
 
-barge_in: enabled
-
 voice_ack_earcon: disabled
 voice_ack_earcon_freq: 600
 voice_ack_earcon_duration: 0.06
@@ -226,8 +223,6 @@ All configuration keys are loaded from `common/configuration.py` defaults and ca
 - `wake_confirmation_beep_freq`: frequency in Hz for the wake confirmation beep (default `800`)
 - `wake_confirmation_beep_duration`: duration in seconds for the wake confirmation beep (default `0.1`)
 - `visual_state_indicator`: `enabled`/`disabled`; show terminal state indicators in wake word mode
-
-- `barge_in`: `enabled`/`disabled`; interrupt TTS in `--wake-word` mode by saying the wake word. **Required** in `--wake-word` mode — startup will fail if disabled.
 
 - `voice_ack_earcon`: `enabled`/`disabled`; play a short ack earcon after recording and before processing
 - `voice_ack_earcon_freq`: frequency in Hz for the ack earcon (default `600`)
