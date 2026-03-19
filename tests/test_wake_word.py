@@ -69,6 +69,10 @@ class TestWakeWordModeInitialize(unittest.TestCase):
         self.mock_config.wake_confirmation_beep_freq = 800
         self.mock_config.wake_confirmation_beep_duration = 0.1
         self.mock_config.tmp_files_path = "/tmp/test/"
+        self.mock_config.bot_voice = True
+        self.mock_config.stream_responses = True
+        self.mock_config.stream_tts = True
+        self.mock_config.vad_enabled = True
 
         self.mock_ai = Mock()
         self.mock_audio = Mock()
@@ -140,24 +144,41 @@ class TestWakeWordModeInitialize(unittest.TestCase):
         )
         self.assertEqual(mode.ack_earcon_path, "/tmp/test/ack.mp3")
 
-    @patch('common.wake_word.pvporcupine.create')
-    @patch('common.wake_word.create_ack_earcon')
-    @patch('common.wake_word.create_confirmation_beep')
-    def test_initialize_does_not_create_ack_earcon_when_bot_voice_disabled(self, mock_beep, mock_ack, mock_porcupine_create):
+    def test_initialize_raises_when_bot_voice_disabled(self):
         self.mock_config.bot_voice = False
-        self.mock_config.voice_ack_earcon = True
-
-        mock_porcupine = Mock()
-        mock_porcupine.sample_rate = 16000
-        mock_porcupine.frame_length = 512
-        mock_porcupine_create.return_value = mock_porcupine
-        mock_beep.return_value = "/tmp/test/beep.mp3"
+        self.mock_config.stream_responses = True
+        self.mock_config.stream_tts = True
 
         mode = WakeWordMode(self.mock_config, self.mock_ai, self.mock_audio)
-        mode._initialize()
 
-        mock_ack.assert_not_called()
-        self.assertIsNone(mode.ack_earcon_path)
+        with self.assertRaises(RuntimeError) as context:
+            mode._initialize()
+
+        self.assertIn("bot_voice", str(context.exception))
+
+    def test_initialize_raises_when_stream_responses_disabled(self):
+        self.mock_config.bot_voice = True
+        self.mock_config.stream_responses = False
+        self.mock_config.stream_tts = True
+
+        mode = WakeWordMode(self.mock_config, self.mock_ai, self.mock_audio)
+
+        with self.assertRaises(RuntimeError) as context:
+            mode._initialize()
+
+        self.assertIn("stream_responses", str(context.exception))
+
+    def test_initialize_raises_when_stream_tts_disabled(self):
+        self.mock_config.bot_voice = True
+        self.mock_config.stream_responses = True
+        self.mock_config.stream_tts = False
+
+        mode = WakeWordMode(self.mock_config, self.mock_ai, self.mock_audio)
+
+        with self.assertRaises(RuntimeError) as context:
+            mode._initialize()
+
+        self.assertIn("stream_tts", str(context.exception))
 
     @patch('common.wake_word.pvporcupine.create')
     def test_initialize_raises_on_missing_access_key(self, mock_porcupine_create):
@@ -315,6 +336,10 @@ class TestWakeWordModeRun(unittest.TestCase):
         self.mock_config = Mock()
         self.mock_config.debug = False
         self.mock_config.visual_state_indicator = False
+        self.mock_config.vad_enabled = True
+        self.mock_config.bot_voice = True
+        self.mock_config.stream_responses = True
+        self.mock_config.stream_tts = True
 
         self.mock_ai = Mock()
         self.mock_audio = Mock()
@@ -864,15 +889,10 @@ class TestWakeWordModeProcessing(unittest.TestCase):
         logging.disable(logging.NOTSET)
 
     @patch('common.wake_word.os.path.exists')
-    def test_state_processing_transcribes_and_generates_response(self, mock_exists):
+    def test_state_processing_transcribes_and_sets_up_streaming(self, mock_exists):
         mock_exists.return_value = True
 
-        # Mock AI methods
         self.mock_ai.transcribe_and_translate.return_value = "What's the weather?"
-        mock_response = Mock()
-        mock_response.content = "It's sunny today!"
-        self.mock_ai.generate_response.return_value = mock_response
-        self.mock_ai.text_to_speech.return_value = ["/tmp/tts1.mp3", "/tmp/tts2.mp3"]
 
         mode = WakeWordMode(self.mock_config, self.mock_ai, self.mock_audio)
         mode.recorded_audio_path = "/tmp/recording.wav"
@@ -883,18 +903,13 @@ class TestWakeWordModeProcessing(unittest.TestCase):
         # Verify transcription was called with correct file path
         self.mock_ai.transcribe_and_translate.assert_called_once_with(audio_file_path="/tmp/recording.wav")
 
-        # Verify response generation was called
-        self.mock_ai.generate_response.assert_called_once_with("What's the weather?")
-
-        # Verify TTS generation was called
-        self.mock_ai.text_to_speech.assert_called_once_with("It's sunny today!")
-
-        # Verify state transition
+        # No route_message → streaming path; generate_response is never called directly
+        self.mock_ai.generate_response.assert_not_called()
         self.assertEqual(mode.state, State.RESPONDING)
+        self.assertEqual(mode.streaming_user_input, "What's the weather?")
 
-        # Verify data stored for responding state
-        self.assertEqual(mode.response_text, "It's sunny today!")
-        self.assertEqual(mode.tts_files, ["/tmp/tts1.mp3", "/tmp/tts2.mp3"])
+        # TTS is no longer pre-generated in _state_processing
+        self.mock_ai.text_to_speech.assert_not_called()
 
     @patch('common.wake_word.os.path.exists')
     def test_state_processing_uses_routing_callback_when_provided(self, mock_exists):
@@ -902,11 +917,11 @@ class TestWakeWordModeProcessing(unittest.TestCase):
 
         self.mock_ai.transcribe_and_translate.return_value = "What's the weather?"
         self.mock_ai.define_route.return_value = {"route": "weather", "reason": "weather"}
-        self.mock_ai.text_to_speech.return_value = ["/tmp/tts1.mp3"]
 
         route_message = Mock(return_value="It's sunny today!")
+        plugins = {"weather": Mock()}
 
-        mode = WakeWordMode(self.mock_config, self.mock_ai, self.mock_audio, route_message=route_message)
+        mode = WakeWordMode(self.mock_config, self.mock_ai, self.mock_audio, route_message=route_message, plugins=plugins)
         mode.recorded_audio_path = "/tmp/recording.wav"
         mode.state = State.PROCESSING
 
@@ -916,8 +931,11 @@ class TestWakeWordModeProcessing(unittest.TestCase):
         self.mock_ai.define_route.assert_called_once_with("What's the weather?")
         route_message.assert_called_once()
         self.mock_ai.generate_response.assert_not_called()
-        self.mock_ai.text_to_speech.assert_called_once_with("It's sunny today!")
+        # TTS no longer pre-generated in _state_processing
+        self.mock_ai.text_to_speech.assert_not_called()
         self.assertEqual(mode.response_text, "It's sunny today!")
+        # streaming_response_text set so RESPONDING can speak it via TTS worker
+        self.assertEqual(mode.streaming_response_text, "It's sunny today!")
         self.assertEqual(mode.state, State.RESPONDING)
 
     @patch('common.wake_word.os.path.exists')
@@ -957,28 +975,26 @@ class TestWakeWordModeProcessing(unittest.TestCase):
         self.assertIsNotNone(mode.streaming_route)
 
     @patch('common.wake_word.os.path.exists')
-    def test_state_processing_without_bot_voice(self, mock_exists):
+    def test_state_processing_plugin_response_never_pre_generates_tts(self, mock_exists):
         mock_exists.return_value = True
-        self.mock_config.bot_voice = False
 
         self.mock_ai.transcribe_and_translate.return_value = "Hello"
-        mock_response = Mock()
-        mock_response.content = "Hi there!"
-        self.mock_ai.generate_response.return_value = mock_response
+        self.mock_ai.define_route.return_value = {"route": "echo", "reason": "echo"}
 
-        mode = WakeWordMode(self.mock_config, self.mock_ai, self.mock_audio)
+        route_message = Mock(return_value="Hi there!")
+        plugins = {"echo": Mock()}
+
+        mode = WakeWordMode(self.mock_config, self.mock_ai, self.mock_audio, route_message=route_message, plugins=plugins)
         mode.recorded_audio_path = "/tmp/recording.wav"
         mode.state = State.PROCESSING
 
         mode._state_processing()
 
-        # TTS should not be called when bot_voice is False
+        # TTS is never pre-generated in _state_processing (streaming handles it in RESPONDING)
         self.mock_ai.text_to_speech.assert_not_called()
 
-        # Should still transition to RESPONDING
         self.assertEqual(mode.state, State.RESPONDING)
         self.assertEqual(mode.response_text, "Hi there!")
-        self.assertIsNone(mode.tts_files)
 
     @patch('common.wake_word.os.path.exists')
     def test_state_processing_handles_missing_file(self, mock_exists):
@@ -1095,90 +1111,64 @@ class TestWakeWordModeResponding(unittest.TestCase):
 
     @patch('common.wake_word.os.remove')
     @patch('common.wake_word.os.path.exists')
-    def test_state_responding_plays_tts_and_cleans_up(self, mock_exists, mock_remove):
+    def test_state_responding_streams_and_cleans_up(self, mock_exists, mock_remove):
         mock_exists.return_value = True
 
+        self.mock_config.botname = "TestBot"
+        self.mock_config.stream_tts_boundary = "sentence"
+
+        self.mock_ai.stream_response_deltas.return_value = iter(["Hello!"])
+        self.mock_ai.text_to_speech.return_value = ["/tmp/tts1.mp3"]
+        self.mock_audio.play_audio_queue.return_value = (True, None, None)
+
         mode = WakeWordMode(self.mock_config, self.mock_ai, self.mock_audio)
-        mode.tts_files = ["/tmp/tts1.mp3", "/tmp/tts2.mp3"]
+        mode.streaming_user_input = "Hi"
         mode.recorded_audio_path = "/tmp/recording.wav"
-        mode.response_text = "Hello!"
         mode.state = State.RESPONDING
 
         mode._state_responding()
 
-        # Verify audio playback was called for each file (with new implementation)
-        # play_audio_file is called instead of play_audio_files
-        self.assertEqual(self.mock_audio.play_audio_file.call_count, 2)
-
-        # Verify cleanup - both TTS files and recording file
-        # With new implementation, we clean up TTS files as we go
-        self.assertEqual(mock_remove.call_count, 3)  # 2 TTS + 1 recording
-
-        # Verify state transition to IDLE
+        self.mock_ai.stream_response_deltas.assert_called_once_with("Hi")
+        self.mock_audio.play_audio_queue.assert_called()
         self.assertEqual(mode.state, State.IDLE)
-
-        # Verify data reset
         self.assertIsNone(mode.recorded_audio_path)
         self.assertIsNone(mode.response_text)
-        self.assertIsNone(mode.tts_files)
 
     @patch('common.wake_word.os.remove')
     @patch('common.wake_word.os.path.exists')
     def test_state_responding_handles_playback_error(self, mock_exists, mock_remove):
         mock_exists.return_value = True
 
-        # Mock failed audio playback
-        self.mock_audio.play_audio_file.side_effect = Exception("Playback error")
+        self.mock_config.botname = "TestBot"
+        self.mock_config.stream_tts_boundary = "sentence"
+
+        self.mock_ai.stream_response_deltas.return_value = iter(["Hello!"])
+        self.mock_audio.play_audio_queue.return_value = (False, "/tmp/tts1.mp3", Exception("boom"))
 
         mode = WakeWordMode(self.mock_config, self.mock_ai, self.mock_audio)
-        mode.tts_files = ["/tmp/tts1.mp3"]
+        mode.streaming_user_input = "Hi"
         mode.recorded_audio_path = "/tmp/recording.wav"
         mode.state = State.RESPONDING
 
         mode._state_responding()
 
-        # Should still clean up and transition to IDLE
-        # With new implementation: TTS file + recording file
-        self.assertEqual(mock_remove.call_count, 2)
+        # Should still clean up recording and transition to IDLE
         self.assertEqual(mode.state, State.IDLE)
 
     @patch('common.wake_word.os.remove')
     @patch('common.wake_word.os.path.exists')
-    def test_state_responding_handles_playback_error_in_debug_mode(self, mock_exists, mock_remove):
-        """Test that failed files are preserved in debug mode."""
-        self.mock_config.debug = True
+    def test_state_responding_no_streaming_input_goes_to_idle(self, mock_exists, mock_remove):
+        """No streaming_user_input → nothing to play → clean up and go to IDLE."""
         mock_exists.return_value = True
 
-        # Mock failed audio playback
-        self.mock_audio.play_audio_file.side_effect = Exception("Playback error")
-
         mode = WakeWordMode(self.mock_config, self.mock_ai, self.mock_audio)
-        mode.tts_files = ["/tmp/tts1.mp3"]
+        mode.streaming_user_input = None
         mode.recorded_audio_path = "/tmp/recording.wav"
         mode.state = State.RESPONDING
 
         mode._state_responding()
 
-        # In debug mode: failed file is preserved, only recording is cleaned up
-        mock_remove.assert_called_once_with("/tmp/recording.wav")
-        self.assertEqual(mode.state, State.IDLE)
-
-    @patch('common.wake_word.os.remove')
-    @patch('common.wake_word.os.path.exists')
-    def test_state_responding_without_tts_files(self, mock_exists, mock_remove):
-        mock_exists.return_value = True
-
-        mode = WakeWordMode(self.mock_config, self.mock_ai, self.mock_audio)
-        mode.tts_files = None  # No TTS files
-        mode.recorded_audio_path = "/tmp/recording.wav"
-        mode.state = State.RESPONDING
-
-        mode._state_responding()
-
-        # Audio playback should not be called
-        self.mock_audio.play_audio_files.assert_not_called()
-
-        # Should still clean up and transition to IDLE
+        self.mock_audio.play_audio_queue.assert_not_called()
         mock_remove.assert_called_once_with("/tmp/recording.wav")
         self.assertEqual(mode.state, State.IDLE)
 
@@ -1186,15 +1176,15 @@ class TestWakeWordModeResponding(unittest.TestCase):
     @patch('common.wake_word.os.path.exists')
     def test_state_responding_handles_cleanup_error(self, mock_exists, mock_remove):
         mock_exists.return_value = True
-
-        # Mock cleanup error
         mock_remove.side_effect = Exception("Cleanup failed")
 
-        # Mock play_audio_file to succeed (updated from play_audio_files)
-        self.mock_audio.play_audio_file.return_value = None
+        self.mock_config.botname = "TestBot"
+        self.mock_config.stream_tts_boundary = "sentence"
+        self.mock_ai.stream_response_deltas.return_value = iter([])
+        self.mock_audio.play_audio_queue.return_value = (True, None, None)
 
         mode = WakeWordMode(self.mock_config, self.mock_ai, self.mock_audio)
-        mode.tts_files = ["/tmp/tts1.mp3"]
+        mode.streaming_user_input = "Hey"
         mode.recorded_audio_path = "/tmp/recording.wav"
         mode.state = State.RESPONDING
 
@@ -1202,6 +1192,32 @@ class TestWakeWordModeResponding(unittest.TestCase):
 
         # Should still transition to IDLE despite cleanup error
         self.assertEqual(mode.state, State.IDLE)
+
+    @patch('common.wake_word.os.remove')
+    @patch('common.wake_word.os.path.exists')
+    def test_state_responding_speaks_plugin_response_via_tts(self, mock_exists, mock_remove):
+        """Plugin response (streaming_response_text set) is fed directly to streaming TTS."""
+        mock_exists.return_value = False
+
+        tts_file = "/tmp/tts-plugin.mp3"
+        self.mock_ai.text_to_speech.return_value = [tts_file]
+        self.mock_audio.play_audio_queue.return_value = (True, None, None)
+        self.mock_config.botname = "TestBot"
+        self.mock_config.stream_tts_boundary = "sentence"
+
+        mode = WakeWordMode(self.mock_config, self.mock_ai, self.mock_audio)
+        mode.streaming_response_text = "Plugin said this."
+        mode.streaming_user_input = None
+        mode.state = State.RESPONDING
+
+        mode._state_responding()
+
+        # TTS worker should have been called with the plugin response text
+        self.mock_ai.text_to_speech.assert_called_once_with("Plugin said this.")
+        self.mock_audio.play_audio_queue.assert_called()
+        self.assertEqual(mode.state, State.IDLE)
+        # streaming_response_text cleared after responding
+        self.assertIsNone(mode.streaming_response_text)
 
 
 class TestBargeIn(unittest.TestCase):
@@ -1228,35 +1244,44 @@ class TestBargeIn(unittest.TestCase):
     @patch('common.wake_word.os.path.exists')
     @patch('common.wake_word.os.remove')
     def test_barge_in_starts_detection_thread(self, mock_remove, mock_exists, mock_event_class, mock_thread_class):
-        """Test that barge-in detection thread is started when enabled."""
+        """Test that barge-in detection thread is started when enabled (streaming path)."""
         mock_exists.return_value = False
 
-        # Use distinct mocks for barge_in_event and barge_in_stop_flag
-        mock_barge_in_event = Mock()
-        mock_barge_in_event.is_set.return_value = False
-        mock_barge_in_stop_flag = Mock()
-        mock_barge_in_stop_flag.is_set.return_value = False
-        mock_event_class.side_effect = [mock_barge_in_event, mock_barge_in_stop_flag]
+        # __init__ does NOT call _initialize(), so no Events consumed during construction.
+        # _start_barge_in_detection() consumes 2, _respond_streaming() consumes 2 → 4 total.
+        def _make_event(is_set_val=False):
+            e = Mock()
+            e.is_set.return_value = is_set_val
+            return e
+
+        mock_event_class.side_effect = [_make_event() for _ in range(4)]
 
         mock_thread = Mock()
+        mock_thread.is_alive.return_value = False
         mock_thread_class.return_value = mock_thread
 
-        # Create porcupine mock for barge-in thread
-        mock_porcupine = Mock()
+        self.mock_config.botname = "TestBot"
+        self.mock_config.stream_tts_boundary = "sentence"
+        self.mock_ai.stream_response_deltas.return_value = iter([])
+        self.mock_audio.play_audio_queue.return_value = (True, None, None)
 
         mode = WakeWordMode(self.mock_config, self.mock_ai, self.mock_audio)
-        mode.porcupine = mock_porcupine
-        mode.tts_files = ["/tmp/test.mp3"]  # Need TTS files for barge-in to start
+        mode.porcupine = Mock()
+        mode.streaming_user_input = "Hey"
         mode.state = State.RESPONDING
 
         mode._state_responding()
 
-        # Verify thread was created with daemon=True and started
-        mock_thread_class.assert_called_once()
-        call_kwargs = mock_thread_class.call_args.kwargs
-        self.assertEqual(call_kwargs.get('daemon'), True)
-        mock_thread.start.assert_called_once()
-        
+        # The streaming path creates threads (tts_worker + player_worker)
+        self.assertTrue(mock_thread_class.called)
+        mock_thread.start.assert_called()
+        # _start_barge_in_detection must also create a thread targeting _listen_for_barge_in
+        thread_targets = [call.kwargs.get('target') for call in mock_thread_class.call_args_list]
+        self.assertTrue(
+            any(getattr(t, '__name__', '') == '_listen_for_barge_in' for t in thread_targets),
+            "Expected _listen_for_barge_in to be registered as a thread target"
+        )
+
     @patch('common.wake_word.threading.Thread')
     @patch('common.wake_word.threading.Event')
     @patch('common.wake_word.os.path.exists')
@@ -1265,21 +1290,34 @@ class TestBargeIn(unittest.TestCase):
         """Test that barge-in transitions to LISTENING when wake word detected."""
         mock_exists.return_value = False
 
-        # Use distinct mocks for barge_in_event and barge_in_stop_flag
-        mock_barge_in_event = Mock()
-        mock_barge_in_event.is_set.return_value = True  # Wake word detected
-        mock_barge_in_stop_flag = Mock()
-        mock_barge_in_stop_flag.is_set.return_value = False
-        mock_event_class.side_effect = [mock_barge_in_event, mock_barge_in_stop_flag]
+        # __init__ does NOT call _initialize() — only run() does, so no Events consumed
+        # during construction.  _start_barge_in_detection() consumes indices 0 and 1
+        # (barge_in_event and barge_in_stop_flag), then _respond_streaming() consumes
+        # indices 2 and 3.  Index 0 must have is_set=True to trigger LISTENING.
+        def _make_event(is_set_val=False):
+            e = Mock()
+            e.is_set.return_value = is_set_val
+            return e
+
+        mock_event_class.side_effect = [
+            _make_event(True),    # _start_barge_in_detection barge_in_event (is_set=True → LISTENING)
+            _make_event(),        # _start_barge_in_detection barge_in_stop_flag
+            _make_event(),        # _respond_streaming interrupt_event
+            _make_event(),        # _respond_streaming production_failed_event
+        ]
 
         mock_thread = Mock()
+        mock_thread.is_alive.return_value = False
         mock_thread_class.return_value = mock_thread
 
-        mock_porcupine = Mock()
+        self.mock_config.botname = "TestBot"
+        self.mock_config.stream_tts_boundary = "sentence"
+        self.mock_ai.stream_response_deltas.return_value = iter([])
+        self.mock_audio.play_audio_queue.return_value = (True, None, None)
 
         mode = WakeWordMode(self.mock_config, self.mock_ai, self.mock_audio)
-        mode.porcupine = mock_porcupine
-        mode.tts_files = ["/tmp/test.mp3"]  # Need TTS files for barge-in to work
+        mode.porcupine = Mock()
+        mode.streaming_user_input = "Hey"
         mode.state = State.RESPONDING
 
         mode._state_responding()
@@ -1287,90 +1325,60 @@ class TestBargeIn(unittest.TestCase):
         # Should transition to LISTENING, not IDLE
         self.assertEqual(mode.state, State.LISTENING)
     
-    @patch('common.wake_word.threading.Thread')
-    @patch('common.wake_word.threading.Event')
     @patch('common.wake_word.os.path.exists')
     @patch('common.wake_word.os.remove')
-    def test_barge_in_disabled_transitions_to_idle(self, mock_remove, mock_exists, mock_event_class, mock_thread_class):
-        """Test that without barge-in, state transitions to IDLE."""
+    def test_barge_in_disabled_transitions_to_idle(self, mock_remove, mock_exists):
+        """Test that without barge-in, state transitions to IDLE after streaming."""
         mock_exists.return_value = False
-        
-        # Disable barge-in
+
         self.mock_config.barge_in = False
-        
-        mode = WakeWordMode(self.mock_config, self.mock_ai, self.mock_audio)
-        mode.tts_files = []
-        mode.state = State.RESPONDING
-        
-        mode._state_responding()
-        
-        # Should transition to IDLE (no thread started)
-        self.assertEqual(mode.state, State.IDLE)
-        mock_thread_class.assert_not_called()
+        self.mock_config.botname = "TestBot"
+        self.mock_config.stream_tts_boundary = "sentence"
+        self.mock_ai.stream_response_deltas.return_value = iter([])
+        self.mock_audio.play_audio_queue.return_value = (True, None, None)
 
-    @patch('common.wake_word.threading.Thread')
-    @patch('common.wake_word.threading.Event')
+        mode = WakeWordMode(self.mock_config, self.mock_ai, self.mock_audio)
+        mode.streaming_user_input = "Hey"
+        mode.state = State.RESPONDING
+
+        mode._state_responding()
+
+        self.assertEqual(mode.state, State.IDLE)
+
     @patch('common.wake_word.os.path.exists')
     @patch('common.wake_word.os.remove')
-    def test_barge_in_stops_playback_on_wake_word(self, mock_remove, mock_exists, mock_event_class, mock_thread_class):
-        """Test that barge-in passes stop_event to play_audio_file for mid-playback interruption."""
+    def test_barge_in_stops_playback_on_wake_word(self, mock_remove, mock_exists):
+        """Test that streaming path passes stop_event (composite) to play_audio_queue."""
         mock_exists.return_value = False
 
-        # Simulate wake word detected after first file plays
-        # Create separate mocks for barge_in_event and stop_flag
-        mock_barge_in_event = Mock()
-        mock_stop_flag = Mock()
+        self.mock_config.botname = "TestBot"
+        self.mock_config.stream_tts_boundary = "sentence"
+        self.mock_ai.stream_response_deltas.return_value = iter([])
 
-        # Track which Event() call this is
-        event_call_count = [0]
-        def event_factory():
-            event_call_count[0] += 1
-            if event_call_count[0] == 1:
-                return mock_barge_in_event  # First Event() is barge_in_event
-            else:
-                return mock_stop_flag  # Second Event() is stop_flag
-
-        mock_event_class.side_effect = event_factory
-
-        # Make barge_in_event.is_set() return True after first playback
-        playback_count = [0]
-        def is_set_after_first_playback():
-            # Check if we've played at least one file
-            return playback_count[0] > 0
-
-        mock_barge_in_event.is_set.side_effect = is_set_after_first_playback
-        mock_stop_flag.is_set.return_value = False
-
-        mock_thread = Mock()
-        mock_thread_class.return_value = mock_thread
-
-        mock_porcupine = Mock()
+        # Simulate player interrupted by barge-in (returns False / no error)
+        self.mock_audio.play_audio_queue.return_value = (False, None, None)
 
         mode = WakeWordMode(self.mock_config, self.mock_ai, self.mock_audio)
-        mode.porcupine = mock_porcupine
-        mode.tts_files = ["/tmp/tts1.mp3", "/tmp/tts2.mp3"]
+        mode.porcupine = Mock()
+        # Mark barge-in thread as already running so _start_barge_in_detection is
+        # skipped and self.barge_in_event is not overwritten with a new real Event.
+        mock_barge_in_thread = Mock()
+        mock_barge_in_thread.is_alive.return_value = True
+        mode.barge_in_thread = mock_barge_in_thread
+        mode.barge_in_event = Mock()
+        mode.barge_in_event.is_set.return_value = True
+        mode.streaming_user_input = "Hey"
         mode.state = State.RESPONDING
-
-        # Mock play_audio_file to track playback and simulate barge-in
-        def play_audio_side_effect(file_path, stop_event=None):
-            playback_count[0] += 1
-            return None
-
-        self.mock_audio.play_audio_file.side_effect = play_audio_side_effect
 
         mode._state_responding()
 
-        # Verify play_audio_file was called with stop_event parameter
-        # (New implementation: interruption happens inside play_audio_file via stop_event)
-        self.mock_audio.play_audio_file.assert_called()
-        call_args = self.mock_audio.play_audio_file.call_args
-        # Check that a stop_event was passed (not None)
-        self.assertIn('stop_event', call_args.kwargs)
-        self.assertIsNotNone(call_args.kwargs['stop_event'])
-        # Verify it's the barge_in_event object
-        self.assertIs(call_args.kwargs['stop_event'], mock_barge_in_event)
+        # play_audio_queue should have been called with a stop_event
+        self.mock_audio.play_audio_queue.assert_called()
+        call_kwargs = self.mock_audio.play_audio_queue.call_args.kwargs
+        self.assertIn('stop_event', call_kwargs)
+        self.assertIsNotNone(call_kwargs['stop_event'])
 
-        # Should transition to LISTENING (barge-in triggered)
+        # Should transition to LISTENING (barge-in event is set)
         self.assertEqual(mode.state, State.LISTENING)
 
     @patch('common.wake_word.os.path.exists')
