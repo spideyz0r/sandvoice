@@ -157,7 +157,7 @@ plan/
 
 ### Priority 30: Wake Word Barge-In Always On 🚧 In Progress
 **Document**: [backlog/30-wake-word-barge-in-always-on.md](./backlog/30-wake-word-barge-in-always-on.md)
-**Description**: Make barge-in unconditionally active in wake-word mode. Fail-fast at startup if disabled; remove all `barge_in_enabled` conditional branches throughout `_state_processing`, `_state_responding`, `_respond_streaming`, and `_poll_op`. ~35 lines removed.
+**Description**: Make barge-in unconditionally active in wake-word mode. Remove the `barge_in` config key entirely and all `barge_in_enabled` conditional branches throughout `_state_responding`, `_respond_streaming`, and `_poll_op`. ~35 lines removed.
 
 ### Priority 31: Wake Word Route Always Required
 **Document**: [backlog/31-wake-word-route-always-required.md](./backlog/31-wake-word-route-always-required.md)

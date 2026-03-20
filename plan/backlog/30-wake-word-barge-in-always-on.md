@@ -47,14 +47,7 @@ Estimated net reduction: **~35 lines**.
 
 ### Configuration change
 
-Add to `_initialize()`:
-
-```python
-if not self.config.barge_in:
-    raise RuntimeError("wake-word mode requires barge_in: enabled")
-```
-
-The `barge_in` config key is removed entirely. It was only relevant to wake-word mode; keeping it as a fail-fast-only knob (a key whose only valid value is `enabled`) adds surface area without value.
+The `barge_in` config key is removed entirely. It was only relevant to wake-word mode; keeping it as a knob whose only valid value is `enabled` adds surface area without value. Barge-in is now unconditionally active whenever wake-word mode runs.
 
 ---
 

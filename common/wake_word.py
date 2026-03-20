@@ -569,9 +569,9 @@ class WakeWordMode:
         Returns:
             bool: True if barge-in detected, False otherwise
         """
-        # Note: barge_in_event may be None if Porcupine failed to initialize or if
-        # this method is called before _start_barge_in_detection(). The None check
-        # provides defensive programming against race conditions or unexpected states.
+        # Note: barge_in_event may be None if called before _start_barge_in_detection()
+        # (e.g. from tests or before the state machine starts). The None check guards
+        # against that early-call case only.
         if self.barge_in_event and self.barge_in_event.is_set():
             logger.debug("Barge-in interrupt detected")
             return True
@@ -982,7 +982,6 @@ class WakeWordMode:
         self.response_text = None
 
         # Transition to LISTENING if barge-in occurred, otherwise back to IDLE
-        # Note: barge_in_event may be None if Porcupine failed to initialize
         if self.barge_in_event and self.barge_in_event.is_set():
             logger.debug("Transitioning to LISTENING after barge-in")
 
