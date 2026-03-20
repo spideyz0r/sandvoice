@@ -892,10 +892,12 @@ class TestWakeWordModeProcessing(unittest.TestCase):
         """Create a WakeWordMode with _start_barge_in_detection mocked out.
 
         Tests that exercise state logic (not barge-in thread management) use this
-        to avoid requiring a real Porcupine instance.
+        to avoid requiring a real Porcupine instance.  Returning None keeps
+        barge_in_thread falsy so error-path cleanup guards in _state_processing
+        are skipped cleanly without AttributeError on barge_in_stop_flag.
         """
         mode = WakeWordMode(self.mock_config, self.mock_ai, self.mock_audio, **kwargs)
-        mode._start_barge_in_detection = Mock(return_value=Mock())
+        mode._start_barge_in_detection = Mock(return_value=None)
         return mode
 
     @patch('common.wake_word.os.path.exists')
@@ -1060,10 +1062,11 @@ class TestWakeWordModeResponding(unittest.TestCase):
         """Create a WakeWordMode with _start_barge_in_detection mocked out.
 
         Tests that exercise state logic (not barge-in thread management) use this
-        to avoid requiring a real Porcupine instance.
+        to avoid requiring a real Porcupine instance.  Returning None keeps
+        barge_in_thread falsy so error-path cleanup guards are skipped cleanly.
         """
         mode = WakeWordMode(self.mock_config, self.mock_ai, self.mock_audio, **kwargs)
-        mode._start_barge_in_detection = Mock(return_value=Mock())
+        mode._start_barge_in_detection = Mock(return_value=None)
         return mode
 
     @patch('common.wake_word.os.remove')

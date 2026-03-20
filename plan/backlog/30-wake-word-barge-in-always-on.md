@@ -15,7 +15,7 @@
 
 ## Overview
 
-Make barge-in unconditionally active in wake-word mode. Remove the `barge_in_enabled` flag checks throughout `common/wake_word.py`, and add a fail-fast check at startup if barge-in is disabled. This removes ~35 lines of conditional branching and makes the code simpler to follow.
+Make barge-in unconditionally active in wake-word mode. Remove the `barge_in_enabled` flag checks throughout `common/wake_word.py` and remove the `barge_in` config key entirely. This removes ~35 lines of conditional branching and makes the code simpler to follow.
 
 ---
 
@@ -37,10 +37,10 @@ This pattern repeats across `_state_processing`, `_state_responding`, `_respond_
 
 ## Proposed Solution
 
-1. **Fail-fast in `_initialize()`**: if `barge_in` is not enabled in config, raise `RuntimeError` with a message explaining that wake-word mode requires barge-in.
+1. **Remove `barge_in` config key entirely** from `configuration.py` defaults and `load_config()`. Barge-in is now an invariant of wake-word mode, not a user knob.
 2. **Remove all `barge_in_enabled` local variable assignments** (~4 occurrences).
 3. **Remove all `if barge_in_enabled:` / `elif barge_in_enabled:` conditional branches** — treat the enabled path as unconditional.
-4. **Simplify `_poll_op`**: remove the `barge_in_thread` parameter guard; always poll for barge-in.
+4. **Simplify `_poll_op`**: remove the `barge_in_thread` parameter; always use `self.barge_in_thread` directly.
 5. **Simplify `_respond_streaming`**: remove the `if barge_in_enabled and self.porcupine:` / `elif barge_in_enabled and not self.porcupine:` block; always start barge-in detection if not already running.
 
 Estimated net reduction: **~35 lines**.
