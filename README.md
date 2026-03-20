@@ -78,6 +78,16 @@ Run:
 ./sandvoice --wake-word
 ```
 
+Wake word mode requires the following options to be enabled in `~/.sandvoice/config.yaml` (startup will fail with a clear error if any of these are missing):
+
+```yaml
+bot_voice: enabled
+stream_responses: enabled
+stream_tts: enabled
+vad_enabled: enabled
+porcupine_access_key: "YOUR_KEY_HERE"   # free key from https://console.picovoice.ai/
+```
+
 ## Configuration file
 It should be installed in `~/.sandvoice/config.yaml`
 
@@ -146,8 +156,6 @@ wake_confirmation_beep_freq: 800
 wake_confirmation_beep_duration: 0.1
 visual_state_indicator: enabled
 
-barge_in: disabled
-
 voice_ack_earcon: disabled
 voice_ack_earcon_freq: 600
 voice_ack_earcon_duration: 0.06
@@ -182,9 +190,9 @@ All configuration keys are loaded from `common/configuration.py` defaults and ca
 - `gpt_route_model`: model used for routing (`AI.define_route()`)
 - `gpt_response_model`: model used for normal responses (`AI.generate_response()`)
 
-- `stream_responses`: `enabled`/`disabled`; stream LLM responses and assemble final text from deltas.
+- `stream_responses`: `enabled`/`disabled`; stream LLM responses and assemble final text from deltas. **Required** in `--wake-word` mode.
 
-- `stream_tts`: `enabled`/`disabled`; when streaming responses, generate and play TTS chunks before the full response completes (default route only)
+- `stream_tts`: `enabled`/`disabled`; when streaming responses, generate and play TTS chunks before the full response completes (default route only). **Required** in `--wake-word` mode.
 - `stream_tts_boundary`: `sentence` or `paragraph`; chunk boundary preference
 - `stream_tts_first_chunk_target_s`: target spoken duration (seconds) to accumulate before playing the first TTS chunk (default `6`, minimum `1`)
 - `speech_to_text_model`: model used for speech-to-text
@@ -217,8 +225,6 @@ All configuration keys are loaded from `common/configuration.py` defaults and ca
 - `wake_confirmation_beep_freq`: frequency in Hz for the wake confirmation beep (default `800`)
 - `wake_confirmation_beep_duration`: duration in seconds for the wake confirmation beep (default `0.1`)
 - `visual_state_indicator`: `enabled`/`disabled`; show terminal state indicators in wake word mode
-
-- `barge_in`: `enabled`/`disabled`; interrupt TTS in `--wake-word` mode by saying the wake word
 
 - `voice_ack_earcon`: `enabled`/`disabled`; play a short ack earcon after recording and before processing
 - `voice_ack_earcon_freq`: frequency in Hz for the ack earcon (default `600`)

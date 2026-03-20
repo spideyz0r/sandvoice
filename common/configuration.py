@@ -112,9 +112,6 @@ class Config:
             "wake_confirmation_beep_freq": 800,
             "wake_confirmation_beep_duration": 0.1,
             "visual_state_indicator": "enabled",
-            # Barge-in feature (interrupt TTS with wake word)
-            "barge_in": "disabled",
-
             # Voice UX
             "voice_ack_earcon": "disabled",
             "voice_ack_earcon_freq": 600,
@@ -211,8 +208,6 @@ class Config:
         self.wake_confirmation_beep_freq = _parse_exact_int(self.get("wake_confirmation_beep_freq"))
         self.wake_confirmation_beep_duration = _parse_exact_float(self.get("wake_confirmation_beep_duration"))
         self.visual_state_indicator = self.get("visual_state_indicator").lower() == "enabled"
-        # Barge-in feature
-        self.barge_in = self.get("barge_in").lower() == "enabled"
 
         # Task Scheduler
         raw_scheduler_enabled = self.get("scheduler_enabled")
