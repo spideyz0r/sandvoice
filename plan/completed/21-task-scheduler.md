@@ -222,12 +222,12 @@ Default: enabled with 30s poll interval.
 
 ## Acceptance Criteria
 
-- [ ] `cron`, `interval`, and `once` tasks execute at correct times
-- [ ] `once` tasks transition to `completed` after executing
-- [ ] Tasks survive a restart (read from DB on startup)
-- [ ] `refresh_only` plugin tasks do not produce voice output
-- [ ] `speak` tasks produce voice output via existing TTS pipeline
-- [ ] Scheduler shuts down cleanly on SIGINT with no tasks mid-flight
+- [x] `cron`, `interval`, and `once` tasks execute at correct times
+- [x] `once` tasks transition to `completed` after executing
+- [x] Tasks survive a restart (read from DB on startup)
+- [x] `refresh_only` plugin tasks do not produce voice output
+- [x] `speak` tasks produce voice output via existing TTS pipeline
+- [x] Scheduler shuts down cleanly on SIGINT with no tasks mid-flight
 
 ---
 

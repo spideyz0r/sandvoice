@@ -83,6 +83,10 @@ plan/
 **Document**: [completed/29-wake-word-always-streaming-tts.md](./completed/29-wake-word-always-streaming-tts.md)
 **Description**: Remove the pre-generated TTS playback path from `common/wake_word.py` — streaming TTS (Plan 08) supersedes it. Deletes `_respond_pregenerated_tts`, four cleanup helpers, `self.tts_files` state, and the TTS generation block in `_state_processing`. ~190 lines removed.
 
+### Priority 30: Wake Word Barge-In Always On
+**Document**: [completed/30-wake-word-barge-in-always-on.md](./completed/30-wake-word-barge-in-always-on.md)
+**Description**: Remove the `barge_in` config key entirely and all `barge_in_enabled` conditional branches throughout `wake_word.py`. ~35 lines removed.
+
 ---
 
 ## In Progress 🚧
@@ -154,10 +158,6 @@ plan/
 ### Priority 25: Terminal UI
 **Document**: [backlog/25-terminal-ui.md](./backlog/25-terminal-ui.md)
 **Description**: Replace flat emoji-based terminal output with a high-end CLI UI: ANSI colors, animated waiting dots, in-place status line updates, inline timing per phase, and clear conversation/status separation. Pure ANSI — no external dependencies, Pi-compatible.
-
-### Priority 30: Wake Word Barge-In Always On 🚧 In Progress
-**Document**: [backlog/30-wake-word-barge-in-always-on.md](./backlog/30-wake-word-barge-in-always-on.md)
-**Description**: Make barge-in unconditionally active in wake-word mode. Remove the `barge_in` config key entirely and all `barge_in_enabled` conditional branches throughout `_state_responding`, `_respond_streaming`, and `_poll_op`. ~35 lines removed.
 
 ### Priority 31: Wake Word Route Always Required
 **Document**: [backlog/31-wake-word-route-always-required.md](./backlog/31-wake-word-route-always-required.md)

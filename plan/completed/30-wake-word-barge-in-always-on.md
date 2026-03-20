@@ -1,6 +1,6 @@
 # Wake Word Barge-In Always On
 
-**Status**: 🚧 In Progress
+**Status**: ✅ Completed
 **Priority**: 30
 **Platforms**: macOS M1, Raspberry Pi 3B
 
