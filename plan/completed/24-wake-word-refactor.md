@@ -1,6 +1,6 @@
 # wake_word.py Refactor
 
-**Status**: 📋 Backlog
+**Status**: ✅ Completed
 **Priority**: 24
 **Platforms**: macOS M1, Raspberry Pi 3B
 
@@ -189,12 +189,13 @@ Logic-preserving structural refactors:
 
 ## Acceptance Criteria
 
-- [ ] `logger = logging.getLogger(__name__)` at module top, no bare `logging.X()` calls remain
-- [ ] No f-strings in log calls (use `%s` lazy format)
-- [ ] No local `import threading` inside methods
-- [ ] `_CompositeStopEvent` defined at module level
-- [ ] `_state_responding` delegates to `_respond_streaming()` and `_respond_pregenerated_tts()`
-- [ ] Barge-in poll pattern not repeated more than once in `_state_processing`
-- [ ] All existing tests pass
-- [ ] Coverage >= 80%
-- [ ] No behavior changes (confirmed by tests)
+- [x] `logger = logging.getLogger(__name__)` at module top, no bare `logging.X()` calls remain
+- [x] No f-strings in log calls (use `%s` lazy format)
+- [x] No local `import threading` inside methods
+- [x] `_CompositeStopEvent` defined at module level
+- [x] `_state_responding` delegates to `_respond_streaming()` (pregenerated TTS path removed in Plan 29)
+- [x] Barge-in poll pattern extracted to `_poll_op()` helper
+- [x] `_should_stream_default_route()` extracted to deduplicate stream flag check
+- [x] All existing tests pass
+- [x] Coverage >= 80%
+- [x] No behavior changes (confirmed by tests)
