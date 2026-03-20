@@ -204,7 +204,7 @@ All configuration keys are loaded from `common/configuration.py` defaults and ca
 - `bot_voice_model`: voice name for TTS (e.g. `nova`)
 
 - `cli_input`: `enabled`/`disabled`; enables CLI input mode without `--cli`
-- `bot_voice`: `enabled`/`disabled`; controls whether SandVoice speaks responses
+- `bot_voice`: `enabled`/`disabled`; controls whether SandVoice speaks responses. **Required** in `--wake-word` mode.
 
 - `api_timeout`: OpenAI client timeout in seconds
 - `api_retry_attempts`: retry attempts for OpenAI calls (backoff)
@@ -215,7 +215,7 @@ All configuration keys are loaded from `common/configuration.py` defaults and ca
 - `porcupine_access_key`: Picovoice access key (required for `--wake-word` mode)
 - `porcupine_keyword_paths`: custom Porcupine keyword model path(s) (`.ppn`) or `null`
 
-- `vad_enabled`: `enabled`/`disabled`; voice activity detection toggle
+- `vad_enabled`: `enabled`/`disabled`; voice activity detection toggle. **Required** in `--wake-word` mode.
 - `vad_aggressiveness`: 0-3 (0=least aggressive, 3=most aggressive)
 - `vad_silence_duration`: seconds of silence before stopping recording
 - `vad_frame_duration`: 10, 20, or 30 (ms)
