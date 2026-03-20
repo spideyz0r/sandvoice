@@ -43,7 +43,7 @@ Estimated net reduction: **~30 lines**.
 ### Change to `__init__`
 
 ```python
-def __init__(self, config, ai_instance, audio_instance, route_message=None, plugins=None, audio_lock=None):
+def __init__(self, config, ai_instance, audio_instance, route_message, plugins=None, audio_lock=None):
     if route_message is None:
         raise ValueError("route_message is required for wake-word mode")
     self.route_message = route_message
