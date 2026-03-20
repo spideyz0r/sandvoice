@@ -1,6 +1,6 @@
 # Wake Word Route Always Required
 
-**Status**: 📋 Backlog
+**Status**: 🚧 In Progress
 **Priority**: 31
 **Platforms**: macOS M1, Raspberry Pi 3B
 
@@ -43,7 +43,7 @@ Estimated net reduction: **~30 lines**.
 ### Change to `__init__`
 
 ```python
-def __init__(self, config, ai_instance, audio_instance, route_message=None, plugins=None, audio_lock=None):
+def __init__(self, config, ai_instance, audio_instance, route_message, plugins=None, audio_lock=None):
     if route_message is None:
         raise ValueError("route_message is required for wake-word mode")
     self.route_message = route_message
@@ -71,8 +71,8 @@ def __init__(self, config, ai_instance, audio_instance, route_message=None, plug
 
 ## Acceptance Criteria
 
-- [ ] `__init__` raises `ValueError` if `route_message` is `None`
-- [ ] `if self.route_message is not None:` / `else:` removed from `_state_processing`
-- [ ] `else` fallback block deleted
-- [ ] All tests pass; >80% coverage on changed code
-- [ ] `wake_word.py` reduced by ~30 lines
+- [x] `__init__` raises `ValueError` if `route_message` is `None`
+- [x] `if self.route_message is not None:` / `else:` removed from `_state_processing`
+- [x] `else` fallback block deleted
+- [x] All tests pass; >80% coverage on changed code
+- [x] `wake_word.py` reduced by ~30 lines

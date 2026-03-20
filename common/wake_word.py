@@ -77,14 +77,14 @@ class WakeWordMode:
     Returns to IDLE after each cycle.
     """
 
-    def __init__(self, config, ai_instance, audio_instance, route_message=None, plugins=None, audio_lock=None):
+    def __init__(self, config, ai_instance, audio_instance, route_message, plugins=None, audio_lock=None):
         """Initialize wake word mode.
 
         Args:
             config: Configuration object with wake word settings
             ai_instance: AI instance for transcription and responses
             audio_instance: Audio instance for playback
-            route_message: Optional callback to route messages through SandVoice plugins.
+            route_message: Required callback to route messages through SandVoice plugins.
                 Signature: route_message(user_input: str, route: dict) -> str
             plugins: Optional dict of plugin route handlers (used to decide when "default route"
                 streaming is safe). If not provided, wake word mode will not attempt streaming
@@ -93,6 +93,8 @@ class WakeWordMode:
                 audio playback call to serialize mixer usage with other threads (e.g.,
                 the scheduler's TTS output). If None, no external locking is applied.
         """
+        if route_message is None:
+            raise ValueError("route_message is required for wake-word mode")
         self.config = config
         self.ai = ai_instance
         self.audio = audio_instance
@@ -769,58 +771,44 @@ class WakeWordMode:
                 self._handle_immediate_barge_in(barge_in_thread)
                 return
 
-            # Generate response (prefer plugin routing when available)
-            if self.route_message is not None:
-                route = self._poll_op(
-                    lambda: self.ai.define_route(user_input),
-                    "route definition",
-                )
-                if route is _BARGE_IN:
-                    return
+            # Generate response via plugin routing
+            route = self._poll_op(
+                lambda: self.ai.define_route(user_input),
+                "route definition",
+            )
+            if route is _BARGE_IN:
+                return
 
-                logger.debug("Route: %s", route)
+            logger.debug("Route: %s", route)
 
-                stream_default_route = (
-                    self._should_stream_default_route() and
-                    (self.plugins is not None) and
-                    (route.get("route") not in self.plugins)
-                )
+            stream_default_route = (
+                self._should_stream_default_route() and
+                (self.plugins is not None) and
+                (route.get("route") not in self.plugins)
+            )
 
-                if stream_default_route:
-                    self.streaming_user_input = user_input
-                    self.streaming_route = route
-                    self.response_text = None
-
-                    if barge_in_thread and self._check_barge_in_interrupt():
-                        logger.debug("Barge-in detected after route definition, before streaming")
-                        self._handle_immediate_barge_in(barge_in_thread)
-                        return
-
-                    self.state = State.RESPONDING
-                    return
-
-                response_text = self._poll_op(
-                    lambda: self.route_message(user_input, route),
-                    "plugin response",
-                )
-                if response_text is _BARGE_IN:
-                    return
-
-                self.response_text = response_text
-                self.streaming_response_text = response_text
-            else:
-                # No route_message: streaming is always active (required by Plan 29)
+            if stream_default_route:
                 self.streaming_user_input = user_input
-                self.streaming_route = {"route": "default-route", "reason": "direct"}
+                self.streaming_route = route
                 self.response_text = None
 
                 if barge_in_thread and self._check_barge_in_interrupt():
-                    logger.debug("Barge-in detected before streaming")
+                    logger.debug("Barge-in detected after route definition, before streaming")
                     self._handle_immediate_barge_in(barge_in_thread)
                     return
 
                 self.state = State.RESPONDING
                 return
+
+            response_text = self._poll_op(
+                lambda: self.route_message(user_input, route),
+                "plugin response",
+            )
+            if response_text is _BARGE_IN:
+                return
+
+            self.response_text = response_text
+            self.streaming_response_text = response_text
 
             logger.debug("Response: %s", self.response_text)
             print(f"{self.config.botname}: {self.response_text}\n")
