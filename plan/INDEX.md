@@ -85,7 +85,7 @@ plan/
 
 ### Priority 30: Wake Word Barge-In Always On
 **Document**: [completed/30-wake-word-barge-in-always-on.md](./completed/30-wake-word-barge-in-always-on.md)
-**Description**: Remove the `barge_in` config key entirely and all `barge_in_enabled` conditional branches throughout `wake_word.py`. Remove dead `bot_voice` guards from ack earcon checks. ~35 lines removed.
+**Description**: Remove the `barge_in` config key entirely and all `barge_in_enabled` conditional branches throughout `wake_word.py`. ~35 lines removed.
 
 ---
 
