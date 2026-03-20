@@ -244,9 +244,7 @@ class WakeWordMode:
                 logger.warning("Failed to create confirmation beep: %s", e)
                 self.confirmation_beep_path = None
 
-        if _is_enabled_flag(getattr(self.config, "bot_voice", False)) and _is_enabled_flag(
-            getattr(self.config, "voice_ack_earcon", False)
-        ):
+        if _is_enabled_flag(getattr(self.config, "voice_ack_earcon", False)):
             try:
                 self.ack_earcon_path = create_ack_earcon(
                     freq=self.config.voice_ack_earcon_freq,
@@ -492,9 +490,7 @@ class WakeWordMode:
                 logger.debug("Recording duration: %.2fs, %s frames", elapsed, len(frames))
 
                 # Voice UX: play a short ack earcon before PROCESSING begins
-                if _is_enabled_flag(getattr(self.config, "bot_voice", False)) and _is_enabled_flag(
-                    getattr(self.config, "voice_ack_earcon", False)
-                ):
+                if _is_enabled_flag(getattr(self.config, "voice_ack_earcon", False)):
                     if self.ack_earcon_path and os.path.exists(self.ack_earcon_path):
                         try:
                             audio_playing = False
