@@ -77,7 +77,7 @@ class WakeWordMode:
     Returns to IDLE after each cycle.
     """
 
-    def __init__(self, config, ai_instance, audio_instance, route_message=None, plugins=None, audio_lock=None):
+    def __init__(self, config, ai_instance, audio_instance, route_message, plugins=None, audio_lock=None):
         """Initialize wake word mode.
 
         Args:
