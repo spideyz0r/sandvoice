@@ -164,6 +164,14 @@ plan/
 **Description**: Replace flat emoji-based terminal output with a high-end CLI UI: ANSI colors, animated waiting dots, in-place status line updates, inline timing per phase, and clear conversation/status separation. Pure ANSI — no external dependencies, Pi-compatible.
 
 
+### Priority 32: Wake Word Dead Code and Duplicate Extraction
+**Document**: [backlog/32-wake-word-dead-code-and-duplicates.md](./backlog/32-wake-word-dead-code-and-duplicates.md)
+**Description**: Remove `self.streaming_route` (never read) and `_should_stream_default_route()` (always returns True). Extract four repeated patterns into helpers: `_cleanup_pyaudio()`, `_cleanup_barge_in()`, `_play_confirmation_beep()`, `_reset_streaming_state()`. ~95 lines removed, no behavior change.
+
+### Priority 33: Wake Word Barge-In Detector Extraction
+**Document**: [backlog/33-wake-word-barge-in-extractor.md](./backlog/33-wake-word-barge-in-extractor.md)
+**Description**: Extract the five barge-in detection methods from `WakeWordMode` into a dedicated `common/barge_in.py` module with a `BargeInDetector` class (start/stop/is_triggered/run_with_polling). ~200 lines removed from wake_word.py. Requires Plan 32.
+
 ### Future Enhancements
 **Document**: [backlog/FUTURE.md](./backlog/FUTURE.md)
 **Description**: Long-term feature ideas including API Cost Management, Conversation History Management, Code Deduplication, Timers & Reminders, Music Control, Smart Home Integration, Calendar Integration, Todo List Management, Multi-User Support, and Conversation Memory.
