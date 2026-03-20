@@ -25,12 +25,13 @@ class TestWakeWordModeInitialization(unittest.TestCase):
 
         self.mock_ai = Mock()
         self.mock_audio = Mock()
+        self.mock_route_message = Mock()
 
     def tearDown(self):
         logging.disable(logging.NOTSET)
 
     def test_init_sets_initial_state(self):
-        mode = WakeWordMode(self.mock_config, self.mock_ai, self.mock_audio)
+        mode = WakeWordMode(self.mock_config, self.mock_ai, self.mock_audio, route_message=self.mock_route_message)
 
         self.assertEqual(mode.state, State.IDLE)
         self.assertFalse(mode.running)
@@ -38,21 +39,26 @@ class TestWakeWordModeInitialization(unittest.TestCase):
         self.assertIsNone(mode.confirmation_beep_path)
 
     def test_init_stores_dependencies(self):
-        mode = WakeWordMode(self.mock_config, self.mock_ai, self.mock_audio)
+        mode = WakeWordMode(self.mock_config, self.mock_ai, self.mock_audio, route_message=self.mock_route_message)
 
         self.assertEqual(mode.config, self.mock_config)
         self.assertEqual(mode.ai, self.mock_ai)
         self.assertEqual(mode.audio, self.mock_audio)
 
     def test_audio_lock_defaults_to_none(self):
-        mode = WakeWordMode(self.mock_config, self.mock_ai, self.mock_audio)
+        mode = WakeWordMode(self.mock_config, self.mock_ai, self.mock_audio, route_message=self.mock_route_message)
         self.assertIsNone(mode._audio_lock)
 
     def test_audio_lock_stored_when_provided(self):
         import threading
         lock = threading.Lock()
-        mode = WakeWordMode(self.mock_config, self.mock_ai, self.mock_audio, audio_lock=lock)
+        mode = WakeWordMode(self.mock_config, self.mock_ai, self.mock_audio, route_message=self.mock_route_message, audio_lock=lock)
         self.assertIs(mode._audio_lock, lock)
+
+    def test_init_raises_when_route_message_is_none(self):
+        with self.assertRaises(ValueError) as context:
+            WakeWordMode(self.mock_config, self.mock_ai, self.mock_audio, route_message=None)
+        self.assertIn("route_message", str(context.exception))
 
 
 class TestWakeWordModeInitialize(unittest.TestCase):
@@ -76,6 +82,7 @@ class TestWakeWordModeInitialize(unittest.TestCase):
 
         self.mock_ai = Mock()
         self.mock_audio = Mock()
+        self.mock_route_message = Mock()
 
     def tearDown(self):
         logging.disable(logging.NOTSET)
@@ -89,7 +96,7 @@ class TestWakeWordModeInitialize(unittest.TestCase):
         mock_porcupine_create.return_value = mock_porcupine
         mock_beep.return_value = "/tmp/test/beep.mp3"
 
-        mode = WakeWordMode(self.mock_config, self.mock_ai, self.mock_audio)
+        mode = WakeWordMode(self.mock_config, self.mock_ai, self.mock_audio, route_message=self.mock_route_message)
         mode._initialize()
 
         mock_porcupine_create.assert_called_once_with(
@@ -108,7 +115,7 @@ class TestWakeWordModeInitialize(unittest.TestCase):
         mock_porcupine_create.return_value = mock_porcupine
         mock_beep.return_value = "/tmp/test/beep.mp3"
 
-        mode = WakeWordMode(self.mock_config, self.mock_ai, self.mock_audio)
+        mode = WakeWordMode(self.mock_config, self.mock_ai, self.mock_audio, route_message=self.mock_route_message)
         mode._initialize()
 
         mock_beep.assert_called_once_with(
@@ -134,7 +141,7 @@ class TestWakeWordModeInitialize(unittest.TestCase):
         mock_beep.return_value = "/tmp/test/beep.mp3"
         mock_ack.return_value = "/tmp/test/ack.mp3"
 
-        mode = WakeWordMode(self.mock_config, self.mock_ai, self.mock_audio)
+        mode = WakeWordMode(self.mock_config, self.mock_ai, self.mock_audio, route_message=self.mock_route_message)
         mode._initialize()
 
         mock_ack.assert_called_once_with(
@@ -149,7 +156,7 @@ class TestWakeWordModeInitialize(unittest.TestCase):
         self.mock_config.stream_responses = True
         self.mock_config.stream_tts = True
 
-        mode = WakeWordMode(self.mock_config, self.mock_ai, self.mock_audio)
+        mode = WakeWordMode(self.mock_config, self.mock_ai, self.mock_audio, route_message=self.mock_route_message)
 
         with self.assertRaises(RuntimeError) as context:
             mode._initialize()
@@ -161,7 +168,7 @@ class TestWakeWordModeInitialize(unittest.TestCase):
         self.mock_config.stream_responses = False
         self.mock_config.stream_tts = True
 
-        mode = WakeWordMode(self.mock_config, self.mock_ai, self.mock_audio)
+        mode = WakeWordMode(self.mock_config, self.mock_ai, self.mock_audio, route_message=self.mock_route_message)
 
         with self.assertRaises(RuntimeError) as context:
             mode._initialize()
@@ -173,7 +180,7 @@ class TestWakeWordModeInitialize(unittest.TestCase):
         self.mock_config.stream_responses = True
         self.mock_config.stream_tts = False
 
-        mode = WakeWordMode(self.mock_config, self.mock_ai, self.mock_audio)
+        mode = WakeWordMode(self.mock_config, self.mock_ai, self.mock_audio, route_message=self.mock_route_message)
 
         with self.assertRaises(RuntimeError) as context:
             mode._initialize()
@@ -184,7 +191,7 @@ class TestWakeWordModeInitialize(unittest.TestCase):
     def test_initialize_raises_on_missing_access_key(self, mock_porcupine_create):
         self.mock_config.porcupine_access_key = ""
 
-        mode = WakeWordMode(self.mock_config, self.mock_ai, self.mock_audio)
+        mode = WakeWordMode(self.mock_config, self.mock_ai, self.mock_audio, route_message=self.mock_route_message)
 
         with self.assertRaises(RuntimeError) as context:
             mode._initialize()
@@ -196,7 +203,7 @@ class TestWakeWordModeInitialize(unittest.TestCase):
     def test_initialize_handles_porcupine_error(self, mock_beep, mock_porcupine_create):
         mock_porcupine_create.side_effect = Exception("Porcupine init failed")
 
-        mode = WakeWordMode(self.mock_config, self.mock_ai, self.mock_audio)
+        mode = WakeWordMode(self.mock_config, self.mock_ai, self.mock_audio, route_message=self.mock_route_message)
 
         with self.assertRaises(RuntimeError) as context:
             mode._initialize()
@@ -212,7 +219,7 @@ class TestWakeWordModeInitialize(unittest.TestCase):
         mock_porcupine_create.return_value = mock_porcupine
         mock_beep.side_effect = Exception("Beep creation failed")
 
-        mode = WakeWordMode(self.mock_config, self.mock_ai, self.mock_audio)
+        mode = WakeWordMode(self.mock_config, self.mock_ai, self.mock_audio, route_message=self.mock_route_message)
         mode._initialize()
 
         self.assertIsNone(mode.confirmation_beep_path)
@@ -220,7 +227,7 @@ class TestWakeWordModeInitialize(unittest.TestCase):
     def test_initialize_raises_when_vad_disabled(self):
         self.mock_config.vad_enabled = False
 
-        mode = WakeWordMode(self.mock_config, self.mock_ai, self.mock_audio)
+        mode = WakeWordMode(self.mock_config, self.mock_ai, self.mock_audio, route_message=self.mock_route_message)
 
         with self.assertRaises(RuntimeError) as context:
             mode._initialize()
@@ -242,6 +249,7 @@ class TestWakeWordModeStateIdle(unittest.TestCase):
 
         self.mock_ai = Mock()
         self.mock_audio = Mock()
+        self.mock_route_message = Mock()
 
     def tearDown(self):
         logging.disable(logging.NOTSET)
@@ -262,7 +270,7 @@ class TestWakeWordModeStateIdle(unittest.TestCase):
         mock_pa.open.return_value = mock_stream
         mock_pyaudio_class.return_value = mock_pa
 
-        mode = WakeWordMode(self.mock_config, self.mock_ai, self.mock_audio)
+        mode = WakeWordMode(self.mock_config, self.mock_ai, self.mock_audio, route_message=self.mock_route_message)
         mode.porcupine = mock_porcupine
         mode.confirmation_beep_path = "/tmp/beep.mp3"
         mode.running = True
@@ -292,7 +300,7 @@ class TestWakeWordModeStateIdle(unittest.TestCase):
         mock_pa.open.return_value = mock_stream
         mock_pyaudio_class.return_value = mock_pa
 
-        mode = WakeWordMode(self.mock_config, self.mock_ai, self.mock_audio)
+        mode = WakeWordMode(self.mock_config, self.mock_ai, self.mock_audio, route_message=self.mock_route_message)
         mode.porcupine = mock_porcupine
         mode.confirmation_beep_path = "/tmp/beep.mp3"
         mode.running = True
@@ -316,7 +324,7 @@ class TestWakeWordModeStateIdle(unittest.TestCase):
         mock_pa.open.return_value = mock_stream
         mock_pyaudio_class.return_value = mock_pa
 
-        mode = WakeWordMode(self.mock_config, self.mock_ai, self.mock_audio)
+        mode = WakeWordMode(self.mock_config, self.mock_ai, self.mock_audio, route_message=self.mock_route_message)
         mode.porcupine = mock_porcupine
         mode.running = True
         mode.state = State.IDLE
@@ -343,6 +351,7 @@ class TestWakeWordModeRun(unittest.TestCase):
 
         self.mock_ai = Mock()
         self.mock_audio = Mock()
+        self.mock_route_message = Mock()
 
     def tearDown(self):
         logging.disable(logging.NOTSET)
@@ -361,7 +370,7 @@ class TestWakeWordModeRun(unittest.TestCase):
         self.mock_config.wake_word_sensitivity = 0.5
         self.mock_config.wake_confirmation_beep = True
 
-        mode = WakeWordMode(self.mock_config, self.mock_ai, self.mock_audio)
+        mode = WakeWordMode(self.mock_config, self.mock_ai, self.mock_audio, route_message=self.mock_route_message)
 
         # Mock state methods to simulate state transitions
         call_count = {'idle': 0}
@@ -407,7 +416,7 @@ class TestWakeWordModeRun(unittest.TestCase):
         self.mock_config.wake_word_sensitivity = 0.5
         self.mock_config.wake_confirmation_beep = True
 
-        mode = WakeWordMode(self.mock_config, self.mock_ai, self.mock_audio)
+        mode = WakeWordMode(self.mock_config, self.mock_ai, self.mock_audio, route_message=self.mock_route_message)
 
         def mock_state_idle():
             raise KeyboardInterrupt()
@@ -440,6 +449,7 @@ class TestWakeWordModeStateListening(unittest.TestCase):
 
         self.mock_ai = Mock()
         self.mock_audio = Mock()
+        self.mock_route_message = Mock()
 
     def tearDown(self):
         logging.disable(logging.NOTSET)
@@ -481,7 +491,7 @@ class TestWakeWordModeStateListening(unittest.TestCase):
         # Ensure we don't skip due to "already playing"
         self.mock_audio.is_playing.return_value = False
 
-        mode = WakeWordMode(self.mock_config, self.mock_ai, self.mock_audio)
+        mode = WakeWordMode(self.mock_config, self.mock_ai, self.mock_audio, route_message=self.mock_route_message)
         mode.ack_earcon_path = "/tmp/test/ack.mp3"
         mode.running = True
         mode.state = State.LISTENING
@@ -525,7 +535,7 @@ class TestWakeWordModeStateListening(unittest.TestCase):
 
         self.mock_audio.is_playing.return_value = True
 
-        mode = WakeWordMode(self.mock_config, self.mock_ai, self.mock_audio)
+        mode = WakeWordMode(self.mock_config, self.mock_ai, self.mock_audio, route_message=self.mock_route_message)
         mode.ack_earcon_path = "/tmp/test/ack.mp3"
         mode.running = True
         mode.state = State.LISTENING
@@ -564,7 +574,7 @@ class TestWakeWordModeStateListening(unittest.TestCase):
         mock_wf = Mock()
         mock_wave_open.return_value.__enter__.return_value = mock_wf
 
-        mode = WakeWordMode(self.mock_config, self.mock_ai, self.mock_audio)
+        mode = WakeWordMode(self.mock_config, self.mock_ai, self.mock_audio, route_message=self.mock_route_message)
         mode.ack_earcon_path = "/tmp/test/ack.mp3"
         mode.running = True
         mode.state = State.LISTENING
@@ -605,7 +615,7 @@ class TestWakeWordModeStateListening(unittest.TestCase):
 
         self.mock_audio.is_playing.return_value = False
 
-        mode = WakeWordMode(self.mock_config, self.mock_ai, self.mock_audio)
+        mode = WakeWordMode(self.mock_config, self.mock_ai, self.mock_audio, route_message=self.mock_route_message)
         mode.ack_earcon_path = "/tmp/test/ack.mp3"
         mode.running = True
         mode.state = State.LISTENING
@@ -656,7 +666,7 @@ class TestWakeWordModeStateListening(unittest.TestCase):
         mock_wf = Mock()
         mock_wave_open.return_value.__enter__.return_value = mock_wf
 
-        mode = WakeWordMode(self.mock_config, self.mock_ai, self.mock_audio)
+        mode = WakeWordMode(self.mock_config, self.mock_ai, self.mock_audio, route_message=self.mock_route_message)
         mode.running = True
         mode.state = State.LISTENING
 
@@ -706,7 +716,7 @@ class TestWakeWordModeStateListening(unittest.TestCase):
         mock_wf = Mock()
         mock_wave_open.return_value.__enter__.return_value = mock_wf
 
-        mode = WakeWordMode(self.mock_config, self.mock_ai, self.mock_audio)
+        mode = WakeWordMode(self.mock_config, self.mock_ai, self.mock_audio, route_message=self.mock_route_message)
         mode.running = True
         mode.state = State.LISTENING
 
@@ -728,7 +738,7 @@ class TestWakeWordModeStateListening(unittest.TestCase):
         mock_pa.open.return_value = mock_stream
         mock_pyaudio_class.return_value = mock_pa
 
-        mode = WakeWordMode(self.mock_config, self.mock_ai, self.mock_audio)
+        mode = WakeWordMode(self.mock_config, self.mock_ai, self.mock_audio, route_message=self.mock_route_message)
         mode.running = True
         mode.state = State.LISTENING
 
@@ -763,7 +773,7 @@ class TestWakeWordModeStateListening(unittest.TestCase):
         mock_pa.open.return_value = mock_stream
         mock_pyaudio_class.return_value = mock_pa
 
-        mode = WakeWordMode(self.mock_config, self.mock_ai, self.mock_audio)
+        mode = WakeWordMode(self.mock_config, self.mock_ai, self.mock_audio, route_message=self.mock_route_message)
         mode.running = True
         mode.state = State.LISTENING
 
@@ -815,7 +825,7 @@ class TestWakeWordModeStateListening(unittest.TestCase):
         mock_wf = Mock()
         mock_wave_open.return_value.__enter__.return_value = mock_wf
 
-        mode = WakeWordMode(self.mock_config, self.mock_ai, self.mock_audio)
+        mode = WakeWordMode(self.mock_config, self.mock_ai, self.mock_audio, route_message=self.mock_route_message)
         mode.running = True
         mode.state = State.LISTENING
 
@@ -845,6 +855,7 @@ class TestWakeWordModeCleanup(unittest.TestCase):
 
         self.mock_ai = Mock()
         self.mock_audio = Mock()
+        self.mock_route_message = Mock()
 
     def tearDown(self):
         logging.disable(logging.NOTSET)
@@ -852,7 +863,7 @@ class TestWakeWordModeCleanup(unittest.TestCase):
     def test_cleanup_deletes_porcupine(self):
         mock_porcupine = Mock()
 
-        mode = WakeWordMode(self.mock_config, self.mock_ai, self.mock_audio)
+        mode = WakeWordMode(self.mock_config, self.mock_ai, self.mock_audio, route_message=self.mock_route_message)
         mode.porcupine = mock_porcupine
         mode.running = True
 
@@ -863,7 +874,7 @@ class TestWakeWordModeCleanup(unittest.TestCase):
         self.assertFalse(mode.running)
 
     def test_cleanup_handles_none_porcupine(self):
-        mode = WakeWordMode(self.mock_config, self.mock_ai, self.mock_audio)
+        mode = WakeWordMode(self.mock_config, self.mock_ai, self.mock_audio, route_message=self.mock_route_message)
         mode.porcupine = None
         mode.running = True
 
@@ -884,6 +895,7 @@ class TestWakeWordModeProcessing(unittest.TestCase):
 
         self.mock_ai = Mock()
         self.mock_audio = Mock()
+        self.mock_route_message = Mock()
 
     def tearDown(self):
         logging.disable(logging.NOTSET)
@@ -896,7 +908,7 @@ class TestWakeWordModeProcessing(unittest.TestCase):
         barge_in_thread falsy so error-path cleanup guards in _state_processing
         are skipped cleanly without AttributeError on barge_in_stop_flag.
         """
-        mode = WakeWordMode(self.mock_config, self.mock_ai, self.mock_audio, **kwargs)
+        mode = WakeWordMode(self.mock_config, self.mock_ai, self.mock_audio, **{"route_message": self.mock_route_message, **kwargs})
         mode._start_barge_in_detection = Mock(return_value=None)
         return mode
 
@@ -905,22 +917,18 @@ class TestWakeWordModeProcessing(unittest.TestCase):
         mock_exists.return_value = True
 
         self.mock_ai.transcribe_and_translate.return_value = "What's the weather?"
+        self.mock_ai.define_route.return_value = {"route": "default-route", "reason": "direct"}
 
-        mode = self._make_mode()
+        mode = self._make_mode(plugins={})
         mode.recorded_audio_path = "/tmp/recording.wav"
         mode.state = State.PROCESSING
 
         mode._state_processing()
 
-        # Verify transcription was called with correct file path
         self.mock_ai.transcribe_and_translate.assert_called_once_with(audio_file_path="/tmp/recording.wav")
-
-        # No route_message → streaming path; generate_response is never called directly
         self.mock_ai.generate_response.assert_not_called()
         self.assertEqual(mode.state, State.RESPONDING)
         self.assertEqual(mode.streaming_user_input, "What's the weather?")
-
-        # TTS is no longer pre-generated in _state_processing
         self.mock_ai.text_to_speech.assert_not_called()
 
     @patch('common.wake_word.os.path.exists')
@@ -1005,7 +1013,7 @@ class TestWakeWordModeProcessing(unittest.TestCase):
     def test_state_processing_handles_missing_file(self, mock_exists):
         mock_exists.return_value = False
 
-        mode = WakeWordMode(self.mock_config, self.mock_ai, self.mock_audio)
+        mode = WakeWordMode(self.mock_config, self.mock_ai, self.mock_audio, route_message=self.mock_route_message)
         mode.recorded_audio_path = "/tmp/missing.wav"
         mode.state = State.PROCESSING
 
@@ -1054,6 +1062,7 @@ class TestWakeWordModeResponding(unittest.TestCase):
 
         self.mock_ai = Mock()
         self.mock_audio = Mock()
+        self.mock_route_message = Mock()
 
     def tearDown(self):
         logging.disable(logging.NOTSET)
@@ -1065,7 +1074,7 @@ class TestWakeWordModeResponding(unittest.TestCase):
         to avoid requiring a real Porcupine instance.  Returning None keeps
         barge_in_thread falsy so error-path cleanup guards are skipped cleanly.
         """
-        mode = WakeWordMode(self.mock_config, self.mock_ai, self.mock_audio, **kwargs)
+        mode = WakeWordMode(self.mock_config, self.mock_ai, self.mock_audio, **{"route_message": self.mock_route_message, **kwargs})
         mode._start_barge_in_detection = Mock(return_value=None)
         return mode
 
@@ -1176,7 +1185,7 @@ class TestWakeWordModeResponding(unittest.TestCase):
         """No streaming_user_input → nothing to play → clean up and go to IDLE."""
         mock_exists.return_value = True
 
-        mode = WakeWordMode(self.mock_config, self.mock_ai, self.mock_audio)
+        mode = WakeWordMode(self.mock_config, self.mock_ai, self.mock_audio, route_message=self.mock_route_message)
         mode.streaming_user_input = None
         mode.recorded_audio_path = "/tmp/recording.wav"
         mode.state = State.RESPONDING
@@ -1249,7 +1258,8 @@ class TestBargeIn(unittest.TestCase):
         self.mock_ai = Mock()
         self.mock_audio = Mock()
         self.mock_porcupine = Mock()  # Mock porcupine for consistency
-        
+        self.mock_route_message = Mock()
+
     def tearDown(self):
         logging.disable(logging.NOTSET)
 
@@ -1279,7 +1289,7 @@ class TestBargeIn(unittest.TestCase):
         self.mock_ai.stream_response_deltas.return_value = iter([])
         self.mock_audio.play_audio_queue.return_value = (True, None, None)
 
-        mode = WakeWordMode(self.mock_config, self.mock_ai, self.mock_audio)
+        mode = WakeWordMode(self.mock_config, self.mock_ai, self.mock_audio, route_message=self.mock_route_message)
         mode.porcupine = Mock()
         mode.streaming_user_input = "Hey"
         mode.state = State.RESPONDING
@@ -1329,7 +1339,7 @@ class TestBargeIn(unittest.TestCase):
         self.mock_ai.stream_response_deltas.return_value = iter([])
         self.mock_audio.play_audio_queue.return_value = (True, None, None)
 
-        mode = WakeWordMode(self.mock_config, self.mock_ai, self.mock_audio)
+        mode = WakeWordMode(self.mock_config, self.mock_ai, self.mock_audio, route_message=self.mock_route_message)
         mode.porcupine = Mock()
         mode.streaming_user_input = "Hey"
         mode.state = State.RESPONDING
@@ -1352,7 +1362,7 @@ class TestBargeIn(unittest.TestCase):
         # Simulate player interrupted by barge-in (returns False / no error)
         self.mock_audio.play_audio_queue.return_value = (False, None, None)
 
-        mode = WakeWordMode(self.mock_config, self.mock_ai, self.mock_audio)
+        mode = WakeWordMode(self.mock_config, self.mock_ai, self.mock_audio, route_message=self.mock_route_message)
         mode.porcupine = Mock()
         # Mark barge-in thread as already running so _start_barge_in_detection is
         # skipped and self.barge_in_event is not overwritten with a new real Event.
@@ -1382,7 +1392,7 @@ class TestBargeIn(unittest.TestCase):
         mock_exists.return_value = True
         self.mock_config.wake_confirmation_beep = True
 
-        mode = WakeWordMode(self.mock_config, self.mock_ai, self.mock_audio)
+        mode = WakeWordMode(self.mock_config, self.mock_ai, self.mock_audio, route_message=self.mock_route_message)
         mode.recorded_audio_path = "/tmp/test.mp3"
         mode.confirmation_beep_path = "/tmp/beep.mp3"
         mode.state = State.PROCESSING
