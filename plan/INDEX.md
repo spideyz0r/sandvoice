@@ -87,6 +87,10 @@ plan/
 **Document**: [completed/30-wake-word-barge-in-always-on.md](./completed/30-wake-word-barge-in-always-on.md)
 **Description**: Remove the `barge_in` config key entirely and all `barge_in_enabled` conditional branches throughout `wake_word.py`. ~35 lines removed.
 
+### Priority 31: Wake Word Route Always Required
+**Document**: [completed/31-wake-word-route-always-required.md](./completed/31-wake-word-route-always-required.md)
+**Description**: Remove the dead-code `else` branch in `_state_processing` that handles a `None` route_message. sandvoice.py always provides this callback; the fallback path is unreachable. Fail-fast in `__init__` if None. ~30 lines removed.
+
 ---
 
 ## In Progress 🚧
@@ -159,9 +163,6 @@ plan/
 **Document**: [backlog/25-terminal-ui.md](./backlog/25-terminal-ui.md)
 **Description**: Replace flat emoji-based terminal output with a high-end CLI UI: ANSI colors, animated waiting dots, in-place status line updates, inline timing per phase, and clear conversation/status separation. Pure ANSI — no external dependencies, Pi-compatible.
 
-### Priority 31: Wake Word Route Always Required
-**Document**: [backlog/31-wake-word-route-always-required.md](./backlog/31-wake-word-route-always-required.md)
-**Description**: Remove the dead-code `else` branch in `_state_processing` that handles a `None` route_message. sandvoice.py always provides this callback; the fallback path is unreachable. Fail-fast in `__init__` if None. ~30 lines removed.
 
 ### Future Enhancements
 **Document**: [backlog/FUTURE.md](./backlog/FUTURE.md)
