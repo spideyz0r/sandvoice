@@ -888,14 +888,23 @@ class TestWakeWordModeProcessing(unittest.TestCase):
     def tearDown(self):
         logging.disable(logging.NOTSET)
 
+    def _make_mode(self, **kwargs):
+        """Create a WakeWordMode with _start_barge_in_detection mocked out.
+
+        Tests that exercise state logic (not barge-in thread management) use this
+        to avoid requiring a real Porcupine instance.
+        """
+        mode = WakeWordMode(self.mock_config, self.mock_ai, self.mock_audio, **kwargs)
+        mode._start_barge_in_detection = Mock(return_value=Mock())
+        return mode
+
     @patch('common.wake_word.os.path.exists')
     def test_state_processing_transcribes_and_sets_up_streaming(self, mock_exists):
         mock_exists.return_value = True
 
         self.mock_ai.transcribe_and_translate.return_value = "What's the weather?"
 
-        mode = WakeWordMode(self.mock_config, self.mock_ai, self.mock_audio)
-        mode._start_barge_in_detection = Mock(return_value=Mock())
+        mode = self._make_mode()
         mode.recorded_audio_path = "/tmp/recording.wav"
         mode.state = State.PROCESSING
 
@@ -922,8 +931,7 @@ class TestWakeWordModeProcessing(unittest.TestCase):
         route_message = Mock(return_value="It's sunny today!")
         plugins = {"weather": Mock()}
 
-        mode = WakeWordMode(self.mock_config, self.mock_ai, self.mock_audio, route_message=route_message, plugins=plugins)
-        mode._start_barge_in_detection = Mock(return_value=Mock())
+        mode = self._make_mode(route_message=route_message, plugins=plugins)
         mode.recorded_audio_path = "/tmp/recording.wav"
         mode.state = State.PROCESSING
 
@@ -954,14 +962,7 @@ class TestWakeWordModeProcessing(unittest.TestCase):
         route_message = Mock(return_value="non-streaming default")
         plugins = {"weather": Mock()}
 
-        mode = WakeWordMode(
-            self.mock_config,
-            self.mock_ai,
-            self.mock_audio,
-            route_message=route_message,
-            plugins=plugins,
-        )
-        mode._start_barge_in_detection = Mock(return_value=None)
+        mode = self._make_mode(route_message=route_message, plugins=plugins)
         mode.recorded_audio_path = "/tmp/recording.wav"
         mode.state = State.PROCESSING
 
@@ -986,8 +987,7 @@ class TestWakeWordModeProcessing(unittest.TestCase):
         route_message = Mock(return_value="Hi there!")
         plugins = {"echo": Mock()}
 
-        mode = WakeWordMode(self.mock_config, self.mock_ai, self.mock_audio, route_message=route_message, plugins=plugins)
-        mode._start_barge_in_detection = Mock(return_value=Mock())
+        mode = self._make_mode(route_message=route_message, plugins=plugins)
         mode.recorded_audio_path = "/tmp/recording.wav"
         mode.state = State.PROCESSING
 
@@ -1024,8 +1024,7 @@ class TestWakeWordModeProcessing(unittest.TestCase):
         # Mock transcription error
         self.mock_ai.transcribe_and_translate.side_effect = Exception("Transcription failed")
 
-        mode = WakeWordMode(self.mock_config, self.mock_ai, self.mock_audio)
-        mode._start_barge_in_detection = Mock(return_value=Mock())
+        mode = self._make_mode()
         mode.recorded_audio_path = "/tmp/recording.wav"
         mode.state = State.PROCESSING
 
@@ -1057,6 +1056,16 @@ class TestWakeWordModeResponding(unittest.TestCase):
     def tearDown(self):
         logging.disable(logging.NOTSET)
 
+    def _make_mode(self, **kwargs):
+        """Create a WakeWordMode with _start_barge_in_detection mocked out.
+
+        Tests that exercise state logic (not barge-in thread management) use this
+        to avoid requiring a real Porcupine instance.
+        """
+        mode = WakeWordMode(self.mock_config, self.mock_ai, self.mock_audio, **kwargs)
+        mode._start_barge_in_detection = Mock(return_value=Mock())
+        return mode
+
     @patch('common.wake_word.os.remove')
     @patch('common.wake_word.os.path.exists')
     def test_state_responding_streaming_uses_stream_response_deltas_and_audio_queue(self, mock_exists, mock_remove):
@@ -1072,8 +1081,7 @@ class TestWakeWordModeResponding(unittest.TestCase):
         # Mock queue-based playback (do not consume queue in this test)
         self.mock_audio.play_audio_queue.return_value = (True, None, None)
 
-        mode = WakeWordMode(self.mock_config, self.mock_ai, self.mock_audio)
-        mode._start_barge_in_detection = Mock(return_value=Mock())
+        mode = self._make_mode()
         mode.streaming_user_input = "Hi"
         mode.recorded_audio_path = "/tmp/recording.wav"
         mode.state = State.RESPONDING
@@ -1104,8 +1112,7 @@ class TestWakeWordModeResponding(unittest.TestCase):
         # Player fails immediately -> interrupt_event set.
         self.mock_audio.play_audio_queue.return_value = (False, "/tmp/fail.mp3", Exception("boom"))
 
-        mode = WakeWordMode(self.mock_config, self.mock_ai, self.mock_audio)
-        mode._start_barge_in_detection = Mock(return_value=Mock())
+        mode = self._make_mode()
         mode.streaming_user_input = "Hi"
         mode.recorded_audio_path = "/tmp/recording.wav"
         mode.state = State.RESPONDING
@@ -1126,8 +1133,7 @@ class TestWakeWordModeResponding(unittest.TestCase):
         self.mock_ai.text_to_speech.return_value = ["/tmp/tts1.mp3"]
         self.mock_audio.play_audio_queue.return_value = (True, None, None)
 
-        mode = WakeWordMode(self.mock_config, self.mock_ai, self.mock_audio)
-        mode._start_barge_in_detection = Mock(return_value=Mock())
+        mode = self._make_mode()
         mode.streaming_user_input = "Hi"
         mode.recorded_audio_path = "/tmp/recording.wav"
         mode.state = State.RESPONDING
@@ -1151,8 +1157,7 @@ class TestWakeWordModeResponding(unittest.TestCase):
         self.mock_ai.stream_response_deltas.return_value = iter(["Hello!"])
         self.mock_audio.play_audio_queue.return_value = (False, "/tmp/tts1.mp3", Exception("boom"))
 
-        mode = WakeWordMode(self.mock_config, self.mock_ai, self.mock_audio)
-        mode._start_barge_in_detection = Mock(return_value=Mock())
+        mode = self._make_mode()
         mode.streaming_user_input = "Hi"
         mode.recorded_audio_path = "/tmp/recording.wav"
         mode.state = State.RESPONDING
@@ -1190,8 +1195,7 @@ class TestWakeWordModeResponding(unittest.TestCase):
         self.mock_ai.stream_response_deltas.return_value = iter([])
         self.mock_audio.play_audio_queue.return_value = (True, None, None)
 
-        mode = WakeWordMode(self.mock_config, self.mock_ai, self.mock_audio)
-        mode._start_barge_in_detection = Mock(return_value=Mock())
+        mode = self._make_mode()
         mode.streaming_user_input = "Hey"
         mode.recorded_audio_path = "/tmp/recording.wav"
         mode.state = State.RESPONDING
@@ -1213,8 +1217,7 @@ class TestWakeWordModeResponding(unittest.TestCase):
         self.mock_config.botname = "TestBot"
         self.mock_config.stream_tts_boundary = "sentence"
 
-        mode = WakeWordMode(self.mock_config, self.mock_ai, self.mock_audio)
-        mode._start_barge_in_detection = Mock(return_value=Mock())
+        mode = self._make_mode()
         mode.streaming_response_text = "Plugin said this."
         mode.streaming_user_input = None
         mode.state = State.RESPONDING

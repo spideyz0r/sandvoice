@@ -84,6 +84,8 @@ Wake word mode requires the following options to be enabled in `~/.sandvoice/con
 bot_voice: enabled
 stream_responses: enabled
 stream_tts: enabled
+vad_enabled: enabled
+porcupine_access_key: "YOUR_KEY_HERE"   # free key from https://console.picovoice.ai/
 ```
 
 ## Configuration file

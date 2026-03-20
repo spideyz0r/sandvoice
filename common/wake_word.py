@@ -707,7 +707,7 @@ class WakeWordMode:
         """Return True — streaming is always active in wake-word mode (Plan 29)."""
         return True
 
-    def _poll_op(self, operation, name, barge_in_thread):
+    def _poll_op(self, operation, name):
         """Run *operation* with barge-in polling.
 
         Always polls for barge-in interruption (barge-in is unconditionally
@@ -717,7 +717,7 @@ class WakeWordMode:
         """
         completed, result = self._run_with_barge_in_polling(operation, name)
         if not completed:
-            self._handle_immediate_barge_in(barge_in_thread)
+            self._handle_immediate_barge_in(self.barge_in_thread)
             return _BARGE_IN
         return result
 
@@ -760,7 +760,6 @@ class WakeWordMode:
             user_input = self._poll_op(
                 lambda: self.ai.transcribe_and_translate(audio_file_path=audio_path),
                 "transcription",
-                barge_in_thread,
             )
             if user_input is _BARGE_IN:
                 return
@@ -779,7 +778,6 @@ class WakeWordMode:
                 route = self._poll_op(
                     lambda: self.ai.define_route(user_input),
                     "route definition",
-                    barge_in_thread,
                 )
                 if route is _BARGE_IN:
                     return
@@ -808,7 +806,6 @@ class WakeWordMode:
                 response_text = self._poll_op(
                     lambda: self.route_message(user_input, route),
                     "plugin response",
-                    barge_in_thread,
                 )
                 if response_text is _BARGE_IN:
                     return
