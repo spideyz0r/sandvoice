@@ -1,6 +1,6 @@
 # Wake Word Barge-In Detector Extraction
 
-**Status**: 📋 Backlog
+**Status**: ✅ Completed
 **Priority**: 33
 **Platforms**: macOS M1, Raspberry Pi 3B
 
@@ -109,10 +109,10 @@ The `_BARGE_IN` sentinel moves to `common/barge_in.py` (or a shared `common/sent
 
 ## Acceptance Criteria
 
-- [ ] `common/barge_in.py` created with `BargeInDetector` class
-- [ ] `BargeInDetector` has `start()`, `stop()`, `is_triggered`, `clear()`, `run_with_polling()`
-- [ ] Five barge-in methods removed from `WakeWordMode`
-- [ ] All call sites in `wake_word.py` updated to use `self.barge_in.*`
-- [ ] `tests/test_barge_in.py` covers `BargeInDetector` in isolation (>80% coverage)
-- [ ] All existing tests pass
-- [ ] `wake_word.py` reduced by ~200 lines
+- [x] `common/barge_in.py` created with `BargeInDetector` class
+- [x] `BargeInDetector` has `start()`, `stop()`, `is_triggered`, `clear()`, `run_with_polling()`
+- [x] Five barge-in methods removed from `WakeWordMode`
+- [x] All call sites in `wake_word.py` updated to use `self.barge_in.*`
+- [x] `tests/test_barge_in.py` covers `BargeInDetector` in isolation (>80% coverage)
+- [x] All existing tests pass
+- [x] `wake_word.py` reduced by ~200 lines
