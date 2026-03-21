@@ -291,9 +291,14 @@ class TestBargeInDetectorRunWithPolling(unittest.TestCase):
         # Clean up slow operation
         operation_completed.wait(timeout=1.0)
 
-    def test_barge_in_sentinel_is_module_level_object(self):
+    def test_barge_in_sentinel_is_unique_object(self):
         from common.barge_in import _BARGE_IN as sentinel
-        self.assertIsInstance(sentinel, object)
+        # Sentinel must be a distinct object — not None, True, False, 0, or any other singleton
+        self.assertIsNot(sentinel, None)
+        self.assertIsNot(sentinel, True)
+        self.assertIsNot(sentinel, False)
+        self.assertIsNot(sentinel, 0)
+        self.assertIs(sentinel, _BARGE_IN)  # identity is stable
 
 
 class TestBargeInDetectorDetectionLoop(unittest.TestCase):

@@ -578,6 +578,8 @@ class WakeWordMode:
         _BARGE_IN sentinel so callers can early-return without further logic.
         Otherwise returns the operation result directly.
         """
+        if self.barge_in is None:
+            raise RuntimeError("Barge-in detector is not initialized; ensure _initialize() has been called")
         result = self.barge_in.run_with_polling(operation, name)
         if result is _BARGE_IN:
             self._handle_immediate_barge_in()
@@ -609,6 +611,8 @@ class WakeWordMode:
             return
 
         # Start barge-in detection (runs through PROCESSING and RESPONDING)
+        if self.barge_in is None:
+            raise RuntimeError("Barge-in detector is not initialized; ensure _initialize() has been called")
         self.barge_in.start()
 
         try:
