@@ -465,7 +465,11 @@ class WakeWordMode:
                         wf.setframerate(vad_sample_rate)
                         wf.writeframes(b''.join(frames))
                 except Exception:
-                    self._remove_recorded_audio()
+                    try:
+                        if self.recorded_audio_path and os.path.exists(self.recorded_audio_path):
+                            os.remove(self.recorded_audio_path)
+                    finally:
+                        self.recorded_audio_path = None
                     raise
 
                 logger.debug("Recorded audio saved: %s", self.recorded_audio_path)
