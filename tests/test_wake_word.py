@@ -1614,21 +1614,21 @@ class TestHelperMethods(unittest.TestCase):
 
     def test_require_config_enabled_raises_when_disabled(self):
         mode = self._make_mode()
+        msg = "Wake-word mode requires VAD. Set vad_enabled: enabled"
         with self.assertRaises(RuntimeError) as ctx:
-            mode._require_config_enabled("disabled", "VAD", "Set vad_enabled: enabled")
-        self.assertIn("VAD", str(ctx.exception))
-        self.assertIn("Set vad_enabled: enabled", str(ctx.exception))
+            mode._require_config_enabled("disabled", msg)
+        self.assertEqual(str(ctx.exception), msg)
 
     def test_require_config_enabled_raises_for_false(self):
         mode = self._make_mode()
         with self.assertRaises(RuntimeError):
-            mode._require_config_enabled(False, "bot_voice", "")
+            mode._require_config_enabled(False, "some error message")
 
     def test_require_config_enabled_passes_when_enabled(self):
         mode = self._make_mode()
         # Should not raise
-        mode._require_config_enabled("enabled", "VAD", "")
-        mode._require_config_enabled(True, "bot_voice", "")
+        mode._require_config_enabled("enabled", "irrelevant")
+        mode._require_config_enabled(True, "irrelevant")
 
     # --- _remove_recorded_audio ---
 

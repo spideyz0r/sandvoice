@@ -161,22 +161,22 @@ class WakeWordMode:
 
         self._require_config_enabled(
             getattr(self.config, "vad_enabled", False),
-            "VAD-based recording",
+            "Wake-word mode requires VAD-based recording. "
             "Enable it in your config: vad_enabled: enabled",
         )
         self._require_config_enabled(
             getattr(self.config, "bot_voice", False),
-            "voice output",
+            "Wake-word mode requires voice output to be enabled. "
             "Enable it in your config: bot_voice: enabled",
         )
         self._require_config_enabled(
             getattr(self.config, "stream_responses", False),
-            "streaming responses",
+            "Wake-word mode requires streaming responses. "
             "Enable it in your config: stream_responses: enabled",
         )
         self._require_config_enabled(
             getattr(self.config, "stream_tts", False),
-            "streaming TTS",
+            "Wake-word mode requires streaming TTS. "
             "Enable it in your config: stream_tts: enabled",
         )
 
@@ -283,12 +283,11 @@ class WakeWordMode:
                 sensitivities=[self.config.wake_word_sensitivity]
             )
 
-    def _require_config_enabled(self, flag_value, flag_name, detail=""):
+    def _require_config_enabled(self, flag_value, error_msg):
         """Raise RuntimeError if flag_value is not considered enabled by _is_enabled_flag()."""
         if not _is_enabled_flag(flag_value):
-            msg = f"Wake-word mode requires {flag_name} to be enabled. {detail}".strip()
-            print(f"Error: {msg}")
-            raise RuntimeError(msg)
+            print(f"Error: {error_msg}")
+            raise RuntimeError(error_msg)
 
     def _remove_recorded_audio(self):
         """Remove the temporary recorded audio file if it exists and clear the path."""
@@ -298,7 +297,7 @@ class WakeWordMode:
             try:
                 os.remove(self.recorded_audio_path)
             except OSError as e:
-                logger.debug("Failed to remove recorded audio: %s", e)
+                logger.debug("Failed to remove recorded audio '%s': %s", self.recorded_audio_path, e)
         self.recorded_audio_path = None
 
     def _state_idle(self):
