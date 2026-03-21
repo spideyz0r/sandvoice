@@ -1528,7 +1528,9 @@ class TestHelperMethods(unittest.TestCase):
         mock_pa = Mock()
         mode = self._make_mode()
         # Should not raise — exception is logged at DEBUG and absorbed
+        # close() must still be attempted even when stop_stream() fails
         mode._cleanup_pyaudio(mock_stream, mock_pa)
+        mock_stream.close.assert_called_once()
         mock_pa.terminate.assert_called_once()
 
     def test_cleanup_pyaudio_suppresses_pa_exception(self):

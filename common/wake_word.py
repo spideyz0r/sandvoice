@@ -644,6 +644,9 @@ class WakeWordMode:
         if stream is not None:
             try:
                 stream.stop_stream()
+            except Exception as e:
+                logger.debug("Failed to stop PyAudio stream: %s", e)
+            try:
                 stream.close()
             except Exception as e:
                 logger.debug("Failed to close PyAudio stream: %s", e)
