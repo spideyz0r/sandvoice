@@ -87,13 +87,12 @@ def _respond_streaming(self):
     self.streaming_user_input = None
     precomputed_text = self.streaming_response_text
     self.streaming_response_text = None
-    interrupted = not self.responder.respond(user_input, precomputed_text)
-    if interrupted:
-        self._handle_immediate_barge_in()
-    return interrupted
+    self.responder.respond(user_input, precomputed_text)
 ```
 
 - `_state_responding()` call site remains unchanged (`self._respond_streaming()`).
+- Barge-in handling (beep + state transition) stays in `_state_responding()`, which already
+  checks `self.barge_in.is_triggered` after `_respond_streaming()` returns — no change needed.
 
 ---
 
