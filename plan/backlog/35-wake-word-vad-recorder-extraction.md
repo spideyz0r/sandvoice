@@ -45,13 +45,16 @@ pattern used to extract `BargeInDetector` in Plan 33.
 
 ```python
 class VadRecorder:
-    def __init__(self, config, audio, audio_lock):
+    def __init__(self, config, audio, audio_lock, ack_earcon_path=None):
         """
         Args:
-            config: Config instance (reads rate, vad_aggressiveness, vad_frame_duration,
-                    vad_timeout, etc.)
-            audio:  Audio instance (used to play ack earcon).
-            audio_lock: threading.Lock acquired around audio playback calls.
+            config:          Config instance (reads rate, vad_aggressiveness,
+                             vad_frame_duration, vad_timeout, voice_ack_earcon, etc.)
+            audio:           Audio instance (used to play ack earcon).
+            audio_lock:      threading.Lock acquired around audio playback calls.
+            ack_earcon_path: Path to the ack earcon file, or None if not configured.
+                             Created once in WakeWordMode._initialize() and injected here
+                             so VadRecorder does not recreate it on every recording.
         """
 
     def record(self) -> str | None:
@@ -78,8 +81,8 @@ Internally `record()` handles:
 
 ### Changes to `WakeWordMode`
 
-- Add `self.vad_recorder = VadRecorder(self.config, self.audio, self._audio_lock)` in
-  `_initialize()`.
+- Add `self.vad_recorder = VadRecorder(self.config, self.audio, self._audio_lock, self.ack_earcon_path)` in
+  `_initialize()` (after `self.ack_earcon_path` is set up).
 - Replace the body of `_state_listening()` with:
 
 ```python

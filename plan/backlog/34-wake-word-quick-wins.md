@@ -27,9 +27,8 @@ Five nearly-identical blocks check a config flag and raise `RuntimeError` if it 
 `"enabled"`:
 
 ```python
-if not _is_enabled_flag(self.config.vad_enabled):
+if not _is_enabled_flag(getattr(self.config, "vad_enabled", False)):
     error_msg = "Wake-word mode requires VAD ... set 'vad_enabled: enabled'"
-    logger.error(error_msg)
     print(f"Error: {error_msg}")
     raise RuntimeError(error_msg)
 ```
@@ -74,7 +73,7 @@ Replace each of the five validation blocks with a single call:
 
 ```python
 self._require_config_enabled(
-    self.config.vad_enabled,
+    getattr(self.config, "vad_enabled", False),
     "VAD",
     "Set 'vad_enabled: enabled' in your config.",
 )

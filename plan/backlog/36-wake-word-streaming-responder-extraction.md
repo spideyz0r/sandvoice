@@ -48,21 +48,26 @@ which can be injected at construction time.
 
 ```python
 class StreamingResponder:
-    def __init__(self, ai, audio, audio_lock, barge_in):
+    def __init__(self, ai, audio, audio_lock, barge_in, pop_chunk_fn):
         """
         Args:
-            ai:         AI instance (stream_response_deltas, text_to_speech, pop_streaming_chunk).
-            audio:      Audio instance (play_audio_queue with audio_lock/stop_event pattern).
-            audio_lock: threading.Lock acquired around audio playback.
-            barge_in:   BargeInDetector instance (polled for interruption).
+            ai:           AI instance (stream_response_deltas, text_to_speech).
+            audio:        Audio instance (play_audio_queue with audio_lock/stop_event pattern).
+            audio_lock:   threading.Lock acquired around audio playback.
+            barge_in:     BargeInDetector instance (polled for interruption).
+            pop_chunk_fn: The standalone `pop_streaming_chunk` function imported from
+                          `common.ai`. Injected rather than called via `ai` because it is
+                          a module-level function, not an instance method.
         """
 
-    def respond(self, user_input, response_text=None):
+    def respond(self, user_input=None, response_text=None):
         """
         Stream a response to the user.
 
-        If response_text is provided, stream it directly to TTS (pre-computed path).
-        Otherwise, stream from the LLM via ai.stream_response_deltas().
+        If response_text is provided, stream it directly to TTS (pre-computed text).
+        Otherwise, stream from the LLM via ai.stream_response_deltas() using user_input.
+        user_input may be None when a pre-computed plugin response is provided via
+        response_text.
 
         Barge-in interruption is communicated via barge_in.is_triggered (set by the
         BargeInDetector thread). StreamingResponder must not clear or stop the barge-in
@@ -77,8 +82,8 @@ thread, and barge-in polling. `_CompositeStopEvent` moves into this module (or
 
 ### Changes to `WakeWordMode`
 
-- Add `self.responder = StreamingResponder(self.ai, self.audio, self._audio_lock, self.barge_in)`
-  in `_initialize()`.
+- Add `self.responder = StreamingResponder(self.ai, self.audio, self._audio_lock, self.barge_in, pop_streaming_chunk)`
+  in `_initialize()` (where `pop_streaming_chunk` is the function already imported from `common.ai` at the top of `wake_word.py`).
 - Replace the body of `_respond_streaming()` with a thin wrapper (keeping its no-arg
   signature so `_state_responding()` call sites stay unchanged):
 
