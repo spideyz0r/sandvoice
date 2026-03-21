@@ -31,7 +31,7 @@ Estimated net reduction in `wake_word.py`: **~130 lines**.
    running the VAD frame loop, detecting speech/silence transitions, writing the WAV
    file, playing the ack earcon.
 2. **State machine integration** (thin): deciding what to do with the result (transition
-   to PROCESSING, handle barge-in, handle errors).
+   to PROCESSING, handle errors).
 
 The recording logic has no dependency on `WakeWordMode` state beyond reading a handful
 of config values and writing `self.recorded_audio_path`. This mirrors exactly the
@@ -48,21 +48,24 @@ class VadRecorder:
     def __init__(self, config, audio, audio_lock):
         """
         Args:
-            config: Config instance (reads vad_sample_rate, vad_aggressiveness,
-                    vad_silence_duration_ms, vad_max_recording_duration_s, etc.)
+            config: Config instance (reads rate, vad_aggressiveness, vad_frame_duration,
+                    vad_timeout, etc.)
             audio:  Audio instance (used to play ack earcon).
             audio_lock: threading.Lock acquired around audio playback calls.
         """
 
-    def record(self) -> str:
+    def record(self) -> str | None:
         """
         Open mic, run VAD loop, detect speech, save WAV.
 
         Returns:
-            Path to the recorded WAV file.
+            Path to the recorded WAV file on success.
+            None if no audio frames were captured (non-error; caller should
+            return to IDLE without processing).
 
         Raises:
-            RuntimeError: if no suitable sample rate is found or recording fails.
+            RuntimeError: if no suitable sample rate is found or a stream
+            open/read/write failure occurs.
         """
 ```
 
@@ -84,10 +87,14 @@ def _state_listening(self):
     logger.debug("State: LISTENING")
     try:
         self.recorded_audio_path = self.vad_recorder.record()
-        self._transition(State.PROCESSING)
+        if self.recorded_audio_path:
+            self.state = State.PROCESSING
+        else:
+            logger.warning("No audio frames captured; returning to IDLE")
+            self.state = State.IDLE
     except Exception as e:
         logger.error("Recording failed: %s", e)
-        self._transition(State.IDLE)
+        self.state = State.IDLE
 ```
 
 ---

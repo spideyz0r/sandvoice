@@ -27,9 +27,9 @@ Estimated net reduction in `wake_word.py`: **~240 lines**.
 
 `_respond_streaming()` is the single largest method in the codebase. It manages:
 
-1. **LLM streaming**: collecting deltas from `ai.stream_responses()`, chunking text via
+1. **LLM streaming**: collecting deltas from `ai.stream_response_deltas()`, chunking text via
    `pop_streaming_chunk()`, putting chunks onto a text queue.
-2. **TTS worker thread**: consuming text chunks, calling `ai.stream_tts()`, writing audio
+2. **TTS worker thread**: consuming text chunks, calling `ai.text_to_speech()`, writing audio
    files, putting file paths onto an audio queue.
 3. **Audio player worker thread**: consuming audio file paths, acquiring the audio lock,
    playing files, deleting temp files.
@@ -51,22 +51,23 @@ class StreamingResponder:
     def __init__(self, ai, audio, audio_lock, barge_in):
         """
         Args:
-            ai:         AI instance (stream_responses, stream_tts, pop_streaming_chunk).
-            audio:      Audio instance (play_audio_file).
+            ai:         AI instance (stream_response_deltas, text_to_speech, pop_streaming_chunk).
+            audio:      Audio instance (play_audio_queue with audio_lock/stop_event pattern).
             audio_lock: threading.Lock acquired around audio playback.
             barge_in:   BargeInDetector instance (polled for interruption).
         """
 
-    def respond(self, user_input, response_text=None) -> bool:
+    def respond(self, user_input, response_text=None):
         """
         Stream a response to the user.
 
         If response_text is provided, stream it directly to TTS (pre-computed path).
-        Otherwise, stream from the LLM via ai.stream_responses().
+        Otherwise, stream from the LLM via ai.stream_response_deltas().
 
-        Returns:
-            True if response completed normally.
-            False if barge-in interrupted the response.
+        Barge-in interruption is communicated via barge_in.is_triggered (set by the
+        BargeInDetector thread). StreamingResponder must not clear or stop the barge-in
+        event — _state_responding() checks it after respond() returns to decide whether
+        to transition to LISTENING.
         """
 ```
 
