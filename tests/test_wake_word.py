@@ -209,7 +209,7 @@ class TestWakeWordModeInitialize(unittest.TestCase):
         with self.assertRaises(RuntimeError) as context:
             mode._initialize()
 
-        self.assertIn("Failed to initialize Porcupine", str(context.exception))
+        self.assertIn("Failed to initialize wake-word mode", str(context.exception))
 
     @patch('common.wake_word.pvporcupine.create')
     @patch('common.wake_word.create_confirmation_beep')

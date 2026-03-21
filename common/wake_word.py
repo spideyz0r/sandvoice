@@ -233,7 +233,7 @@ class WakeWordMode:
         except RuntimeError:
             raise
         except Exception as e:
-            error_msg = f"Failed to initialize Porcupine: {str(e)}"
+            error_msg = f"Failed to initialize wake-word mode: {str(e)}"
             logger.error(error_msg)
             print(f"Error: {error_msg}")
             raise RuntimeError(error_msg)
