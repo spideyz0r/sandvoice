@@ -677,7 +677,7 @@ class WakeWordMode:
             logger.warning("Failed to play confirmation beep: %s", e)
 
     def _reset_streaming_state(self):
-        """Reset streaming metadata to None in preparation for the next cycle."""
+        """Clear response and streaming state fields in preparation for the next cycle."""
         self.response_text = None
         self.streaming_response_text = None
         self.streaming_user_input = None
