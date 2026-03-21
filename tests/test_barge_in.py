@@ -491,6 +491,31 @@ class TestBargeInDetectorDetectionLoop(unittest.TestCase):
         # Event should not be set (error before detection)
         self.assertFalse(d.is_triggered)
 
+    @patch('common.barge_in.pvporcupine.create')
+    @patch('common.barge_in.pyaudio.PyAudio')
+    def test_detection_loop_audio_read_error_during_shutdown_logs_debug(
+        self, mock_pyaudio_class, mock_porcupine_create
+    ):
+        """Audio read error during shutdown (stop_flag set) is logged at DEBUG, not WARNING."""
+        mock_porcupine = Mock()
+        mock_porcupine.sample_rate = 16000
+        mock_porcupine.frame_length = 512
+        mock_porcupine_create.return_value = mock_porcupine
+
+        mock_stream = Mock()
+        mock_stream.read.side_effect = Exception("stream closed")
+        mock_pa = Mock()
+        mock_pa.open.return_value = mock_stream
+        mock_pyaudio_class.return_value = mock_pa
+
+        d = self._make_detector()
+        d._stop_flag.set()  # simulate shutdown in progress
+        d._thread = threading.Thread(target=d._detection_loop, daemon=True)
+        d._thread.start()
+        d._thread.join(timeout=2.0)
+
+        self.assertFalse(d.is_triggered)
+
 
 class TestBargeInCleanupPyAudio(unittest.TestCase):
     """Tests for _cleanup_pyaudio exception-handling paths."""

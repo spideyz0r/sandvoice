@@ -263,7 +263,12 @@ class BargeInDetector:
                         break
 
                 except Exception as e:
-                    logger.warning("Barge-in thread error reading audio: %s", e)
+                    if self._stop_flag.is_set():
+                        logger.debug(
+                            "Barge-in thread audio read error during shutdown (expected): %s", e
+                        )
+                    else:
+                        logger.warning("Barge-in thread error reading audio: %s", e)
                     break
 
         except Exception as e:
