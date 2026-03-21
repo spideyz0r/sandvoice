@@ -608,12 +608,8 @@ class WakeWordMode:
 
         return True, result_holder[0]
 
-    def _handle_immediate_barge_in(self, barge_in_thread):
-        """Handle barge-in with immediate beep and transition to LISTENING.
-
-        Args:
-            barge_in_thread: The barge-in detection thread to stop
-        """
+    def _handle_immediate_barge_in(self):
+        """Handle barge-in with immediate beep and transition to LISTENING."""
         logger.info("=== BARGE-IN TRIGGERED === Current state: %s", self.state.name)
         if self.config.debug:
             self.audio.log_mixer_state("barge-in BEFORE stop")
@@ -646,12 +642,16 @@ class WakeWordMode:
     def _cleanup_pyaudio(self, stream, pa):
         """Stop and close a PyAudio stream, then terminate the PyAudio instance."""
         if stream is not None:
-            with contextlib.suppress(Exception):
+            try:
                 stream.stop_stream()
                 stream.close()
+            except Exception as e:
+                logger.debug("Failed to close PyAudio stream: %s", e)
         if pa is not None:
-            with contextlib.suppress(Exception):
+            try:
                 pa.terminate()
+            except Exception as e:
+                logger.debug("Failed to terminate PyAudio instance: %s", e)
 
     def _cleanup_barge_in(self, timeout=0.3):
         """Signal barge-in thread to stop, join it, and clear all barge-in references."""
@@ -692,7 +692,7 @@ class WakeWordMode:
         """
         completed, result = self._run_with_barge_in_polling(operation, name)
         if not completed:
-            self._handle_immediate_barge_in(self.barge_in_thread)
+            self._handle_immediate_barge_in()
             return _BARGE_IN
         return result
 
@@ -742,7 +742,7 @@ class WakeWordMode:
             # Check for barge-in before starting response generation
             if barge_in_thread and self._check_barge_in_interrupt():
                 logger.debug("Barge-in detected after transcription, before response generation")
-                self._handle_immediate_barge_in(barge_in_thread)
+                self._handle_immediate_barge_in()
                 return
 
             # Generate response via plugin routing
@@ -766,7 +766,7 @@ class WakeWordMode:
 
                 if barge_in_thread and self._check_barge_in_interrupt():
                     logger.debug("Barge-in detected after route definition, before streaming")
-                    self._handle_immediate_barge_in(barge_in_thread)
+                    self._handle_immediate_barge_in()
                     return
 
                 self.state = State.RESPONDING
@@ -788,7 +788,7 @@ class WakeWordMode:
             # Final barge-in check before transitioning to RESPONDING
             if barge_in_thread and self._check_barge_in_interrupt():
                 logger.debug("Barge-in detected after processing completed, before RESPONDING")
-                self._handle_immediate_barge_in(barge_in_thread)
+                self._handle_immediate_barge_in()
                 return
 
             # Transition to RESPONDING state (barge-in thread continues running)

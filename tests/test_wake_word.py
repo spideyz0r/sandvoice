@@ -1406,7 +1406,7 @@ class TestBargeIn(unittest.TestCase):
         mode.barge_in_event = Mock()
 
         # Call the immediate barge-in handler
-        mode._handle_immediate_barge_in(mock_barge_in_thread)
+        mode._handle_immediate_barge_in()
 
         # Verify beep was played
         self.mock_audio.play_audio_file.assert_called_once_with("/tmp/beep.mp3")
@@ -1527,7 +1527,7 @@ class TestHelperMethods(unittest.TestCase):
         mock_stream.stop_stream.side_effect = Exception("hw error")
         mock_pa = Mock()
         mode = self._make_mode()
-        # Should not raise — contextlib.suppress absorbs the error
+        # Should not raise — exception is logged at DEBUG and absorbed
         mode._cleanup_pyaudio(mock_stream, mock_pa)
         mock_pa.terminate.assert_called_once()
 
