@@ -110,7 +110,6 @@ class WakeWordMode:
         self.recorded_audio_path = None
         self.response_text = None
         self.streaming_user_input = None
-        self.streaming_route = None
         self.streaming_response_text = None  # Pre-computed plugin response for TTS
         self.barge_in_event = None  # Event to signal barge-in during TTS
         self.barge_in_stop_flag = None  # Flag to stop barge-in thread immediately
@@ -321,12 +320,7 @@ class WakeWordMode:
                 if keyword_index >= 0:
                     logger.info("Wake word detected: '%s'", self.config.wake_phrase)
 
-                    if self.config.wake_confirmation_beep and self.confirmation_beep_path:
-                        try:
-                            with (self._audio_lock or contextlib.nullcontext()):
-                                self.audio.play_audio_file(self.confirmation_beep_path)
-                        except Exception as e:
-                            logger.warning("Failed to play confirmation beep: %s", e)
+                    self._play_confirmation_beep()
 
                     self.state = State.LISTENING
                     break
@@ -337,17 +331,7 @@ class WakeWordMode:
             print(f"Error: {error_msg}")
             self.running = False
         finally:
-            if audio_stream is not None:
-                try:
-                    audio_stream.stop_stream()
-                    audio_stream.close()
-                except Exception as e:
-                    logger.warning("Failed to close audio stream: %s", e)
-            if pa is not None:
-                try:
-                    pa.terminate()
-                except Exception as e:
-                    logger.warning("Failed to terminate PyAudio: %s", e)
+            self._cleanup_pyaudio(audio_stream, pa)
 
     def _state_listening(self):
         """LISTENING state: Record audio with VAD until silence detected.
@@ -450,20 +434,9 @@ class WakeWordMode:
                     sample_width = 2  # 16-bit PCM
 
                 # Close input stream before playing any earcons (improves compatibility on some devices)
-                if audio_stream is not None:
-                    try:
-                        audio_stream.stop_stream()
-                        audio_stream.close()
-                    except Exception as e:
-                        logger.warning("Failed to close audio stream: %s", e)
-                    audio_stream = None
-
-                if pa is not None:
-                    try:
-                        pa.terminate()
-                    except Exception as e:
-                        logger.warning("Failed to terminate PyAudio: %s", e)
-                    pa = None
+                self._cleanup_pyaudio(audio_stream, pa)
+                audio_stream = None
+                pa = None
 
                 self.recorded_audio_path = os.path.join(
                     self.config.tmp_files_path,
@@ -519,17 +492,7 @@ class WakeWordMode:
             print(f"Error: {error_msg}")
             self.state = State.IDLE
         finally:
-            if audio_stream is not None:
-                try:
-                    audio_stream.stop_stream()
-                    audio_stream.close()
-                except Exception as e:
-                    logger.warning("Failed to close audio stream: %s", e)
-            if pa is not None:
-                try:
-                    pa.terminate()
-                except Exception as e:
-                    logger.warning("Failed to terminate PyAudio: %s", e)
+            self._cleanup_pyaudio(audio_stream, pa)
 
     def _start_barge_in_detection(self):
         """Start barge-in detection thread.
@@ -645,12 +608,8 @@ class WakeWordMode:
 
         return True, result_holder[0]
 
-    def _handle_immediate_barge_in(self, barge_in_thread):
-        """Handle barge-in with immediate beep and transition to LISTENING.
-
-        Args:
-            barge_in_thread: The barge-in detection thread to stop
-        """
+    def _handle_immediate_barge_in(self):
+        """Handle barge-in with immediate beep and transition to LISTENING."""
         logger.info("=== BARGE-IN TRIGGERED === Current state: %s", self.state.name)
         if self.config.debug:
             self.audio.log_mixer_state("barge-in BEFORE stop")
@@ -662,20 +621,8 @@ class WakeWordMode:
             self.audio.log_mixer_state("barge-in AFTER stop")
 
         # Signal barge-in thread to stop and give it a brief chance to clean up
-        if barge_in_thread and self.barge_in_stop_flag:
-            self.barge_in_stop_flag.set()
-            if barge_in_thread.is_alive():
-                try:
-                    # Short timeout to allow PyAudio stream to close before LISTENING reopens it
-                    barge_in_thread.join(timeout=0.3)
-                except RuntimeError:
-                    # Thread may already be stopped or not started; ignore and continue
-                    pass
-
-        # Clean up thread and events
-        self.barge_in_thread = None
-        self.barge_in_event = None
-        self.barge_in_stop_flag = None
+        # Short timeout to allow PyAudio stream to close before LISTENING reopens it
+        self._cleanup_barge_in(timeout=0.3)
 
         # Clean up any partial data
         if self.recorded_audio_path and os.path.exists(self.recorded_audio_path):
@@ -684,26 +631,60 @@ class WakeWordMode:
             except OSError as e:
                 logger.debug("Failed to remove recorded audio file '%s': %s", self.recorded_audio_path, e)
         self.recorded_audio_path = None
-        self.response_text = None
-        self.streaming_response_text = None
-        self.streaming_user_input = None
-        self.streaming_route = None
+        self._reset_streaming_state()
 
         # Play confirmation beep
-        if self.config.wake_confirmation_beep and self.confirmation_beep_path:
-            if os.path.exists(self.confirmation_beep_path):
-                try:
-                    with (self._audio_lock or contextlib.nullcontext()):
-                        self.audio.play_audio_file(self.confirmation_beep_path)
-                except Exception as e:
-                    logger.warning("Failed to play beep: %s", e)
+        self._play_confirmation_beep()
 
         # Go directly to LISTENING
         self.state = State.LISTENING
 
-    def _should_stream_default_route(self):
-        """Return True — streaming is always active in wake-word mode (Plan 29)."""
-        return True
+    def _cleanup_pyaudio(self, stream, pa):
+        """Stop and close a PyAudio stream, then terminate the PyAudio instance."""
+        if stream is not None:
+            try:
+                stream.stop_stream()
+            except Exception as e:
+                logger.debug("Failed to stop PyAudio stream: %s", e)
+            try:
+                stream.close()
+            except Exception as e:
+                logger.debug("Failed to close PyAudio stream: %s", e)
+        if pa is not None:
+            try:
+                pa.terminate()
+            except Exception as e:
+                logger.debug("Failed to terminate PyAudio instance: %s", e)
+
+    def _cleanup_barge_in(self, timeout=0.3):
+        """Signal barge-in thread to stop, join it, and clear all barge-in references."""
+        if self.barge_in_stop_flag:
+            logger.debug("Signaled barge-in thread to stop")
+            self.barge_in_stop_flag.set()
+        if self.barge_in_thread and self.barge_in_thread.is_alive():
+            with contextlib.suppress(RuntimeError):
+                self.barge_in_thread.join(timeout=timeout)
+        self.barge_in_thread = None
+        self.barge_in_event = None
+        self.barge_in_stop_flag = None
+
+    def _play_confirmation_beep(self):
+        """Play confirmation beep if configured and the file exists."""
+        if not (getattr(self.config, "wake_confirmation_beep", False) and self.confirmation_beep_path):
+            return
+        if not os.path.exists(self.confirmation_beep_path):
+            return
+        try:
+            with (self._audio_lock or contextlib.nullcontext()):
+                self.audio.play_audio_file(self.confirmation_beep_path)
+        except Exception as e:
+            logger.warning("Failed to play confirmation beep: %s", e)
+
+    def _reset_streaming_state(self):
+        """Clear response and streaming state fields in preparation for the next cycle."""
+        self.response_text = None
+        self.streaming_response_text = None
+        self.streaming_user_input = None
 
     def _poll_op(self, operation, name):
         """Run *operation* with barge-in polling.
@@ -715,7 +696,7 @@ class WakeWordMode:
         """
         completed, result = self._run_with_barge_in_polling(operation, name)
         if not completed:
-            self._handle_immediate_barge_in(self.barge_in_thread)
+            self._handle_immediate_barge_in()
             return _BARGE_IN
         return result
 
@@ -734,10 +715,7 @@ class WakeWordMode:
             self.audio.log_mixer_state("PROCESSING state entered")
 
         # Reset response data
-        self.response_text = None
-        self.streaming_response_text = None
-        self.streaming_user_input = None
-        self.streaming_route = None
+        self._reset_streaming_state()
 
         # Check if we have a recorded audio file before starting barge-in detection
         if not self.recorded_audio_path or not os.path.exists(self.recorded_audio_path):
@@ -768,7 +746,7 @@ class WakeWordMode:
             # Check for barge-in before starting response generation
             if barge_in_thread and self._check_barge_in_interrupt():
                 logger.debug("Barge-in detected after transcription, before response generation")
-                self._handle_immediate_barge_in(barge_in_thread)
+                self._handle_immediate_barge_in()
                 return
 
             # Generate response via plugin routing
@@ -782,19 +760,17 @@ class WakeWordMode:
             logger.debug("Route: %s", route)
 
             stream_default_route = (
-                self._should_stream_default_route() and
-                (self.plugins is not None) and
-                (route.get("route") not in self.plugins)
+                (self.plugins is not None)
+                and (route.get("route") not in self.plugins)
             )
 
             if stream_default_route:
                 self.streaming_user_input = user_input
-                self.streaming_route = route
                 self.response_text = None
 
                 if barge_in_thread and self._check_barge_in_interrupt():
                     logger.debug("Barge-in detected after route definition, before streaming")
-                    self._handle_immediate_barge_in(barge_in_thread)
+                    self._handle_immediate_barge_in()
                     return
 
                 self.state = State.RESPONDING
@@ -816,7 +792,7 @@ class WakeWordMode:
             # Final barge-in check before transitioning to RESPONDING
             if barge_in_thread and self._check_barge_in_interrupt():
                 logger.debug("Barge-in detected after processing completed, before RESPONDING")
-                self._handle_immediate_barge_in(barge_in_thread)
+                self._handle_immediate_barge_in()
                 return
 
             # Transition to RESPONDING state (barge-in thread continues running)
@@ -840,19 +816,10 @@ class WakeWordMode:
 
             # Stop barge-in thread if it was started
             if barge_in_thread:
-                try:
-                    self.barge_in_stop_flag.set()
-                    barge_in_thread.join(timeout=1.0)
-                except Exception as thread_error:
-                    logger.warning("Failed to stop barge-in thread: %s", thread_error)
+                self._cleanup_barge_in(timeout=1.0)
 
-            # Reset state
-            self.barge_in_thread = None
-            self.barge_in_event = None
-            self.barge_in_stop_flag = None
             self.recorded_audio_path = None
-            self.response_text = None
-            self.streaming_response_text = None
+            self._reset_streaming_state()
 
             # Return to IDLE on error
             self.state = State.IDLE
@@ -907,17 +874,7 @@ class WakeWordMode:
         except Exception as e:
             logger.error("Barge-in detection thread error: %s", e)
         finally:
-            if audio_stream is not None:
-                try:
-                    audio_stream.stop_stream()
-                    audio_stream.close()
-                except Exception as e:
-                    logger.warning("Failed to close barge-in audio stream: %s", e)
-            if pa is not None:
-                try:
-                    pa.terminate()
-                except Exception as e:
-                    logger.warning("Failed to terminate barge-in PyAudio: %s", e)
+            self._cleanup_pyaudio(audio_stream, pa)
             if porcupine_instance is not None:
                 try:
                     porcupine_instance.delete()
@@ -940,15 +897,9 @@ class WakeWordMode:
             self._respond_streaming()
 
         # Signal barge-in thread to stop and wait for it to finish
-        if self.barge_in_stop_flag is not None:
-            self.barge_in_stop_flag.set()
-            logger.debug("Signaled barge-in thread to stop")
-            # Wait for thread to finish to ensure PyAudio stream is closed before LISTENING reopens it
-            if self.barge_in_thread is not None and self.barge_in_thread.is_alive():
-                try:
-                    self.barge_in_thread.join(timeout=0.3)
-                except RuntimeError:
-                    pass  # Thread may already be stopped
+        # Wait for thread to finish to ensure PyAudio stream is closed before LISTENING reopens it
+        barge_in_triggered = bool(self.barge_in_event and self.barge_in_event.is_set())
+        self._cleanup_barge_in(timeout=0.3)
 
         # Clean up temporary recorded audio file
         if self.recorded_audio_path and os.path.exists(self.recorded_audio_path):
@@ -963,26 +914,14 @@ class WakeWordMode:
         self.response_text = None
 
         # Transition to LISTENING if barge-in occurred, otherwise back to IDLE
-        if self.barge_in_event and self.barge_in_event.is_set():
+        if barge_in_triggered:
             logger.debug("Transitioning to LISTENING after barge-in")
 
             # Play confirmation beep (consistent with _handle_immediate_barge_in)
-            if self.config.wake_confirmation_beep and self.confirmation_beep_path:
-                if os.path.exists(self.confirmation_beep_path):
-                    try:
-                        with (self._audio_lock or contextlib.nullcontext()):
-                            self.audio.play_audio_file(self.confirmation_beep_path)
-                    except Exception as e:
-                        logger.warning("Failed to play beep: %s", e)
+            self._play_confirmation_beep()
 
-            self.barge_in_thread = None
-            self.barge_in_event = None
-            self.barge_in_stop_flag = None
             self.state = State.LISTENING
         else:
-            self.barge_in_thread = None
-            self.barge_in_event = None
-            self.barge_in_stop_flag = None
             self.state = State.IDLE
 
     def _respond_streaming(self):
@@ -1254,24 +1193,14 @@ class WakeWordMode:
                 )
 
         # Reset streaming metadata
-        self.streaming_route = None
-        self.response_text = None
+        self._reset_streaming_state()
 
     def _cleanup(self):
         """Clean up Porcupine, VAD, barge-in thread, and audio resources."""
         logger.info("Cleaning up wake word mode")
 
         # Clean up barge-in thread if running
-        if self.barge_in_stop_flag is not None:
-            self.barge_in_stop_flag.set()
-        if self.barge_in_thread is not None and self.barge_in_thread.is_alive():
-            try:
-                self.barge_in_thread.join(timeout=0.5)
-            except RuntimeError:
-                pass  # Thread may already be stopped
-        self.barge_in_thread = None
-        self.barge_in_event = None
-        self.barge_in_stop_flag = None
+        self._cleanup_barge_in(timeout=0.5)
 
         if self.porcupine is not None:
             try:

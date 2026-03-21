@@ -284,9 +284,12 @@ class TestWakeWordModeStateIdle(unittest.TestCase):
         mock_stream.close.assert_called_once()
         mock_pa.terminate.assert_called_once()
 
+    @patch('common.wake_word.os.path.exists')
     @patch('common.wake_word.pyaudio.PyAudio')
     @patch('common.wake_word.struct.unpack_from')
-    def test_state_idle_plays_confirmation_beep(self, mock_unpack, mock_pyaudio_class):
+    def test_state_idle_plays_confirmation_beep(self, mock_unpack, mock_pyaudio_class, mock_exists):
+        mock_exists.return_value = True
+
         mock_porcupine = Mock()
         mock_porcupine.sample_rate = 16000
         mock_porcupine.frame_length = 512
@@ -985,7 +988,6 @@ class TestWakeWordModeProcessing(unittest.TestCase):
 
         self.assertEqual(mode.state, State.RESPONDING)
         self.assertEqual(mode.streaming_user_input, "Tell me something long")
-        self.assertIsNotNone(mode.streaming_route)
 
     @patch('common.wake_word.os.path.exists')
     def test_state_processing_plugin_response_never_pre_generates_tts(self, mock_exists):
@@ -1404,7 +1406,7 @@ class TestBargeIn(unittest.TestCase):
         mode.barge_in_event = Mock()
 
         # Call the immediate barge-in handler
-        mode._handle_immediate_barge_in(mock_barge_in_thread)
+        mode._handle_immediate_barge_in()
 
         # Verify beep was played
         self.mock_audio.play_audio_file.assert_called_once_with("/tmp/beep.mp3")
@@ -1465,6 +1467,209 @@ class TestBargeIn(unittest.TestCase):
         # Operation may still be running (daemon thread) - that's expected
         # Wait for it to complete to clean up
         operation_completed.wait(timeout=1.0)
+
+
+class TestHelperMethods(unittest.TestCase):
+    """Tests for the private helper methods extracted in Plan 32."""
+
+    def setUp(self):
+        logging.disable(logging.CRITICAL)
+
+        self.mock_config = Mock()
+        self.mock_config.debug = False
+        self.mock_config.visual_state_indicator = False
+        self.mock_config.wake_confirmation_beep = True
+
+        self.mock_ai = Mock()
+        self.mock_audio = Mock()
+        self.mock_route_message = Mock()
+
+    def tearDown(self):
+        logging.disable(logging.NOTSET)
+
+    def _make_mode(self, **kwargs):
+        return WakeWordMode(
+            self.mock_config, self.mock_ai, self.mock_audio,
+            **{"route_message": self.mock_route_message, **kwargs}
+        )
+
+    # --- _cleanup_pyaudio ---
+
+    def test_cleanup_pyaudio_stops_and_closes_stream(self):
+        mock_stream = Mock()
+        mock_pa = Mock()
+        mode = self._make_mode()
+        mode._cleanup_pyaudio(mock_stream, mock_pa)
+        mock_stream.stop_stream.assert_called_once()
+        mock_stream.close.assert_called_once()
+        mock_pa.terminate.assert_called_once()
+
+    def test_cleanup_pyaudio_handles_none_stream(self):
+        mock_pa = Mock()
+        mode = self._make_mode()
+        mode._cleanup_pyaudio(None, mock_pa)
+        mock_pa.terminate.assert_called_once()
+
+    def test_cleanup_pyaudio_handles_none_pa(self):
+        mock_stream = Mock()
+        mode = self._make_mode()
+        mode._cleanup_pyaudio(mock_stream, None)
+        mock_stream.stop_stream.assert_called_once()
+        mock_stream.close.assert_called_once()
+
+    def test_cleanup_pyaudio_handles_both_none(self):
+        mode = self._make_mode()
+        # Should not raise
+        mode._cleanup_pyaudio(None, None)
+
+    def test_cleanup_pyaudio_suppresses_stream_exception(self):
+        mock_stream = Mock()
+        mock_stream.stop_stream.side_effect = Exception("hw error")
+        mock_pa = Mock()
+        mode = self._make_mode()
+        # Should not raise — exception is logged at DEBUG and absorbed
+        # close() must still be attempted even when stop_stream() fails
+        mode._cleanup_pyaudio(mock_stream, mock_pa)
+        mock_stream.close.assert_called_once()
+        mock_pa.terminate.assert_called_once()
+
+    def test_cleanup_pyaudio_suppresses_pa_exception(self):
+        mock_stream = Mock()
+        mock_pa = Mock()
+        mock_pa.terminate.side_effect = Exception("pa terminate error")
+        mode = self._make_mode()
+        # Should not raise
+        mode._cleanup_pyaudio(mock_stream, mock_pa)
+
+    # --- _cleanup_barge_in ---
+
+    def test_cleanup_barge_in_signals_stop_flag_and_clears_refs(self):
+        mock_stop_flag = Mock()
+        mock_thread = Mock()
+        mock_thread.is_alive.return_value = False
+        mode = self._make_mode()
+        mode.barge_in_stop_flag = mock_stop_flag
+        mode.barge_in_thread = mock_thread
+        mode.barge_in_event = Mock()
+
+        mode._cleanup_barge_in()
+
+        mock_stop_flag.set.assert_called_once()
+        self.assertIsNone(mode.barge_in_thread)
+        self.assertIsNone(mode.barge_in_event)
+        self.assertIsNone(mode.barge_in_stop_flag)
+
+    def test_cleanup_barge_in_joins_live_thread(self):
+        mock_stop_flag = Mock()
+        mock_thread = Mock()
+        mock_thread.is_alive.return_value = True
+        mode = self._make_mode()
+        mode.barge_in_stop_flag = mock_stop_flag
+        mode.barge_in_thread = mock_thread
+        mode.barge_in_event = Mock()
+
+        mode._cleanup_barge_in(timeout=0.5)
+
+        mock_thread.join.assert_called_once_with(timeout=0.5)
+        self.assertIsNone(mode.barge_in_thread)
+
+    def test_cleanup_barge_in_handles_none_refs(self):
+        mode = self._make_mode()
+        mode.barge_in_stop_flag = None
+        mode.barge_in_thread = None
+        mode.barge_in_event = None
+        # Should not raise
+        mode._cleanup_barge_in()
+
+    def test_cleanup_barge_in_suppresses_runtime_error_on_join(self):
+        mock_stop_flag = Mock()
+        mock_thread = Mock()
+        mock_thread.is_alive.return_value = True
+        mock_thread.join.side_effect = RuntimeError("already stopped")
+        mode = self._make_mode()
+        mode.barge_in_stop_flag = mock_stop_flag
+        mode.barge_in_thread = mock_thread
+        mode.barge_in_event = Mock()
+        # Should not raise
+        mode._cleanup_barge_in()
+        self.assertIsNone(mode.barge_in_thread)
+
+    # --- _play_confirmation_beep ---
+
+    @patch('common.wake_word.os.path.exists')
+    def test_play_confirmation_beep_plays_when_configured(self, mock_exists):
+        mock_exists.return_value = True
+        mode = self._make_mode()
+        mode.confirmation_beep_path = "/tmp/beep.mp3"
+
+        mode._play_confirmation_beep()
+
+        self.mock_audio.play_audio_file.assert_called_once_with("/tmp/beep.mp3")
+
+    @patch('common.wake_word.os.path.exists')
+    def test_play_confirmation_beep_skips_when_beep_disabled(self, mock_exists):
+        self.mock_config.wake_confirmation_beep = False
+        mock_exists.return_value = True
+        mode = self._make_mode()
+        mode.confirmation_beep_path = "/tmp/beep.mp3"
+
+        mode._play_confirmation_beep()
+
+        self.mock_audio.play_audio_file.assert_not_called()
+
+    @patch('common.wake_word.os.path.exists')
+    def test_play_confirmation_beep_skips_when_path_is_none(self, mock_exists):
+        mock_exists.return_value = True
+        mode = self._make_mode()
+        mode.confirmation_beep_path = None
+
+        mode._play_confirmation_beep()
+
+        self.mock_audio.play_audio_file.assert_not_called()
+
+    @patch('common.wake_word.os.path.exists')
+    def test_play_confirmation_beep_skips_when_file_missing(self, mock_exists):
+        mock_exists.return_value = False
+        mode = self._make_mode()
+        mode.confirmation_beep_path = "/tmp/beep.mp3"
+
+        mode._play_confirmation_beep()
+
+        self.mock_audio.play_audio_file.assert_not_called()
+
+    @patch('common.wake_word.os.path.exists')
+    def test_play_confirmation_beep_logs_warning_on_playback_error(self, mock_exists):
+        mock_exists.return_value = True
+        self.mock_audio.play_audio_file.side_effect = Exception("audio error")
+        mode = self._make_mode()
+        mode.confirmation_beep_path = "/tmp/beep.mp3"
+        # Should not raise
+        mode._play_confirmation_beep()
+
+    # --- _reset_streaming_state ---
+
+    def test_reset_streaming_state_clears_all_fields(self):
+        mode = self._make_mode()
+        mode.response_text = "some response"
+        mode.streaming_response_text = "some streaming text"
+        mode.streaming_user_input = "some input"
+
+        mode._reset_streaming_state()
+
+        self.assertIsNone(mode.response_text)
+        self.assertIsNone(mode.streaming_response_text)
+        self.assertIsNone(mode.streaming_user_input)
+
+    def test_reset_streaming_state_idempotent_when_already_none(self):
+        mode = self._make_mode()
+        mode.response_text = None
+        mode.streaming_response_text = None
+        mode.streaming_user_input = None
+        # Should not raise
+        mode._reset_streaming_state()
+        self.assertIsNone(mode.response_text)
+        self.assertIsNone(mode.streaming_response_text)
+        self.assertIsNone(mode.streaming_user_input)
 
 
 if __name__ == '__main__':
