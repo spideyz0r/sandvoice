@@ -171,6 +171,17 @@ plan/
 **Document**: [backlog/25-terminal-ui.md](./backlog/25-terminal-ui.md)
 **Description**: Replace flat emoji-based terminal output with a high-end CLI UI: ANSI colors, animated waiting dots, in-place status line updates, inline timing per phase, and clear conversation/status separation. Pure ANSI — no external dependencies, Pi-compatible.
 
+### Priority 34: Wake Word Quick Wins — Config Validation and File Cleanup
+**Document**: [backlog/34-wake-word-quick-wins.md](./backlog/34-wake-word-quick-wins.md)
+**Description**: Extract `_require_config_enabled()` to replace 4 repetitive config validation blocks in `_initialize()`, and `_remove_recorded_audio()` to replace 4 duplicated file-cleanup blocks. ~55 lines removed, no behavior change. Requires Plan 33.
+
+### Priority 35: Wake Word VAD Recorder Extraction
+**Document**: [backlog/35-wake-word-vad-recorder-extraction.md](./backlog/35-wake-word-vad-recorder-extraction.md)
+**Description**: Extract the VAD-based audio recording subsystem from `_state_listening()` into a dedicated `common/vad_recorder.py` module with a `VadRecorder` class. ~130 lines removed from wake_word.py. Requires Plan 34.
+
+### Priority 36: Wake Word Streaming Responder Extraction
+**Document**: [backlog/36-wake-word-streaming-responder-extraction.md](./backlog/36-wake-word-streaming-responder-extraction.md)
+**Description**: Extract the 265-line `_respond_streaming()` pipeline (text queue, TTS worker, audio player worker, barge-in polling) into `common/streaming_responder.py` with a `StreamingResponder` class. ~240 lines removed from wake_word.py. Requires Plan 35.
 
 ### Future Enhancements
 **Document**: [backlog/FUTURE.md](./backlog/FUTURE.md)
