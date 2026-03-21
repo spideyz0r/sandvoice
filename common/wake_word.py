@@ -659,6 +659,7 @@ class WakeWordMode:
     def _cleanup_barge_in(self, timeout=0.3):
         """Signal barge-in thread to stop, join it, and clear all barge-in references."""
         if self.barge_in_stop_flag:
+            logger.debug("Signaled barge-in thread to stop")
             self.barge_in_stop_flag.set()
         if self.barge_in_thread and self.barge_in_thread.is_alive():
             with contextlib.suppress(RuntimeError):
@@ -897,7 +898,6 @@ class WakeWordMode:
 
         # Signal barge-in thread to stop and wait for it to finish
         # Wait for thread to finish to ensure PyAudio stream is closed before LISTENING reopens it
-        logger.debug("Signaled barge-in thread to stop")
         barge_in_triggered = bool(self.barge_in_event and self.barge_in_event.is_set())
         self._cleanup_barge_in(timeout=0.3)
 
