@@ -5,6 +5,7 @@ import logging
 from unittest.mock import Mock, patch
 
 from common.wake_word import WakeWordMode, State
+from common.barge_in import BargeInDetector, _BARGE_IN
 
 
 class TestWakeWordModeInitialization(unittest.TestCase):
@@ -208,7 +209,7 @@ class TestWakeWordModeInitialize(unittest.TestCase):
         with self.assertRaises(RuntimeError) as context:
             mode._initialize()
 
-        self.assertIn("Failed to initialize Porcupine", str(context.exception))
+        self.assertIn("Failed to initialize wake-word mode", str(context.exception))
 
     @patch('common.wake_word.pvporcupine.create')
     @patch('common.wake_word.create_confirmation_beep')
@@ -904,15 +905,18 @@ class TestWakeWordModeProcessing(unittest.TestCase):
         logging.disable(logging.NOTSET)
 
     def _make_mode(self, **kwargs):
-        """Create a WakeWordMode with _start_barge_in_detection mocked out.
+        """Create a WakeWordMode with barge-in detector mocked out.
 
         Tests that exercise state logic (not barge-in thread management) use this
-        to avoid requiring a real Porcupine instance.  Returning None keeps
-        barge_in_thread falsy so error-path cleanup guards in _state_processing
-        are skipped cleanly without AttributeError on barge_in_stop_flag.
+        to avoid requiring a real Porcupine instance.
         """
         mode = WakeWordMode(self.mock_config, self.mock_ai, self.mock_audio, **{"route_message": self.mock_route_message, **kwargs})
-        mode._start_barge_in_detection = Mock(return_value=None)
+        mock_barge_in = Mock(spec=BargeInDetector)
+        mock_barge_in.is_triggered = False
+        mock_barge_in.event = Mock()
+        mock_barge_in.event.is_set.return_value = False
+        mock_barge_in.run_with_polling.side_effect = lambda op, name: op()
+        mode.barge_in = mock_barge_in
         return mode
 
     @patch('common.wake_word.os.path.exists')
@@ -1070,14 +1074,18 @@ class TestWakeWordModeResponding(unittest.TestCase):
         logging.disable(logging.NOTSET)
 
     def _make_mode(self, **kwargs):
-        """Create a WakeWordMode with _start_barge_in_detection mocked out.
+        """Create a WakeWordMode with barge-in detector mocked out.
 
         Tests that exercise state logic (not barge-in thread management) use this
-        to avoid requiring a real Porcupine instance.  Returning None keeps
-        barge_in_thread falsy so error-path cleanup guards are skipped cleanly.
+        to avoid requiring a real Porcupine instance.
         """
         mode = WakeWordMode(self.mock_config, self.mock_ai, self.mock_audio, **{"route_message": self.mock_route_message, **kwargs})
-        mode._start_barge_in_detection = Mock(return_value=None)
+        mock_barge_in = Mock(spec=BargeInDetector)
+        mock_barge_in.is_triggered = False
+        mock_barge_in.event = Mock()
+        mock_barge_in.event.is_set.return_value = False
+        mock_barge_in.run_with_polling.side_effect = lambda op, name: op()
+        mode.barge_in = mock_barge_in
         return mode
 
     @patch('common.wake_word.os.remove')
@@ -1266,21 +1274,11 @@ class TestBargeIn(unittest.TestCase):
         logging.disable(logging.NOTSET)
 
     @patch('common.wake_word.threading.Thread')
-    @patch('common.wake_word.threading.Event')
     @patch('common.wake_word.os.path.exists')
     @patch('common.wake_word.os.remove')
-    def test_barge_in_starts_detection_thread(self, mock_remove, mock_exists, mock_event_class, mock_thread_class):
-        """Test that barge-in detection thread is started when enabled (streaming path)."""
+    def test_barge_in_starts_detection_thread(self, mock_remove, mock_exists, mock_thread_class):
+        """Test that barge-in detection is started when entering responding state."""
         mock_exists.return_value = False
-
-        # __init__ does NOT call _initialize(), so no Events consumed during construction.
-        # _start_barge_in_detection() consumes 2, _respond_streaming() consumes 2 → 4 total.
-        def _make_event(is_set_val=False):
-            e = Mock()
-            e.is_set.return_value = is_set_val
-            return e
-
-        mock_event_class.side_effect = [_make_event() for _ in range(4)]
 
         mock_thread = Mock()
         mock_thread.is_alive.return_value = False
@@ -1292,45 +1290,27 @@ class TestBargeIn(unittest.TestCase):
         self.mock_audio.play_audio_queue.return_value = (True, None, None)
 
         mode = WakeWordMode(self.mock_config, self.mock_ai, self.mock_audio, route_message=self.mock_route_message)
-        mode.porcupine = Mock()
+        mock_barge_in = Mock(spec=BargeInDetector)
+        mock_barge_in.is_triggered = False
+        mock_barge_in.event = Mock()
+        mock_barge_in.event.is_set.return_value = False
+        mode.barge_in = mock_barge_in
         mode.streaming_user_input = "Hey"
         mode.state = State.RESPONDING
 
         mode._state_responding()
 
-        # The streaming path creates threads (tts_worker + player_worker)
+        # barge_in.start() should have been called to ensure detection is running
+        mock_barge_in.start.assert_called()
+        # The streaming path should also create TTS and player threads
         self.assertTrue(mock_thread_class.called)
-        mock_thread.start.assert_called()
-        # _start_barge_in_detection must also create a thread targeting _listen_for_barge_in
-        thread_targets = [call.kwargs.get('target') for call in mock_thread_class.call_args_list]
-        self.assertTrue(
-            any(getattr(t, '__name__', '') == '_listen_for_barge_in' for t in thread_targets),
-            "Expected _listen_for_barge_in to be registered as a thread target"
-        )
 
     @patch('common.wake_word.threading.Thread')
-    @patch('common.wake_word.threading.Event')
     @patch('common.wake_word.os.path.exists')
     @patch('common.wake_word.os.remove')
-    def test_barge_in_transitions_to_listening_on_wake_word(self, mock_remove, mock_exists, mock_event_class, mock_thread_class):
+    def test_barge_in_transitions_to_listening_on_wake_word(self, mock_remove, mock_exists, mock_thread_class):
         """Test that barge-in transitions to LISTENING when wake word detected."""
         mock_exists.return_value = False
-
-        # __init__ does NOT call _initialize() — only run() does, so no Events consumed
-        # during construction.  _start_barge_in_detection() consumes indices 0 and 1
-        # (barge_in_event and barge_in_stop_flag), then _respond_streaming() consumes
-        # indices 2 and 3.  Index 0 must have is_set=True to trigger LISTENING.
-        def _make_event(is_set_val=False):
-            e = Mock()
-            e.is_set.return_value = is_set_val
-            return e
-
-        mock_event_class.side_effect = [
-            _make_event(True),    # _start_barge_in_detection barge_in_event (is_set=True → LISTENING)
-            _make_event(),        # _start_barge_in_detection barge_in_stop_flag
-            _make_event(),        # _respond_streaming interrupt_event
-            _make_event(),        # _respond_streaming production_failed_event
-        ]
 
         mock_thread = Mock()
         mock_thread.is_alive.return_value = False
@@ -1342,7 +1322,13 @@ class TestBargeIn(unittest.TestCase):
         self.mock_audio.play_audio_queue.return_value = (True, None, None)
 
         mode = WakeWordMode(self.mock_config, self.mock_ai, self.mock_audio, route_message=self.mock_route_message)
-        mode.porcupine = Mock()
+        # Simulate barge-in already triggered
+        mock_barge_in = Mock(spec=BargeInDetector)
+        mock_barge_in.is_triggered = True
+        mock_barge_event = Mock()
+        mock_barge_event.is_set.return_value = True
+        mock_barge_in.event = mock_barge_event
+        mode.barge_in = mock_barge_in
         mode.streaming_user_input = "Hey"
         mode.state = State.RESPONDING
 
@@ -1365,14 +1351,13 @@ class TestBargeIn(unittest.TestCase):
         self.mock_audio.play_audio_queue.return_value = (False, None, None)
 
         mode = WakeWordMode(self.mock_config, self.mock_ai, self.mock_audio, route_message=self.mock_route_message)
-        mode.porcupine = Mock()
-        # Mark barge-in thread as already running so _start_barge_in_detection is
-        # skipped and self.barge_in_event is not overwritten with a new real Event.
-        mock_barge_in_thread = Mock()
-        mock_barge_in_thread.is_alive.return_value = True
-        mode.barge_in_thread = mock_barge_in_thread
-        mode.barge_in_event = Mock()
-        mode.barge_in_event.is_set.return_value = True
+        # Set up a mock BargeInDetector with barge-in already triggered
+        mock_barge_in = Mock(spec=BargeInDetector)
+        mock_barge_in.is_triggered = True
+        mock_barge_event = Mock()
+        mock_barge_event.is_set.return_value = True
+        mock_barge_in.event = mock_barge_event
+        mode.barge_in = mock_barge_in
         mode.streaming_user_input = "Hey"
         mode.state = State.RESPONDING
 
@@ -1384,7 +1369,7 @@ class TestBargeIn(unittest.TestCase):
         self.assertIn('stop_event', call_kwargs)
         self.assertIsNotNone(call_kwargs['stop_event'])
 
-        # Should transition to LISTENING (barge-in event is set)
+        # Should transition to LISTENING (barge-in is triggered)
         self.assertEqual(mode.state, State.LISTENING)
 
     @patch('common.wake_word.os.path.exists')
@@ -1399,11 +1384,11 @@ class TestBargeIn(unittest.TestCase):
         mode.confirmation_beep_path = "/tmp/beep.mp3"
         mode.state = State.PROCESSING
 
-        # Set up mock barge-in thread and flags
-        mock_barge_in_thread = Mock()
-        mock_stop_flag = Mock()
-        mode.barge_in_stop_flag = mock_stop_flag
-        mode.barge_in_event = Mock()
+        # Set up mock BargeInDetector
+        mock_barge_in = Mock(spec=BargeInDetector)
+        mock_barge_in.is_triggered = True
+        mock_barge_in.event = Mock()
+        mode.barge_in = mock_barge_in
 
         # Call the immediate barge-in handler
         mode._handle_immediate_barge_in()
@@ -1411,62 +1396,42 @@ class TestBargeIn(unittest.TestCase):
         # Verify beep was played
         self.mock_audio.play_audio_file.assert_called_once_with("/tmp/beep.mp3")
 
-        # Verify barge-in thread was signaled to stop; thread lifecycle is handled by the implementation
-        mock_stop_flag.set.assert_called_once()
+        # Verify barge-in detector was stopped
+        mock_barge_in.stop.assert_called_once()
 
         # Verify cleanup
         mock_remove.assert_called_once_with("/tmp/test.mp3")
         self.assertIsNone(mode.recorded_audio_path)
-        self.assertIsNone(mode.barge_in_event)
-        self.assertIsNone(mode.barge_in_stop_flag)
 
         # Should transition to LISTENING (immediate response)
         self.assertEqual(mode.state, State.LISTENING)
 
-    def test_run_with_barge_in_polling_returns_early_on_interrupt(self):
-        """Test that _run_with_barge_in_polling returns early when barge-in detected."""
-        mode = WakeWordMode.__new__(WakeWordMode)
-        mode.config = self.mock_config
-        mode.barge_in_event = threading.Event()
+    def test_poll_op_returns_barge_in_and_handles_barge_in(self):
+        """Test that _poll_op returns _BARGE_IN and calls _handle_immediate_barge_in."""
+        mode = WakeWordMode(self.mock_config, self.mock_ai, self.mock_audio, route_message=self.mock_route_message)
+        mock_barge_in = Mock(spec=BargeInDetector)
+        mock_barge_in.run_with_polling.return_value = _BARGE_IN
+        mode.barge_in = mock_barge_in
+        mode.state = State.PROCESSING
+        mode.recorded_audio_path = None
+        mode._handle_immediate_barge_in = Mock()
 
-        # Track operation execution
-        operation_started = threading.Event()
-        operation_completed = threading.Event()
+        result = mode._poll_op(lambda: "result", "test_op")
 
-        def slow_operation():
-            operation_started.set()
-            # Wait for a bit to simulate slow API call (kept short to minimize test time)
-            time.sleep(0.3)
-            operation_completed.set()
-            return "result"
+        self.assertIs(result, _BARGE_IN)
+        mode._handle_immediate_barge_in.assert_called_once()
 
-        # Start polling in a thread so we can trigger barge-in
-        result_holder = [None]
+    def test_poll_op_returns_operation_result_on_success(self):
+        """Test that _poll_op returns the operation result when no barge-in."""
+        mode = WakeWordMode(self.mock_config, self.mock_ai, self.mock_audio, route_message=self.mock_route_message)
+        mock_barge_in = Mock(spec=BargeInDetector)
+        mock_barge_in.run_with_polling.return_value = "api_result"
+        mode.barge_in = mock_barge_in
 
-        def run_polling():
-            result_holder[0] = mode._run_with_barge_in_polling(slow_operation, "test")
+        result = mode._poll_op(lambda: "api_result", "test_op")
 
-        polling_thread = threading.Thread(target=run_polling)
-        polling_thread.start()
-
-        # Wait for operation to start
-        operation_started.wait(timeout=1.0)
-
-        # Trigger barge-in
-        mode.barge_in_event.set()
-
-        # Polling should return quickly (use generous timeout for CI stability)
-        polling_thread.join(timeout=0.5)
-        self.assertFalse(polling_thread.is_alive(), "Polling should return quickly on barge-in")
-
-        # Should return (False, None) indicating interrupted
-        completed, result = result_holder[0]
-        self.assertFalse(completed)
-        self.assertIsNone(result)
-
-        # Operation may still be running (daemon thread) - that's expected
-        # Wait for it to complete to clean up
-        operation_completed.wait(timeout=1.0)
+        self.assertEqual(result, "api_result")
+        mode.barge_in.run_with_polling.assert_called_once()
 
 
 class TestHelperMethods(unittest.TestCase):
@@ -1543,56 +1508,29 @@ class TestHelperMethods(unittest.TestCase):
 
     # --- _cleanup_barge_in ---
 
-    def test_cleanup_barge_in_signals_stop_flag_and_clears_refs(self):
-        mock_stop_flag = Mock()
-        mock_thread = Mock()
-        mock_thread.is_alive.return_value = False
+    def test_cleanup_barge_in_calls_stop_on_detector(self):
         mode = self._make_mode()
-        mode.barge_in_stop_flag = mock_stop_flag
-        mode.barge_in_thread = mock_thread
-        mode.barge_in_event = Mock()
+        mock_barge_in = Mock(spec=BargeInDetector)
+        mode.barge_in = mock_barge_in
 
         mode._cleanup_barge_in()
 
-        mock_stop_flag.set.assert_called_once()
-        self.assertIsNone(mode.barge_in_thread)
-        self.assertIsNone(mode.barge_in_event)
-        self.assertIsNone(mode.barge_in_stop_flag)
+        mock_barge_in.stop.assert_called_once_with(timeout=0.3)
 
-    def test_cleanup_barge_in_joins_live_thread(self):
-        mock_stop_flag = Mock()
-        mock_thread = Mock()
-        mock_thread.is_alive.return_value = True
+    def test_cleanup_barge_in_passes_custom_timeout(self):
         mode = self._make_mode()
-        mode.barge_in_stop_flag = mock_stop_flag
-        mode.barge_in_thread = mock_thread
-        mode.barge_in_event = Mock()
+        mock_barge_in = Mock(spec=BargeInDetector)
+        mode.barge_in = mock_barge_in
 
-        mode._cleanup_barge_in(timeout=0.5)
+        mode._cleanup_barge_in(timeout=1.5)
 
-        mock_thread.join.assert_called_once_with(timeout=0.5)
-        self.assertIsNone(mode.barge_in_thread)
+        mock_barge_in.stop.assert_called_once_with(timeout=1.5)
 
-    def test_cleanup_barge_in_handles_none_refs(self):
+    def test_cleanup_barge_in_handles_none_detector(self):
         mode = self._make_mode()
-        mode.barge_in_stop_flag = None
-        mode.barge_in_thread = None
-        mode.barge_in_event = None
+        mode.barge_in = None
         # Should not raise
         mode._cleanup_barge_in()
-
-    def test_cleanup_barge_in_suppresses_runtime_error_on_join(self):
-        mock_stop_flag = Mock()
-        mock_thread = Mock()
-        mock_thread.is_alive.return_value = True
-        mock_thread.join.side_effect = RuntimeError("already stopped")
-        mode = self._make_mode()
-        mode.barge_in_stop_flag = mock_stop_flag
-        mode.barge_in_thread = mock_thread
-        mode.barge_in_event = Mock()
-        # Should not raise
-        mode._cleanup_barge_in()
-        self.assertIsNone(mode.barge_in_thread)
 
     # --- _play_confirmation_beep ---
 

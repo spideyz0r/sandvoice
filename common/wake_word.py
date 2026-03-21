@@ -14,6 +14,7 @@ import webrtcvad
 
 from common.beep_generator import create_confirmation_beep, create_ack_earcon
 from common.ai import pop_streaming_chunk
+from common.barge_in import BargeInDetector, _BARGE_IN
 from common.error_handling import handle_api_error
 
 logger = logging.getLogger(__name__)
@@ -34,10 +35,6 @@ class _CompositeStopEvent:
     def set(self):
         # Only set the interrupt event (do not set barge-in).
         self._interrupt.set()
-
-
-# Sentinel returned by _poll_op when barge-in interrupted the operation.
-_BARGE_IN = object()
 
 
 def _is_enabled_flag(value):
@@ -111,9 +108,7 @@ class WakeWordMode:
         self.response_text = None
         self.streaming_user_input = None
         self.streaming_response_text = None  # Pre-computed plugin response for TTS
-        self.barge_in_event = None  # Event to signal barge-in during TTS
-        self.barge_in_stop_flag = None  # Flag to stop barge-in thread immediately
-        self.barge_in_thread = None  # Thread for barge-in detection
+        self.barge_in = None  # BargeInDetector instance (created in _initialize)
 
         logger.debug("Initializing wake word mode")
 
@@ -225,10 +220,20 @@ class WakeWordMode:
             logger.debug("Porcupine sample rate: %s", self.porcupine.sample_rate)
             logger.debug("Porcupine frame length: %s", self.porcupine.frame_length)
 
+            # Create barge-in detector now that config is validated.
+            self.barge_in = BargeInDetector(
+                access_key=self.config.porcupine_access_key,
+                keyword_paths=getattr(self.config, "porcupine_keyword_paths", None),
+                sensitivity=self.config.wake_word_sensitivity,
+                audio_lock=self._audio_lock,
+                audio=self.audio,
+                config=self.config,
+            )
+
         except RuntimeError:
             raise
         except Exception as e:
-            error_msg = f"Failed to initialize Porcupine: {str(e)}"
+            error_msg = f"Failed to initialize wake-word mode: {str(e)}"
             logger.error(error_msg)
             print(f"Error: {error_msg}")
             raise RuntimeError(error_msg)
@@ -494,120 +499,6 @@ class WakeWordMode:
         finally:
             self._cleanup_pyaudio(audio_stream, pa)
 
-    def _start_barge_in_detection(self):
-        """Start barge-in detection thread.
-
-        Returns:
-            threading.Thread: The barge-in detection thread.
-
-        Raises:
-            RuntimeError: If Porcupine is not initialized (invariant violation —
-                _initialize() must be called before entering the state machine).
-        """
-        if not self.porcupine:
-            raise RuntimeError(
-                "Cannot start barge-in detection: Porcupine is not initialized. "
-                "Wake-word mode requires barge-in and Porcupine must be initialized "
-                "by _initialize() before the state machine runs."
-            )
-
-        self.barge_in_event = threading.Event()
-        self.barge_in_stop_flag = threading.Event()
-        self.barge_in_thread = threading.Thread(
-            target=self._listen_for_barge_in,
-            args=(self.barge_in_event, self.barge_in_stop_flag),
-            daemon=True
-        )
-        self.barge_in_thread.start()
-
-        logger.debug("Barge-in detection started")
-
-        return self.barge_in_thread
-
-    def _check_barge_in_interrupt(self):
-        """Check if barge-in was triggered.
-
-        Returns:
-            bool: True if barge-in detected, False otherwise
-        """
-        # Note: barge_in_event may be None if called before _start_barge_in_detection()
-        # (e.g. from tests or before the state machine starts). The None check guards
-        # against that early-call case only.
-        if self.barge_in_event and self.barge_in_event.is_set():
-            logger.debug("Barge-in interrupt detected")
-            return True
-        return False
-
-    def _run_with_barge_in_polling(self, operation, operation_name="operation"):
-        """Run an operation in background thread, polling for barge-in every 50ms.
-
-        If barge-in is detected, returns immediately without waiting for operation.
-        The operation continues in background but result is discarded.
-
-        Note: On barge-in, the background thread (daemon) continues running until
-        completion. This is a deliberate tradeoff for responsiveness - cancelling
-        API calls mid-flight would require significant client changes. The daemon
-        thread will complete naturally and be cleaned up by the runtime. In practice,
-        users rarely barge-in repeatedly in quick succession, so thread buildup is
-        minimal.
-
-        Limitation: Operations with side effects (e.g., AI conversation history
-        updates, plugin actions) will still complete even after barge-in. This is
-        acceptable for the current use case where barge-in is primarily about
-        responsiveness, not transaction rollback.
-
-        Args:
-            operation: Callable to run
-            operation_name: Name for debug logging
-
-        Returns:
-            tuple: (completed: bool, result: any)
-                - (True, result) if operation completed normally
-                - (False, None) if interrupted by barge-in
-        """
-        # If barge-in is already active, skip starting the operation
-        if self._check_barge_in_interrupt():
-            logger.debug("Barge-in already active before starting %s - skipping", operation_name)
-            return False, None
-
-        result_holder = [None]
-        error_holder = [None]
-
-        def run_in_background():
-            try:
-                result_holder[0] = operation()
-            except Exception as e:
-                error_holder[0] = e
-                # Log at DEBUG only — if no barge-in, the error is re-raised and
-                # logged by the outer handler; a WARNING here would duplicate it.
-                logger.debug("Background %s failed: %s", operation_name, e)
-
-        thread = threading.Thread(target=run_in_background, daemon=True)
-        thread.start()
-
-        # Poll every 50ms for completion or barge-in (faster response)
-        poll_count = 0
-        while thread.is_alive():
-            if self._check_barge_in_interrupt():
-                logger.debug("Barge-in during %s - responding immediately!", operation_name)
-                return False, None
-            time.sleep(0.05)
-            poll_count += 1
-            # Every 2 seconds (40 polls), check if audio is unexpectedly playing
-            if logger.isEnabledFor(logging.DEBUG) and poll_count % 40 == 0:
-                try:
-                    import pygame
-                    if pygame.mixer.get_init() and pygame.mixer.music.get_busy():
-                        logger.debug(">>> UNEXPECTED: Audio is playing during %s polling!", operation_name)
-                except Exception:
-                    pass
-
-        # Operation completed - check for errors
-        if error_holder[0] is not None:
-            raise error_holder[0]
-
-        return True, result_holder[0]
-
     def _handle_immediate_barge_in(self):
         """Handle barge-in with immediate beep and transition to LISTENING."""
         logger.info("=== BARGE-IN TRIGGERED === Current state: %s", self.state.name)
@@ -657,16 +548,9 @@ class WakeWordMode:
                 logger.debug("Failed to terminate PyAudio instance: %s", e)
 
     def _cleanup_barge_in(self, timeout=0.3):
-        """Signal barge-in thread to stop, join it, and clear all barge-in references."""
-        if self.barge_in_stop_flag:
-            logger.debug("Signaled barge-in thread to stop")
-            self.barge_in_stop_flag.set()
-        if self.barge_in_thread and self.barge_in_thread.is_alive():
-            with contextlib.suppress(RuntimeError):
-                self.barge_in_thread.join(timeout=timeout)
-        self.barge_in_thread = None
-        self.barge_in_event = None
-        self.barge_in_stop_flag = None
+        """Signal barge-in detector to stop and wait briefly for cleanup."""
+        if self.barge_in is not None:
+            self.barge_in.stop(timeout=timeout)
 
     def _play_confirmation_beep(self):
         """Play confirmation beep if configured and the file exists."""
@@ -689,13 +573,15 @@ class WakeWordMode:
     def _poll_op(self, operation, name):
         """Run *operation* with barge-in polling.
 
-        Always polls for barge-in interruption (barge-in is unconditionally
-        active in wake-word mode).  If barge-in interrupts, calls
-        _handle_immediate_barge_in and returns the _BARGE_IN sentinel.
+        Delegates to ``self.barge_in.run_with_polling``.  If barge-in
+        interrupts, calls _handle_immediate_barge_in and returns the
+        _BARGE_IN sentinel so callers can early-return without further logic.
         Otherwise returns the operation result directly.
         """
-        completed, result = self._run_with_barge_in_polling(operation, name)
-        if not completed:
+        if self.barge_in is None:
+            raise RuntimeError("Barge-in detector is not initialized; ensure _initialize() has been called")
+        result = self.barge_in.run_with_polling(operation, name)
+        if result is _BARGE_IN:
             self._handle_immediate_barge_in()
             return _BARGE_IN
         return result
@@ -724,8 +610,10 @@ class WakeWordMode:
             self.state = State.IDLE
             return
 
-        # Start barge-in detection thread (will run through PROCESSING and RESPONDING)
-        barge_in_thread = self._start_barge_in_detection()
+        # Start barge-in detection (runs through PROCESSING and RESPONDING)
+        if self.barge_in is None:
+            raise RuntimeError("Barge-in detector is not initialized; ensure _initialize() has been called")
+        self.barge_in.start()
 
         try:
             # Capture path locally to avoid race with barge-in clearing self.recorded_audio_path
@@ -744,7 +632,7 @@ class WakeWordMode:
             print(f"You: {user_input}")
 
             # Check for barge-in before starting response generation
-            if barge_in_thread and self._check_barge_in_interrupt():
+            if self.barge_in.is_triggered:
                 logger.debug("Barge-in detected after transcription, before response generation")
                 self._handle_immediate_barge_in()
                 return
@@ -768,7 +656,7 @@ class WakeWordMode:
                 self.streaming_user_input = user_input
                 self.response_text = None
 
-                if barge_in_thread and self._check_barge_in_interrupt():
+                if self.barge_in.is_triggered:
                     logger.debug("Barge-in detected after route definition, before streaming")
                     self._handle_immediate_barge_in()
                     return
@@ -790,12 +678,12 @@ class WakeWordMode:
             print(f"{self.config.botname}: {self.response_text}\n")
 
             # Final barge-in check before transitioning to RESPONDING
-            if barge_in_thread and self._check_barge_in_interrupt():
+            if self.barge_in.is_triggered:
                 logger.debug("Barge-in detected after processing completed, before RESPONDING")
                 self._handle_immediate_barge_in()
                 return
 
-            # Transition to RESPONDING state (barge-in thread continues running)
+            # Transition to RESPONDING state (barge-in detector continues running)
             logger.debug("=== TRANSITIONING TO RESPONDING ===")
             if self.config.debug:
                 self.audio.log_mixer_state("BEFORE RESPONDING transition")
@@ -814,72 +702,14 @@ class WakeWordMode:
                 except Exception as cleanup_error:
                     logger.warning("Failed to clean up recording file after error: %s", cleanup_error)
 
-            # Stop barge-in thread if it was started
-            if barge_in_thread:
-                self._cleanup_barge_in(timeout=1.0)
+            # Stop barge-in detector
+            self._cleanup_barge_in(timeout=1.0)
 
             self.recorded_audio_path = None
             self._reset_streaming_state()
 
             # Return to IDLE on error
             self.state = State.IDLE
-
-    def _listen_for_barge_in(self, barge_in_event, stop_flag):
-        """Background thread to listen for wake word during TTS playback.
-
-        Creates its own Porcupine instance to avoid thread-safety issues.
-
-        Args:
-            barge_in_event: threading.Event to signal when wake word detected
-            stop_flag: threading.Event to signal immediate thread termination
-        """
-        porcupine_instance = None
-        pa = None
-        audio_stream = None
-
-        try:
-            # Create dedicated Porcupine instance for this thread (thread-safety)
-            logger.debug("Barge-in thread: Creating Porcupine instance...")
-            porcupine_instance = self._create_porcupine_instance()
-            logger.debug("Barge-in thread: Porcupine created successfully")
-
-            logger.debug("Barge-in thread: Opening PyAudio stream...")
-            pa = pyaudio.PyAudio()
-            audio_stream = pa.open(
-                rate=porcupine_instance.sample_rate,
-                channels=1,
-                format=pyaudio.paInt16,
-                input=True,
-                frames_per_buffer=porcupine_instance.frame_length
-            )
-
-            logger.debug("Barge-in thread: Audio stream opened, listening for wake word...")
-
-            while self.running and not barge_in_event.is_set() and not stop_flag.is_set():
-                try:
-                    pcm = audio_stream.read(porcupine_instance.frame_length, exception_on_overflow=False)
-                    pcm = struct.unpack_from("h" * porcupine_instance.frame_length, pcm)
-
-                    keyword_index = porcupine_instance.process(pcm)
-
-                    if keyword_index >= 0:
-                        logger.debug("Barge-in: Wake word detected! Interrupting...")
-                        barge_in_event.set()
-                        break
-
-                except Exception as e:
-                    logger.warning("Barge-in thread error reading audio: %s", e)
-                    break
-
-        except Exception as e:
-            logger.error("Barge-in detection thread error: %s", e)
-        finally:
-            self._cleanup_pyaudio(audio_stream, pa)
-            if porcupine_instance is not None:
-                try:
-                    porcupine_instance.delete()
-                except Exception as e:
-                    logger.warning("Failed to delete barge-in Porcupine instance: %s", e)
 
     def _state_responding(self):
         """RESPONDING state: Play streaming TTS response.
@@ -896,9 +726,9 @@ class WakeWordMode:
         if self.streaming_user_input is not None or self.streaming_response_text is not None:
             self._respond_streaming()
 
-        # Signal barge-in thread to stop and wait for it to finish
+        # Signal barge-in detector to stop and wait for it to finish
         # Wait for thread to finish to ensure PyAudio stream is closed before LISTENING reopens it
-        barge_in_triggered = bool(self.barge_in_event and self.barge_in_event.is_set())
+        barge_in_triggered = self.barge_in is not None and self.barge_in.is_triggered
         self._cleanup_barge_in(timeout=0.3)
 
         # Clean up temporary recorded audio file
@@ -943,15 +773,9 @@ class WakeWordMode:
         self.streaming_response_text = None
 
         # Ensure barge-in detection is running (always required in wake-word mode)
-        thread_already_running = (
-            self.barge_in_thread is not None and
-            self.barge_in_thread.is_alive()
-        )
+        self.barge_in.start()  # no-op if already running
 
-        if not thread_already_running:
-            self._start_barge_in_detection()
-
-        barge_in_event = self.barge_in_event
+        barge_in_event = self.barge_in.event
         interrupt_event = threading.Event()
         production_failed_event = threading.Event()
 
