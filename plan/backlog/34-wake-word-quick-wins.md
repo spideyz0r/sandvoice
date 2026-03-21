@@ -63,10 +63,9 @@ single call.
 
 ```python
 def _require_config_enabled(self, flag_value, flag_name, detail=""):
-    """Raise RuntimeError if flag_value is not 'enabled'."""
+    """Raise RuntimeError if flag_value is not considered enabled by _is_enabled_flag()."""
     if not _is_enabled_flag(flag_value):
         msg = f"Wake-word mode requires {flag_name} to be enabled. {detail}".strip()
-        logger.error(msg)
         print(f"Error: {msg}")
         raise RuntimeError(msg)
 ```

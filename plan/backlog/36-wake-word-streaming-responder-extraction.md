@@ -78,17 +78,22 @@ thread, and barge-in polling. `_CompositeStopEvent` moves into this module (or
 
 - Add `self.responder = StreamingResponder(self.ai, self.audio, self._audio_lock, self.barge_in)`
   in `_initialize()`.
-- Replace `_respond_streaming()` with a thin call:
+- Replace the body of `_respond_streaming()` with a thin wrapper (keeping its no-arg
+  signature so `_state_responding()` call sites stay unchanged):
 
 ```python
-def _respond_streaming(self, user_input, response_text=None):
-    interrupted = not self.responder.respond(user_input, response_text)
+def _respond_streaming(self):
+    user_input = self.streaming_user_input
+    self.streaming_user_input = None
+    precomputed_text = self.streaming_response_text
+    self.streaming_response_text = None
+    interrupted = not self.responder.respond(user_input, precomputed_text)
     if interrupted:
         self._handle_immediate_barge_in()
     return interrupted
 ```
 
-- `_state_responding()` and `_state_processing()` call sites remain unchanged.
+- `_state_responding()` call site remains unchanged (`self._respond_streaming()`).
 
 ---
 

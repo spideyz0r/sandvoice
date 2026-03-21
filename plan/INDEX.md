@@ -173,7 +173,7 @@ plan/
 
 ### Priority 34: Wake Word Quick Wins — Config Validation and File Cleanup
 **Document**: [backlog/34-wake-word-quick-wins.md](./backlog/34-wake-word-quick-wins.md)
-**Description**: Extract `_require_config_enabled()` to replace 5 repetitive config validation blocks in `_initialize()`, and `_remove_recorded_audio()` to replace 4 duplicated file-cleanup blocks. ~55 lines removed, no behavior change. Requires Plan 33.
+**Description**: Extract `_require_config_enabled()` to replace 4 repetitive config validation blocks in `_initialize()`, and `_remove_recorded_audio()` to replace 4 duplicated file-cleanup blocks. ~55 lines removed, no behavior change. Requires Plan 33.
 
 ### Priority 35: Wake Word VAD Recorder Extraction
 **Document**: [backlog/35-wake-word-vad-recorder-extraction.md](./backlog/35-wake-word-vad-recorder-extraction.md)
