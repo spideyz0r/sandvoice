@@ -45,8 +45,8 @@ class BargeInDetector:
                 calls inside the host WakeWordMode.  Not used by the detector
                 itself; stored so callers can pass it along if needed.
             audio: Audio instance (stored for future use; not used internally).
-            config: Config instance; used to read ``wake_phrase`` and
-                ``porcupine_access_key`` when creating Porcupine instances.
+            config: Config instance; used to read ``wake_phrase`` when
+                creating Porcupine instances with built-in keywords.
         """
         self._access_key = access_key
         self._keyword_paths = keyword_paths
@@ -84,15 +84,22 @@ class BargeInDetector:
                 non-blocking stop (signal only, no join).
         """
         self._stop_flag.set()
-        if timeout != 0 and self._thread is not None and self._thread.is_alive():
+        thread = self._thread
+        if thread is None:
+            logger.debug("Barge-in detection stop requested, but no thread is running")
+            return
+        if timeout != 0 and thread.is_alive():
             try:
-                self._thread.join(timeout=timeout)
+                thread.join(timeout=timeout)
             except RuntimeError:
                 pass
-        self._thread = None
-        self._stop_flag.clear()
-        self._event.clear()
-        logger.debug("Barge-in detection stopped")
+        if not thread.is_alive():
+            self._thread = None
+            self._stop_flag.clear()
+            self._event.clear()
+            logger.debug("Barge-in detection stopped")
+        else:
+            logger.debug("Barge-in detection stop requested, but thread is still running")
 
     def clear(self):
         """Reset the triggered flag (re-arm for next detection cycle)."""

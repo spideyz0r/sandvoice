@@ -2,7 +2,7 @@ import logging
 import threading
 import time
 import unittest
-from unittest.mock import Mock, MagicMock, patch, call
+from unittest.mock import Mock, patch
 
 from common.barge_in import BargeInDetector, _BARGE_IN
 
@@ -122,7 +122,8 @@ class TestBargeInDetectorStartStop(unittest.TestCase):
     def test_stop_signals_thread_and_clears_state(self):
         d = self._make_detector()
         mock_thread = Mock()
-        mock_thread.is_alive.return_value = True
+        # Simulate thread alive before join, dead after join
+        mock_thread.is_alive.side_effect = [True, False]
         d._thread = mock_thread
         d._event.set()
 
@@ -134,6 +135,8 @@ class TestBargeInDetectorStartStop(unittest.TestCase):
         self.assertFalse(d._event.is_set())
 
     def test_stop_nonblocking_when_timeout_zero(self):
+        # timeout=0 signals the stop flag but does not join; since the thread
+        # is still alive, internal state is NOT reset (prevents duplicate threads).
         d = self._make_detector()
         mock_thread = Mock()
         mock_thread.is_alive.return_value = True
@@ -142,9 +145,12 @@ class TestBargeInDetectorStartStop(unittest.TestCase):
         d.stop(timeout=0)
 
         mock_thread.join.assert_not_called()
-        self.assertIsNone(d._thread)
+        self.assertIsNotNone(d._thread)  # thread ref kept until it actually exits
+        self.assertTrue(d._stop_flag.is_set())  # stop was signaled
 
     def test_stop_suppresses_runtime_error_on_join(self):
+        # RuntimeError from join() is suppressed; since the thread is still alive
+        # after the failed join, internal state is not reset.
         d = self._make_detector()
         mock_thread = Mock()
         mock_thread.is_alive.return_value = True
@@ -152,7 +158,9 @@ class TestBargeInDetectorStartStop(unittest.TestCase):
         d._thread = mock_thread
         # Should not raise
         d.stop(timeout=0.1)
-        self.assertIsNone(d._thread)
+        # Thread still alive after failed join — ref and stop flag kept set
+        self.assertIsNotNone(d._thread)
+        self.assertTrue(d._stop_flag.is_set())
 
     def test_stop_before_start_does_not_crash(self):
         d = self._make_detector()
@@ -320,7 +328,6 @@ class TestBargeInDetectorDetectionLoop(unittest.TestCase):
         mock_porcupine.process.side_effect = [-1, -1, 0]  # wake word on 3rd call
         mock_porcupine_create.return_value = mock_porcupine
 
-        call_count = [0]
         def fake_read(n, exception_on_overflow=False):
             return b'\x00' * (n * 2)
         mock_stream = Mock()
@@ -339,7 +346,6 @@ class TestBargeInDetectorDetectionLoop(unittest.TestCase):
             d.stop(timeout=0.5)
 
         self.assertTrue(detected, "Expected wake word to be detected and event set")
-        self.assertTrue(d.is_triggered or True)  # may be cleared by stop(), check we got here
 
     @patch('common.barge_in.pvporcupine.create')
     @patch('common.barge_in.pyaudio.PyAudio')
