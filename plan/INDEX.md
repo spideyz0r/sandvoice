@@ -165,7 +165,7 @@ plan/
 
 
 ### Priority 32: Wake Word Dead Code and Duplicate Extraction
-**Document**: [backlog/32-wake-word-dead-code-and-duplicates.md](./backlog/32-wake-word-dead-code-and-duplicates.md)
+**Document**: [completed/32-wake-word-dead-code-and-duplicates.md](./completed/32-wake-word-dead-code-and-duplicates.md)
 **Description**: Remove `self.streaming_route` (never read) and `_should_stream_default_route()` (always returns True). Extract four repeated patterns into helpers: `_cleanup_pyaudio()`, `_cleanup_barge_in()`, `_play_confirmation_beep()`, `_reset_streaming_state()`. ~95 lines removed, no behavior change.
 
 ### Priority 33: Wake Word Barge-In Detector Extraction
