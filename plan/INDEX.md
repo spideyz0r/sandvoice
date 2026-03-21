@@ -91,14 +91,6 @@ plan/
 **Document**: [completed/31-wake-word-route-always-required.md](./completed/31-wake-word-route-always-required.md)
 **Description**: Remove the dead-code `else` branch in `_state_processing` that handles a `None` route_message. sandvoice.py always provides this callback; the fallback path is unreachable. Fail-fast in `__init__` if None. ~30 lines removed.
 
-### Priority 32: Wake Word Dead Code and Duplicate Extraction
-**Document**: [completed/32-wake-word-dead-code-and-duplicates.md](./completed/32-wake-word-dead-code-and-duplicates.md)
-**Description**: Remove `self.streaming_route` (never read) and `_should_stream_default_route()` (always returns True). Extract four repeated patterns into helpers: `_cleanup_pyaudio()`, `_cleanup_barge_in()`, `_play_confirmation_beep()`, `_reset_streaming_state()`. ~95 lines removed, no behavior change.
-
-### Priority 33: Wake Word Barge-In Detector Extraction
-**Document**: [completed/33-wake-word-barge-in-extractor.md](./completed/33-wake-word-barge-in-extractor.md)
-**Description**: Extract the five barge-in detection methods from `WakeWordMode` into a dedicated `common/barge_in.py` module with a `BargeInDetector` class (start/stop/is_triggered/run_with_polling). ~200 lines removed from wake_word.py. Requires Plan 32.
-
 ---
 
 ## In Progress 🚧
@@ -171,6 +163,14 @@ plan/
 **Document**: [backlog/25-terminal-ui.md](./backlog/25-terminal-ui.md)
 **Description**: Replace flat emoji-based terminal output with a high-end CLI UI: ANSI colors, animated waiting dots, in-place status line updates, inline timing per phase, and clear conversation/status separation. Pure ANSI — no external dependencies, Pi-compatible.
 
+
+### Priority 32: Wake Word Dead Code and Duplicate Extraction
+**Document**: [completed/32-wake-word-dead-code-and-duplicates.md](./completed/32-wake-word-dead-code-and-duplicates.md)
+**Description**: Remove `self.streaming_route` (never read) and `_should_stream_default_route()` (always returns True). Extract four repeated patterns into helpers: `_cleanup_pyaudio()`, `_cleanup_barge_in()`, `_play_confirmation_beep()`, `_reset_streaming_state()`. ~95 lines removed, no behavior change.
+
+### Priority 33: Wake Word Barge-In Detector Extraction
+**Document**: [backlog/33-wake-word-barge-in-extractor.md](./backlog/33-wake-word-barge-in-extractor.md)
+**Description**: Extract the five barge-in detection methods from `WakeWordMode` into a dedicated `common/barge_in.py` module with a `BargeInDetector` class (start/stop/is_triggered/run_with_polling). ~200 lines removed from wake_word.py. Requires Plan 32.
 
 ### Future Enhancements
 **Document**: [backlog/FUTURE.md](./backlog/FUTURE.md)
