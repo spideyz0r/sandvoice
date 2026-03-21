@@ -159,37 +159,26 @@ class WakeWordMode:
             print(f"Error: {error_msg}")
             raise RuntimeError(error_msg)
 
-        if not _is_enabled_flag(getattr(self.config, "vad_enabled", False)):
-            error_msg = (
-                "Wake-word mode requires VAD-based recording. "
-                "Enable it in your config: vad_enabled: enabled"
-            )
-            print(f"Error: {error_msg}")
-            raise RuntimeError(error_msg)
-
-        if not _is_enabled_flag(getattr(self.config, "bot_voice", False)):
-            error_msg = (
-                "Wake-word mode requires voice output to be enabled. "
-                "Enable it in your config: bot_voice: enabled"
-            )
-            print(f"Error: {error_msg}")
-            raise RuntimeError(error_msg)
-
-        if not _is_enabled_flag(getattr(self.config, "stream_responses", False)):
-            error_msg = (
-                "Wake-word mode requires streaming responses. "
-                "Enable it in your config: stream_responses: enabled"
-            )
-            print(f"Error: {error_msg}")
-            raise RuntimeError(error_msg)
-
-        if not _is_enabled_flag(getattr(self.config, "stream_tts", False)):
-            error_msg = (
-                "Wake-word mode requires streaming TTS. "
-                "Enable it in your config: stream_tts: enabled"
-            )
-            print(f"Error: {error_msg}")
-            raise RuntimeError(error_msg)
+        self._require_config_enabled(
+            getattr(self.config, "vad_enabled", False),
+            "VAD-based recording",
+            "Enable it in your config: vad_enabled: enabled",
+        )
+        self._require_config_enabled(
+            getattr(self.config, "bot_voice", False),
+            "voice output",
+            "Enable it in your config: bot_voice: enabled",
+        )
+        self._require_config_enabled(
+            getattr(self.config, "stream_responses", False),
+            "streaming responses",
+            "Enable it in your config: stream_responses: enabled",
+        )
+        self._require_config_enabled(
+            getattr(self.config, "stream_tts", False),
+            "streaming TTS",
+            "Enable it in your config: stream_tts: enabled",
+        )
 
         try:
             keyword_paths = getattr(self.config, "porcupine_keyword_paths", None)
@@ -293,6 +282,24 @@ class WakeWordMode:
                 keywords=[wake_keyword],
                 sensitivities=[self.config.wake_word_sensitivity]
             )
+
+    def _require_config_enabled(self, flag_value, flag_name, detail=""):
+        """Raise RuntimeError if flag_value is not considered enabled by _is_enabled_flag()."""
+        if not _is_enabled_flag(flag_value):
+            msg = f"Wake-word mode requires {flag_name} to be enabled. {detail}".strip()
+            print(f"Error: {msg}")
+            raise RuntimeError(msg)
+
+    def _remove_recorded_audio(self):
+        """Remove the temporary recorded audio file if it exists and clear the path."""
+        if not self.recorded_audio_path:
+            return
+        if os.path.exists(self.recorded_audio_path):
+            try:
+                os.remove(self.recorded_audio_path)
+            except OSError as e:
+                logger.debug("Failed to remove recorded audio: %s", e)
+        self.recorded_audio_path = None
 
     def _state_idle(self):
         """IDLE state: Listen for wake word using Porcupine.
@@ -459,11 +466,7 @@ class WakeWordMode:
                         wf.setframerate(vad_sample_rate)
                         wf.writeframes(b''.join(frames))
                 except Exception:
-                    try:
-                        if self.recorded_audio_path and os.path.exists(self.recorded_audio_path):
-                            os.remove(self.recorded_audio_path)
-                    finally:
-                        self.recorded_audio_path = None
+                    self._remove_recorded_audio()
                     raise
 
                 logger.debug("Recorded audio saved: %s", self.recorded_audio_path)
@@ -516,12 +519,7 @@ class WakeWordMode:
         self._cleanup_barge_in(timeout=0.3)
 
         # Clean up any partial data
-        if self.recorded_audio_path and os.path.exists(self.recorded_audio_path):
-            try:
-                os.remove(self.recorded_audio_path)
-            except OSError as e:
-                logger.debug("Failed to remove recorded audio file '%s': %s", self.recorded_audio_path, e)
-        self.recorded_audio_path = None
+        self._remove_recorded_audio()
         self._reset_streaming_state()
 
         # Play confirmation beep
@@ -695,17 +693,10 @@ class WakeWordMode:
             print(f"Error: {error_msg}")
 
             # Clean up recorded audio file on error
-            if self.recorded_audio_path and os.path.exists(self.recorded_audio_path):
-                try:
-                    os.remove(self.recorded_audio_path)
-                    logger.debug("Cleaned up recording after error: %s", self.recorded_audio_path)
-                except Exception as cleanup_error:
-                    logger.warning("Failed to clean up recording file after error: %s", cleanup_error)
+            self._remove_recorded_audio()
 
             # Stop barge-in detector
             self._cleanup_barge_in(timeout=1.0)
-
-            self.recorded_audio_path = None
             self._reset_streaming_state()
 
             # Return to IDLE on error
@@ -732,15 +723,9 @@ class WakeWordMode:
         self._cleanup_barge_in(timeout=0.3)
 
         # Clean up temporary recorded audio file
-        if self.recorded_audio_path and os.path.exists(self.recorded_audio_path):
-            try:
-                os.remove(self.recorded_audio_path)
-                logger.debug("Cleaned up recording: %s", self.recorded_audio_path)
-            except Exception as e:
-                logger.warning("Failed to clean up recording file: %s", e)
+        self._remove_recorded_audio()
 
         # Reset for next cycle
-        self.recorded_audio_path = None
         self.response_text = None
 
         # Transition to LISTENING if barge-in occurred, otherwise back to IDLE

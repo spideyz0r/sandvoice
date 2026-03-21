@@ -1210,7 +1210,7 @@ class TestWakeWordModeResponding(unittest.TestCase):
     @patch('common.wake_word.os.path.exists')
     def test_state_responding_handles_cleanup_error(self, mock_exists, mock_remove):
         mock_exists.return_value = True
-        mock_remove.side_effect = Exception("Cleanup failed")
+        mock_remove.side_effect = OSError("Cleanup failed")
 
         self.mock_config.botname = "TestBot"
         self.mock_config.stream_tts_boundary = "sentence"
@@ -1608,6 +1608,67 @@ class TestHelperMethods(unittest.TestCase):
         self.assertIsNone(mode.response_text)
         self.assertIsNone(mode.streaming_response_text)
         self.assertIsNone(mode.streaming_user_input)
+
+
+    # --- _require_config_enabled ---
+
+    def test_require_config_enabled_raises_when_disabled(self):
+        mode = self._make_mode()
+        with self.assertRaises(RuntimeError) as ctx:
+            mode._require_config_enabled("disabled", "VAD", "Set vad_enabled: enabled")
+        self.assertIn("VAD", str(ctx.exception))
+        self.assertIn("Set vad_enabled: enabled", str(ctx.exception))
+
+    def test_require_config_enabled_raises_for_false(self):
+        mode = self._make_mode()
+        with self.assertRaises(RuntimeError):
+            mode._require_config_enabled(False, "bot_voice", "")
+
+    def test_require_config_enabled_passes_when_enabled(self):
+        mode = self._make_mode()
+        # Should not raise
+        mode._require_config_enabled("enabled", "VAD", "")
+        mode._require_config_enabled(True, "bot_voice", "")
+
+    # --- _remove_recorded_audio ---
+
+    @patch('common.wake_word.os.path.exists')
+    @patch('common.wake_word.os.remove')
+    def test_remove_recorded_audio_removes_existing_file(self, mock_remove, mock_exists):
+        mock_exists.return_value = True
+        mode = self._make_mode()
+        mode.recorded_audio_path = "/tmp/recording.wav"
+        mode._remove_recorded_audio()
+        mock_remove.assert_called_once_with("/tmp/recording.wav")
+        self.assertIsNone(mode.recorded_audio_path)
+
+    @patch('common.wake_word.os.path.exists')
+    @patch('common.wake_word.os.remove')
+    def test_remove_recorded_audio_skips_missing_file(self, mock_remove, mock_exists):
+        mock_exists.return_value = False
+        mode = self._make_mode()
+        mode.recorded_audio_path = "/tmp/missing.wav"
+        mode._remove_recorded_audio()
+        mock_remove.assert_not_called()
+        self.assertIsNone(mode.recorded_audio_path)
+
+    def test_remove_recorded_audio_noop_when_path_none(self):
+        mode = self._make_mode()
+        mode.recorded_audio_path = None
+        # Should not raise
+        mode._remove_recorded_audio()
+        self.assertIsNone(mode.recorded_audio_path)
+
+    @patch('common.wake_word.os.path.exists')
+    @patch('common.wake_word.os.remove')
+    def test_remove_recorded_audio_handles_oserror(self, mock_remove, mock_exists):
+        mock_exists.return_value = True
+        mock_remove.side_effect = OSError("Permission denied")
+        mode = self._make_mode()
+        mode.recorded_audio_path = "/tmp/recording.wav"
+        # Should not raise; path should be cleared
+        mode._remove_recorded_audio()
+        self.assertIsNone(mode.recorded_audio_path)
 
 
 if __name__ == '__main__':
