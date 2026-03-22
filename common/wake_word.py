@@ -5,16 +5,15 @@ import queue
 import struct
 import threading
 import time
-import wave
 from enum import Enum
 
 import pvporcupine
 import pyaudio
-import webrtcvad
 
 from common.beep_generator import create_confirmation_beep, create_ack_earcon
 from common.ai import pop_streaming_chunk
 from common.barge_in import BargeInDetector, _BARGE_IN
+from common.vad_recorder import VadRecorder
 from common.error_handling import handle_api_error
 
 logger = logging.getLogger(__name__)
@@ -109,6 +108,7 @@ class WakeWordMode:
         self.streaming_user_input = None
         self.streaming_response_text = None  # Pre-computed plugin response for TTS
         self.barge_in = None  # BargeInDetector instance (created in _initialize)
+        self.vad_recorder = None  # VadRecorder instance (created in _initialize)
 
         logger.debug("Initializing wake word mode")
 
@@ -251,6 +251,10 @@ class WakeWordMode:
                 logger.warning("Failed to create ack earcon: %s", e)
                 self.ack_earcon_path = None
 
+        self.vad_recorder = VadRecorder(
+            self.config, self.audio, self._audio_lock, self.ack_earcon_path
+        )
+
     def _create_porcupine_instance(self):
         """Create a new Porcupine instance with current config.
 
@@ -353,157 +357,21 @@ class WakeWordMode:
         if self.config.visual_state_indicator:
             print("🎤 Listening...")
 
-        # Debug: Check if any audio is unexpectedly playing when we enter LISTENING
         if self.config.debug:
             self.audio.log_mixer_state("LISTENING state entered")
 
-        # Initialize VAD
-        vad = webrtcvad.Vad(self.config.vad_aggressiveness)
-
-        # Audio parameters
-        sample_rate = self.config.rate
-        frame_duration_ms = self.config.vad_frame_duration
-
-        # VAD requires 16-bit PCM audio at 8kHz, 16kHz, 32kHz, or 48kHz
-        # If config.rate doesn't match, we need to handle it
-        vad_sample_rates = [8000, 16000, 32000, 48000]
-        if sample_rate not in vad_sample_rates:
-            # Find closest supported rate
-            vad_sample_rate = min(vad_sample_rates, key=lambda x: abs(x - sample_rate))
-            logger.debug("VAD requires specific sample rates. Using %sHz instead of %sHz", vad_sample_rate, sample_rate)
-        else:
-            vad_sample_rate = sample_rate
-
-        # Recalculate frame size for VAD sample rate
-        vad_frame_size = int(vad_sample_rate * frame_duration_ms / 1000)
-
-        pa = None
-        audio_stream = None
-        frames = []
-        silence_start = None
-        recording_start = time.time()
-
         try:
-            pa = pyaudio.PyAudio()
-            audio_stream = pa.open(
-                rate=vad_sample_rate,
-                channels=1,  # VAD requires mono
-                format=pyaudio.paInt16,
-                input=True,
-                frames_per_buffer=vad_frame_size
-            )
-
-            logger.debug("Recording with VAD: %sHz, frame_duration=%sms", vad_sample_rate, frame_duration_ms)
-
-            while self.running and self.state == State.LISTENING:
-                # Check timeout
-                elapsed = time.time() - recording_start
-                if elapsed > self.config.vad_timeout:
-                    logger.debug("VAD timeout reached (%ss)", self.config.vad_timeout)
-                    break
-
-                # Read audio frame
-                try:
-                    pcm = audio_stream.read(vad_frame_size, exception_on_overflow=False)
-                except Exception as e:
-                    logger.error("Error reading audio frame: %s", e)
-                    break
-
-                frames.append(pcm)
-
-                # Run VAD on frame
-                try:
-                    is_speech = vad.is_speech(pcm, vad_sample_rate)
-                except Exception as e:
-                    logger.warning("VAD processing error: %s", e)
-                    is_speech = True  # Assume speech on error
-
-                if is_speech:
-                    # Reset silence timer
-                    silence_start = None
-                else:
-                    # Track silence duration
-                    if silence_start is None:
-                        silence_start = time.time()
-                    else:
-                        silence_duration = time.time() - silence_start
-                        if silence_duration >= self.config.vad_silence_duration:
-                            logger.debug("Silence detected (%.2fs)", silence_duration)
-                            break
-
-            # Save recorded audio to temporary WAV file
-            if frames:
-                # Calculate final recording duration
-                elapsed = time.time() - recording_start
-
-                # Capture audio format info before we terminate PyAudio
-                sample_width = None
-                try:
-                    sample_width = pa.get_sample_size(pyaudio.paInt16)
-                except Exception as e:
-                    logger.warning("Failed to get sample width: %s", e)
-                    sample_width = 2  # 16-bit PCM
-
-                # Close input stream before playing any earcons (improves compatibility on some devices)
-                self._cleanup_pyaudio(audio_stream, pa)
-                audio_stream = None
-                pa = None
-
-                self.recorded_audio_path = os.path.join(
-                    self.config.tmp_files_path,
-                    f"wake_word_recording_{int(time.time())}.wav"
-                )
-
-                # Ensure tmp directory exists
-                os.makedirs(self.config.tmp_files_path, exist_ok=True)
-
-                # Write WAV file
-                try:
-                    with wave.open(self.recorded_audio_path, 'wb') as wf:
-                        wf.setnchannels(1)  # Mono
-                        wf.setsampwidth(sample_width)
-                        wf.setframerate(vad_sample_rate)
-                        wf.writeframes(b''.join(frames))
-                except Exception:
-                    try:
-                        if self.recorded_audio_path and os.path.exists(self.recorded_audio_path):
-                            os.remove(self.recorded_audio_path)
-                    finally:
-                        self.recorded_audio_path = None
-                    raise
-
-                logger.debug("Recorded audio saved: %s", self.recorded_audio_path)
-                logger.debug("Recording duration: %.2fs, %s frames", elapsed, len(frames))
-
-                # Voice UX: play a short ack earcon before PROCESSING begins
-                if _is_enabled_flag(getattr(self.config, "voice_ack_earcon", False)):
-                    if self.ack_earcon_path and os.path.exists(self.ack_earcon_path):
-                        try:
-                            audio_playing = False
-                            is_playing_fn = getattr(self.audio, "is_playing", None)
-                            if callable(is_playing_fn):
-                                audio_playing = bool(is_playing_fn())
-
-                            if not audio_playing:
-                                with (self._audio_lock or contextlib.nullcontext()):
-                                    self.audio.play_audio_file(self.ack_earcon_path)
-                            else:
-                                logger.debug("Skipping ack earcon: audio is already playing")
-                        except Exception as e:
-                            logger.warning("Failed to play ack earcon: %s", e)
-
+            self.recorded_audio_path = self.vad_recorder.record()
+            if self.recorded_audio_path:
                 self.state = State.PROCESSING
             else:
                 logger.warning("No audio recorded, returning to IDLE")
                 self.state = State.IDLE
-
         except Exception as e:
             error_msg = f"Recording error: {str(e)}"
             logger.error(error_msg)
             print(f"Error: {error_msg}")
             self.state = State.IDLE
-        finally:
-            self._cleanup_pyaudio(audio_stream, pa)
 
     def _handle_immediate_barge_in(self):
         """Handle barge-in with immediate beep and transition to LISTENING."""
