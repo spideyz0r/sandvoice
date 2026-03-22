@@ -68,11 +68,20 @@ class StreamingResponder:
         user_input may be None when a pre-computed plugin response is provided via
         response_text.
 
-        Barge-in interruption is communicated via barge_in.is_triggered (set by the
-        BargeInDetector thread). StreamingResponder must not clear or stop the barge-in
-        event — _state_responding() checks it after respond() returns to decide whether
-        to transition to LISTENING.
+        Barge-in interruption is communicated via barge_in.event (the underlying
+        threading.Event whose .is_set() is polled). StreamingResponder must not clear
+        or stop the barge-in event — _state_responding() checks it after respond()
+        returns to decide whether to transition to LISTENING.
+
+        Raises:
+            ValueError: If neither user_input nor response_text is provided, or if
+                        both are provided simultaneously.
         """
+        if user_input is None and response_text is None:
+            raise ValueError("respond() requires user_input or response_text")
+        if user_input is not None and response_text is not None:
+            raise ValueError("respond() requires exactly one of user_input or response_text")
+
         barge_in_event = self._barge_in.event if self._barge_in is not None else None
         interrupt_event = threading.Event()
         production_failed_event = threading.Event()

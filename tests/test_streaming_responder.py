@@ -91,6 +91,16 @@ class TestStreamingResponderSetup(unittest.TestCase):
         self.assertIs(responder._pop_chunk_fn, self.mock_pop_chunk_fn)
         self.assertIs(responder._config, self.mock_config)
 
+    def test_respond_raises_when_both_args_none(self):
+        responder = self._make_responder()
+        with self.assertRaises(ValueError):
+            responder.respond(user_input=None, response_text=None)
+
+    def test_respond_raises_when_both_args_provided(self):
+        responder = self._make_responder()
+        with self.assertRaises(ValueError):
+            responder.respond(user_input="hello", response_text="pre-computed")
+
 
 class TestStreamingResponderPrecomputed(unittest.TestCase):
     """Tests for respond() with pre-computed text (response_text parameter)."""
@@ -535,7 +545,7 @@ class TestStreamingResponderTTSFileCleanup(unittest.TestCase):
         )
         responder.respond(user_input=None, response_text="Text to speak.")
 
-        # After respond, no exception raised
+        mock_remove.assert_called_with(tts_file)
 
 
 class TestStreamingResponderInterruptPaths(unittest.TestCase):
