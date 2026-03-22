@@ -236,7 +236,8 @@ class WakeWordMode:
                 self.ack_earcon_path = None
 
         self.vad_recorder = VadRecorder(
-            self.config, self.audio, self._audio_lock, self.ack_earcon_path
+            self.config, self.audio, self._audio_lock,
+            ack_earcon_path=self.ack_earcon_path,
         )
 
     def _create_porcupine_instance(self):
