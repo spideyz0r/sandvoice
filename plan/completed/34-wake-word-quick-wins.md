@@ -1,6 +1,6 @@
 # Wake Word Quick Wins: Config Validation and File Cleanup
 
-**Status**: 📋 Backlog
+**Status**: ✅ Completed
 **Priority**: 34
 **Platforms**: macOS M1, Raspberry Pi 3B
 
@@ -117,7 +117,7 @@ Replace each of the four duplicated blocks with `self._remove_recorded_audio()`.
 
 ## Acceptance Criteria
 
-- [ ] `_require_config_enabled()` replaces all 5 config validation blocks in `_initialize()`
-- [ ] `_remove_recorded_audio()` replaces all 4 duplicated file-cleanup blocks
-- [ ] All tests pass; >80% coverage on changed code
-- [ ] `wake_word.py` reduced by ~55 lines
+- [x] `_require_config_enabled()` replaces all 5 config validation blocks in `_initialize()`
+- [x] `_remove_recorded_audio()` replaces all 4 duplicated file-cleanup blocks
+- [x] All tests pass; >80% coverage on changed code
+- [x] `wake_word.py` reduced by ~55 lines
