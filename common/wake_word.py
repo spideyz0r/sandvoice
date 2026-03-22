@@ -15,6 +15,7 @@ from common.ai import pop_streaming_chunk
 from common.barge_in import BargeInDetector, _BARGE_IN
 from common.vad_recorder import VadRecorder
 from common.error_handling import handle_api_error
+from common.utils import _is_enabled_flag
 
 logger = logging.getLogger(__name__)
 
@@ -34,23 +35,6 @@ class _CompositeStopEvent:
     def set(self):
         # Only set the interrupt event (do not set barge-in).
         self._interrupt.set()
-
-
-def _is_enabled_flag(value):
-    """Interpret common enabled/disabled flag representations."""
-    if isinstance(value, bool):
-        return value
-    if isinstance(value, str):
-        normalized = value.strip().lower()
-        if normalized in {"enabled", "true", "yes", "1", "on"}:
-            return True
-        if normalized in {"disabled", "false", "no", "0", "off"}:
-            return False
-        return False
-    if isinstance(value, int):
-        return value != 0
-    # For unknown types (e.g. mocks), default to disabled to avoid accidental enablement.
-    return False
 
 
 class State(Enum):
@@ -371,6 +355,7 @@ class WakeWordMode:
             error_msg = f"Recording error: {str(e)}"
             logger.error(error_msg)
             print(f"Error: {error_msg}")
+            self.recorded_audio_path = None
             self.state = State.IDLE
 
     def _handle_immediate_barge_in(self):

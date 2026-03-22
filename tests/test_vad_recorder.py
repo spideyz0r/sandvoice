@@ -1,10 +1,9 @@
-import contextlib
 import logging
-import os
 import unittest
-from unittest.mock import Mock, patch, MagicMock
+from unittest.mock import Mock, patch
 
-from common.vad_recorder import VadRecorder, _negotiate_sample_rate, _is_enabled_flag
+from common.utils import _is_enabled_flag
+from common.vad_recorder import VadRecorder, _negotiate_sample_rate
 
 
 class TestIsEnabledFlag(unittest.TestCase):
@@ -95,7 +94,7 @@ class TestVadRecorderRecord(unittest.TestCase):
         def mock_read(size, exception_on_overflow=False):
             read_count[0] += 1
             if read_count[0] <= 6:
-                return b'\x00' * 480
+                return b'\x00' * 960
             raise Exception("End of test")
 
         mock_stream = Mock()
@@ -156,7 +155,7 @@ class TestVadRecorderRecord(unittest.TestCase):
         mock_vad_class.return_value = mock_vad
 
         mock_stream = Mock()
-        mock_stream.read.return_value = b'\x00' * 480
+        mock_stream.read.return_value = b'\x00' * 960
 
         mock_pa = Mock()
         mock_pa.open.return_value = mock_stream
@@ -212,7 +211,7 @@ class TestVadRecorderRecord(unittest.TestCase):
         def mock_read(size, exception_on_overflow=False):
             read_count[0] += 1
             if read_count[0] <= 3:
-                return b'\x00' * 480
+                return b'\x00' * 960
             raise Exception("End")
         mock_stream = Mock()
         mock_stream.read = mock_read
@@ -240,14 +239,14 @@ class TestVadRecorderRecord(unittest.TestCase):
     def test_record_sample_rate_negotiation(
             self, mock_pa_class, mock_vad_class, mock_wave_open, mock_makedirs, mock_time):
         self.mock_config.rate = 44100  # Not a VAD-supported rate → negotiates to 48000
-        mock_time.side_effect = [0.0, 31.0, 31.0, 31.0]
+        mock_time.side_effect = [0.0, 0.0, 31.0, 31.0, 31.0]
 
         mock_vad = Mock()
         mock_vad.is_speech.return_value = True
         mock_vad_class.return_value = mock_vad
 
         mock_stream = Mock()
-        mock_stream.read.return_value = b'\x00' * 480
+        mock_stream.read.return_value = b'\x00' * 960
 
         mock_pa = Mock()
         mock_pa.open.return_value = mock_stream
@@ -278,7 +277,7 @@ class TestVadRecorderRecord(unittest.TestCase):
         mock_vad_class.return_value = mock_vad
 
         mock_stream = Mock()
-        mock_stream.read.return_value = b'\x00' * 480
+        mock_stream.read.return_value = b'\x00' * 960
 
         mock_pa = Mock()
         mock_pa.open.return_value = mock_stream
@@ -477,7 +476,7 @@ class TestVadRecorderRecordWithEarcon(unittest.TestCase):
         mock_vad_class.return_value = mock_vad
 
         mock_stream = Mock()
-        mock_stream.read.return_value = b'\x00' * 480
+        mock_stream.read.return_value = b'\x00' * 960
 
         mock_pa = Mock()
         mock_pa.open.return_value = mock_stream
@@ -515,7 +514,7 @@ class TestVadRecorderRecordWithEarcon(unittest.TestCase):
         mock_vad_class.return_value = mock_vad
 
         mock_stream = Mock()
-        mock_stream.read.return_value = b'\x00' * 480
+        mock_stream.read.return_value = b'\x00' * 960
 
         mock_pa = Mock()
         mock_pa.open.return_value = mock_stream

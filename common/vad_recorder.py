@@ -7,20 +7,11 @@ import wave
 import pyaudio
 import webrtcvad
 
+from common.utils import _is_enabled_flag
+
 logger = logging.getLogger(__name__)
 
 _VAD_SAMPLE_RATES = [8000, 16000, 32000, 48000]
-
-
-def _is_enabled_flag(value):
-    """Interpret common enabled/disabled flag representations."""
-    if isinstance(value, bool):
-        return value
-    if isinstance(value, str):
-        return value.strip().lower() in {"enabled", "true", "yes", "1", "on"}
-    if isinstance(value, int):
-        return value != 0
-    return False
 
 
 def _negotiate_sample_rate(desired_rate):
@@ -71,8 +62,8 @@ class VadRecorder:
             return to IDLE without processing).
 
         Raises:
-            RuntimeError: if no suitable sample rate is found or a stream
-            open/read/write failure occurs.
+            Exceptions from PyAudio, webrtcvad, or wave are allowed to
+            propagate on stream open/read/write or WAV persistence failures.
         """
         vad = webrtcvad.Vad(self._config.vad_aggressiveness)
 
