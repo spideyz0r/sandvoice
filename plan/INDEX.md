@@ -103,6 +103,10 @@ plan/
 **Document**: [completed/34-wake-word-quick-wins.md](./completed/34-wake-word-quick-wins.md)
 **Description**: Extract `_require_config_enabled()` to replace 4 repetitive config validation blocks in `_initialize()`, and `_remove_recorded_audio()` to replace 3 duplicated file-cleanup blocks. ~15 net lines removed, no behavior change. Requires Plan 33.
 
+### Priority 35: Wake Word VAD Recorder Extraction
+**Document**: [completed/35-wake-word-vad-recorder-extraction.md](./completed/35-wake-word-vad-recorder-extraction.md)
+**Description**: Extract VAD-based audio recording from `_state_listening()` into `common/vad_recorder.py` with a `VadRecorder` class. Also introduces `common/utils.py` for shared `_is_enabled_flag`. ~130 lines removed from wake_word.py, 95% test coverage on VadRecorder. Requires Plan 34.
+
 ---
 
 ## In Progress 🚧
@@ -174,10 +178,6 @@ plan/
 ### Priority 25: Terminal UI
 **Document**: [backlog/25-terminal-ui.md](./backlog/25-terminal-ui.md)
 **Description**: Replace flat emoji-based terminal output with a high-end CLI UI: ANSI colors, animated waiting dots, in-place status line updates, inline timing per phase, and clear conversation/status separation. Pure ANSI — no external dependencies, Pi-compatible.
-
-### Priority 35: Wake Word VAD Recorder Extraction
-**Document**: [backlog/35-wake-word-vad-recorder-extraction.md](./backlog/35-wake-word-vad-recorder-extraction.md)
-**Description**: Extract the VAD-based audio recording subsystem from `_state_listening()` into a dedicated `common/vad_recorder.py` module with a `VadRecorder` class. ~130 lines removed from wake_word.py. Requires Plan 34.
 
 ### Priority 36: Wake Word Streaming Responder Extraction
 **Document**: [backlog/36-wake-word-streaming-responder-extraction.md](./backlog/36-wake-word-streaming-responder-extraction.md)
