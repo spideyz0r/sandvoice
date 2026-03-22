@@ -263,14 +263,19 @@ class TestVadRecorderRecord(unittest.TestCase):
         call_kwargs = mock_pa.open.call_args[1]
         self.assertEqual(call_kwargs['rate'], 48000)
 
+    @patch('common.vad_recorder.os.remove')
+    @patch('common.vad_recorder.os.path.exists')
     @patch('common.vad_recorder.time.time')
     @patch('common.vad_recorder.os.makedirs')
     @patch('common.vad_recorder.wave.open')
     @patch('common.vad_recorder.webrtcvad.Vad')
     @patch('common.vad_recorder.pyaudio.PyAudio')
     def test_record_wav_write_failure_raises_and_removes_file(
-            self, mock_pa_class, mock_vad_class, mock_wave_open, mock_makedirs, mock_time):
+            self, mock_pa_class, mock_vad_class, mock_wave_open, mock_makedirs,
+            mock_time, mock_exists, mock_remove):
         mock_time.side_effect = [0.0, 0.0, 31.0, 31.0, 31.0]
+        # Simulate partial file left on disk after wave.open failure
+        mock_exists.return_value = True
 
         mock_vad = Mock()
         mock_vad.is_speech.return_value = True
@@ -290,6 +295,9 @@ class TestVadRecorderRecord(unittest.TestCase):
 
         with self.assertRaises(OSError):
             recorder.record()
+
+        # Verify partial file is cleaned up
+        mock_remove.assert_called_once()
 
 
 class TestVadRecorderCleanupStream(unittest.TestCase):
