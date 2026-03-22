@@ -99,6 +99,10 @@ plan/
 **Document**: [completed/33-wake-word-barge-in-extractor.md](./completed/33-wake-word-barge-in-extractor.md)
 **Description**: Extract the five barge-in detection methods from `WakeWordMode` into a dedicated `common/barge_in.py` module with a `BargeInDetector` class (start/stop/is_triggered/run_with_polling). ~200 lines removed from wake_word.py. Requires Plan 32.
 
+### Priority 34: Wake Word Quick Wins — Config Validation and File Cleanup
+**Document**: [completed/34-wake-word-quick-wins.md](./completed/34-wake-word-quick-wins.md)
+**Description**: Extract `_require_config_enabled()` to replace 4 repetitive config validation blocks in `_initialize()`, and `_remove_recorded_audio()` to replace 3 duplicated file-cleanup blocks. ~15 net lines removed, no behavior change. Requires Plan 33.
+
 ---
 
 ## In Progress 🚧
@@ -170,10 +174,6 @@ plan/
 ### Priority 25: Terminal UI
 **Document**: [backlog/25-terminal-ui.md](./backlog/25-terminal-ui.md)
 **Description**: Replace flat emoji-based terminal output with a high-end CLI UI: ANSI colors, animated waiting dots, in-place status line updates, inline timing per phase, and clear conversation/status separation. Pure ANSI — no external dependencies, Pi-compatible.
-
-### Priority 34: Wake Word Quick Wins — Config Validation and File Cleanup
-**Document**: [backlog/34-wake-word-quick-wins.md](./backlog/34-wake-word-quick-wins.md)
-**Description**: Extract `_require_config_enabled()` to replace 4 repetitive config validation blocks in `_initialize()`, and `_remove_recorded_audio()` to replace 4 duplicated file-cleanup blocks. ~55 lines removed, no behavior change. Requires Plan 33.
 
 ### Priority 35: Wake Word VAD Recorder Extraction
 **Document**: [backlog/35-wake-word-vad-recorder-extraction.md](./backlog/35-wake-word-vad-recorder-extraction.md)
