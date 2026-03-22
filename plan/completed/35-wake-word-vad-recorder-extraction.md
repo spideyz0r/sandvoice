@@ -1,6 +1,6 @@
 # Wake Word VAD Recorder Extraction
 
-**Status**: 📋 Backlog
+**Status**: ✅ Completed
 **Priority**: 35
 **Platforms**: macOS M1, Raspberry Pi 3B
 
@@ -123,10 +123,10 @@ def _state_listening(self):
 
 ## Acceptance Criteria
 
-- [ ] `common/vad_recorder.py` created with `VadRecorder` class
-- [ ] `VadRecorder.record()` handles full VAD loop (sample rate negotiation, frame loop,
+- [x] `common/vad_recorder.py` created with `VadRecorder` class
+- [x] `VadRecorder.record()` handles full VAD loop (sample rate negotiation, frame loop,
       silence detection, WAV writing, ack earcon)
-- [ ] `_state_listening()` reduced to ~10 lines (just calls `self.vad_recorder.record()`)
-- [ ] `tests/test_vad_recorder.py` covers `VadRecorder` in isolation (>80% coverage)
-- [ ] All existing tests pass
-- [ ] `wake_word.py` reduced by ~130 lines
+- [x] `_state_listening()` reduced to ~10 lines (just calls `self.vad_recorder.record()`)
+- [x] `tests/test_vad_recorder.py` covers `VadRecorder` in isolation (95% coverage, 30 tests)
+- [x] All existing tests pass
+- [x] `wake_word.py` reduced by ~130 lines
