@@ -62,8 +62,13 @@ class VadRecorder:
             return to IDLE without processing).
 
         Raises:
-            Exceptions from PyAudio, webrtcvad, or wave are allowed to
-            propagate on stream open/read/write or WAV persistence failures.
+            Exceptions from PyAudio on stream open, or from wave on WAV
+            persistence, are allowed to propagate.
+
+            Exceptions during audio_stream.read() or webrtcvad frame
+            processing are caught internally: read errors break the loop
+            (possibly returning None or a partial recording); VAD errors
+            are logged and the frame is assumed to be speech.
         """
         vad = webrtcvad.Vad(self._config.vad_aggressiveness)
 

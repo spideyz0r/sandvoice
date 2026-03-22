@@ -426,7 +426,8 @@ class TestVadRecorderPlayAckEarcon(unittest.TestCase):
     @patch('common.vad_recorder.os.path.exists')
     def test_earcon_with_no_is_playing_method(self, mock_exists):
         self.mock_config.voice_ack_earcon = True
-        del self.mock_audio.is_playing  # Remove is_playing so getattr returns None
+        # Use a mock without is_playing so getattr(audio, 'is_playing', None) returns None
+        self.mock_audio = Mock(spec=['play_audio_file'])
         mock_exists.return_value = True
 
         recorder = self._make_recorder(ack_earcon_path="/tmp/ack.mp3")
