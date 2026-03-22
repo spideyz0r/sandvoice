@@ -519,17 +519,16 @@ class TestStreamingResponderTTSFileCleanup(unittest.TestCase):
     def test_tts_files_cleaned_up_on_stop_event(self, mock_remove, mock_exists):
         """TTS files are removed when stop event fires during tts_worker processing."""
         tts_file = "/tmp/tts-cleanup.mp3"
-        self.mock_ai.text_to_speech.return_value = [tts_file]
 
-        # Trigger barge-in after TTS is called so stop_event fires
-        call_count = [0]
+        # Use a real threading.Event so the stop fires deterministically after TTS runs.
+        barge_event = threading.Event()
+        self.mock_barge_in.event = barge_event
 
-        def is_set_side_effect():
-            call_count[0] += 1
-            # Return True after TTS has been called
-            return call_count[0] > 5
+        def tts_side_effect(*args, **kwargs):
+            barge_event.set()
+            return [tts_file]
 
-        self.mock_barge_in.event.is_set.side_effect = is_set_side_effect
+        self.mock_ai.text_to_speech.side_effect = tts_side_effect
         self.mock_audio.play_audio_queue.return_value = (True, None, None)
         mock_exists.return_value = True
 
@@ -730,8 +729,6 @@ class TestStreamingResponderInterruptPaths(unittest.TestCase):
 
     def test_production_failed_continue_in_delta_loop(self):
         """Deltas keep flowing even after production_failed_event is set."""
-        import time as _time
-
         tts_called = threading.Event()
         got_second_delta = threading.Event()
 
