@@ -1,9 +1,7 @@
 import logging
-import os
-import queue
 import threading
 import unittest
-from unittest.mock import MagicMock, Mock, patch, call
+from unittest.mock import Mock, patch
 
 from common.streaming_responder import StreamingResponder, _CompositeStopEvent
 
