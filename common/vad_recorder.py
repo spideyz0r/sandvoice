@@ -181,17 +181,17 @@ class VadRecorder:
         if audio_stream is not None:
             try:
                 audio_stream.stop_stream()
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug("Error stopping audio stream: %s", e)
             try:
                 audio_stream.close()
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug("Error closing audio stream: %s", e)
         if pa is not None:
             try:
                 pa.terminate()
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug("Error terminating PyAudio: %s", e)
 
     def _play_ack_earcon(self):
         """Play the ack earcon if configured and not already playing audio."""
