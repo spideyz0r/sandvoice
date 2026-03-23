@@ -172,6 +172,11 @@ class TestVoiceCache(unittest.TestCase):
         self.cache.get("no-such-key")
         self.assertEqual(self.cache.last_hit_type, "miss")
 
+    def test_last_hit_type_miss_when_cache_closed(self):
+        self.cache.close()
+        self.cache.get("any-key")
+        self.assertEqual(self.cache.last_hit_type, "miss")
+
     def test_last_hit_type_hit_fresh_when_within_ttl(self):
         self.cache.set("k", "v", ttl_s=3600, max_stale_s=7200)
         self.cache.get("k")

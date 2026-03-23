@@ -44,6 +44,11 @@ class VoiceCache:
             logger.warning("SQLite WAL/busy_timeout pragma unavailable, using defaults: %s", e)
         self._conn.row_factory = sqlite3.Row
         self._lock = threading.Lock()
+        # last_hit_type is a best-effort diagnostic set on each get() call so that
+        # wake-word request summaries can log cache status without changing plugin
+        # signatures.  It is NOT thread-safe: concurrent get() calls from the scheduler
+        # thread and the wake-word thread can overwrite each other.  The impact is
+        # limited to a single potentially-stale log field; correctness is unaffected.
         self.last_hit_type: Optional[str] = None
         self._init_schema()
 
@@ -69,6 +74,7 @@ class VoiceCache:
         """
         with self._lock:
             if self._conn is None:
+                self.last_hit_type = "miss"
                 return None
             row = self._conn.execute(
                 "SELECT * FROM cache_entries WHERE key = ?", (key,)
