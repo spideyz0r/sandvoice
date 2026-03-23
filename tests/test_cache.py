@@ -163,6 +163,33 @@ class TestVoiceCache(unittest.TestCase):
         self.assertGreater(age, 0)
         self.assertLess(age, 10800)
 
+    # ── last_hit_type ─────────────────────────────────────────────────────────
+
+    def test_last_hit_type_none_initially(self):
+        self.assertIsNone(self.cache.last_hit_type)
+
+    def test_last_hit_type_miss_when_key_not_found(self):
+        self.cache.get("no-such-key")
+        self.assertEqual(self.cache.last_hit_type, "miss")
+
+    def test_last_hit_type_hit_fresh_when_within_ttl(self):
+        self.cache.set("k", "v", ttl_s=3600, max_stale_s=7200)
+        self.cache.get("k")
+        self.assertEqual(self.cache.last_hit_type, "hit-fresh")
+
+    def test_last_hit_type_hit_stale_when_beyond_ttl(self):
+        stale_ts = (datetime.now(timezone.utc) - timedelta(hours=2)).isoformat()
+        self.cache.set_with_timestamp("k", "v", ttl_s=60, max_stale_s=7200, updated_at=stale_ts)
+        self.cache.get("k")
+        self.assertEqual(self.cache.last_hit_type, "hit-stale")
+
+    def test_last_hit_type_updated_on_successive_calls(self):
+        self.cache.set("k", "v", ttl_s=3600, max_stale_s=7200)
+        self.cache.get("k")
+        self.assertEqual(self.cache.last_hit_type, "hit-fresh")
+        self.cache.get("no-such-key")
+        self.assertEqual(self.cache.last_hit_type, "miss")
+
     # ── closed-cache guards ───────────────────────────────────────────────────
 
     def test_get_after_close_returns_none(self):

@@ -44,6 +44,7 @@ class VoiceCache:
             logger.warning("SQLite WAL/busy_timeout pragma unavailable, using defaults: %s", e)
         self._conn.row_factory = sqlite3.Row
         self._lock = threading.Lock()
+        self.last_hit_type: Optional[str] = None
         self._init_schema()
 
     def _init_schema(self):
@@ -60,7 +61,12 @@ class VoiceCache:
             self._conn.commit()
 
     def get(self, key: str) -> Optional[CacheEntry]:
-        """Return the cache entry for key, or None if not found or if the cache is closed."""
+        """Return the cache entry for key, or None if not found or if the cache is closed.
+
+        As a side effect, sets ``last_hit_type`` to ``"miss"`` when no entry is found,
+        ``"hit-fresh"`` when the entry is within its TTL, or ``"hit-stale"`` otherwise.
+        Callers may read ``last_hit_type`` after this call to surface cache status in logs.
+        """
         with self._lock:
             if self._conn is None:
                 return None
@@ -68,14 +74,17 @@ class VoiceCache:
                 "SELECT * FROM cache_entries WHERE key = ?", (key,)
             ).fetchone()
         if row is None:
+            self.last_hit_type = "miss"
             return None
-        return CacheEntry(
+        entry = CacheEntry(
             key=row["key"],
             value=row["value"],
             updated_at=row["updated_at"],
             ttl_s=row["ttl_s"],
             max_stale_s=row["max_stale_s"],
         )
+        self.last_hit_type = "hit-fresh" if self.is_fresh(entry) else "hit-stale"
+        return entry
 
     def set(self, key: str, value: str, ttl_s: int, max_stale_s: int):
         """Insert or update a cache entry."""
