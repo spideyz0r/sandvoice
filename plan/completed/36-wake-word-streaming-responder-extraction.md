@@ -1,6 +1,6 @@
 # Wake Word Streaming Responder Extraction
 
-**Status**: 📋 Backlog
+**Status**: ✅ Completed
 **Priority**: 36
 **Platforms**: macOS M1, Raspberry Pi 3B
 
@@ -123,10 +123,10 @@ def _respond_streaming(self):
 
 ## Acceptance Criteria
 
-- [ ] `common/streaming_responder.py` created with `StreamingResponder` class
-- [ ] `StreamingResponder.respond()` handles both LLM-stream and pre-computed paths
-- [ ] `_respond_streaming()` reduced to ~10 lines
-- [ ] `_CompositeStopEvent` moved out of `wake_word.py`
-- [ ] `tests/test_streaming_responder.py` covers `StreamingResponder` in isolation (>80% coverage)
-- [ ] All existing tests pass
-- [ ] `wake_word.py` reduced by ~240 lines
+- [x] `common/streaming_responder.py` created with `StreamingResponder` class
+- [x] `StreamingResponder.respond()` handles both LLM-stream and pre-computed paths
+- [x] `_respond_streaming()` reduced to ~10 lines
+- [x] `_CompositeStopEvent` moved out of `wake_word.py`
+- [x] `tests/test_streaming_responder.py` covers `StreamingResponder` in isolation (>80% coverage)
+- [x] All existing tests pass
+- [x] `wake_word.py` reduced by ~240 lines
