@@ -68,8 +68,15 @@ class VoiceCache:
     def get(self, key: str) -> Optional[CacheEntry]:
         """Return the cache entry for key, or None if not found or if the cache is closed.
 
-        As a side effect, sets ``last_hit_type`` to ``"miss"`` when no entry is found,
-        ``"hit-fresh"`` when the entry is within its TTL, or ``"hit-stale"`` otherwise.
+        As a side effect, sets ``last_hit_type`` to:
+
+        * ``"miss"`` when no entry is found, when the cache is closed, or when an entry
+          exists but is beyond its ``max_stale_s`` (in which case the plugin will perform
+          a live fetch).
+        * ``"hit-fresh"`` when the entry is within its TTL.
+        * ``"hit-stale"`` when the entry is beyond its TTL but still within ``max_stale_s``
+          and can be served.
+
         Callers may read ``last_hit_type`` after this call to surface cache status in logs.
         """
         with self._lock:
