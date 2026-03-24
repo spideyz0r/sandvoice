@@ -89,7 +89,14 @@ class VoiceCache:
                 ttl_s=row["ttl_s"],
                 max_stale_s=row["max_stale_s"],
             )
-            self.last_hit_type = "hit-fresh" if self.is_fresh(entry) else "hit-stale"
+            if self.is_fresh(entry):
+                self.last_hit_type = "hit-fresh"
+            elif self.can_serve(entry):
+                self.last_hit_type = "hit-stale"
+            else:
+                # Entry exists but is beyond max_stale_s; plugin will do a live fetch.
+                # Report as "miss" so the summary reflects what the plugin actually used.
+                self.last_hit_type = "miss"
         return entry
 
     def set(self, key: str, value: str, ttl_s: int, max_stale_s: int):

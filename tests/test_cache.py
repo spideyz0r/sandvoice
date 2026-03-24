@@ -184,9 +184,17 @@ class TestVoiceCache(unittest.TestCase):
 
     def test_last_hit_type_hit_stale_when_beyond_ttl(self):
         stale_ts = (datetime.now(timezone.utc) - timedelta(hours=2)).isoformat()
-        self.cache.set_with_timestamp("k", "v", ttl_s=60, max_stale_s=7200, updated_at=stale_ts)
+        # max_stale_s=21600 (6h) keeps the 2h-old entry well within the serveable window
+        self.cache.set_with_timestamp("k", "v", ttl_s=60, max_stale_s=21600, updated_at=stale_ts)
         self.cache.get("k")
         self.assertEqual(self.cache.last_hit_type, "hit-stale")
+
+    def test_last_hit_type_miss_when_beyond_max_stale(self):
+        # Entry is 8 hours old with max_stale_s=21600 (6h) → not serveable → reported as miss
+        expired_ts = (datetime.now(timezone.utc) - timedelta(hours=8)).isoformat()
+        self.cache.set_with_timestamp("k", "v", ttl_s=3600, max_stale_s=21600, updated_at=expired_ts)
+        self.cache.get("k")
+        self.assertEqual(self.cache.last_hit_type, "miss")
 
     def test_last_hit_type_updated_on_successive_calls(self):
         self.cache.set("k", "v", ttl_s=3600, max_stale_s=7200)
