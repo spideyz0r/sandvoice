@@ -1363,6 +1363,28 @@ class TestRequestTimingSummary(unittest.TestCase):
 
         self.assertIsNotNone(mode._req_t_start)
 
+    def test_summary_suppressed_when_barge_in_during_responding(self):
+        """_emit_request_summary is skipped when barge-in interrupts the response."""
+        mode = self._make_mode()
+        mode._req_t_start = time.monotonic()
+        mode.streaming_user_input = "tell me a joke"
+        mode.streaming_response_text = None
+
+        mock_barge_in = Mock()
+        mock_barge_in.is_triggered = True
+        mode.barge_in = mock_barge_in
+
+        mode._respond_streaming = Mock()
+        mode._cleanup_barge_in = Mock()
+        mode._remove_recorded_audio = Mock()
+        mode._play_confirmation_beep = Mock()
+
+        with patch("common.wake_word.logger") as mock_logger:
+            mode._state_responding()
+
+        mock_logger.info.assert_not_called()
+        self.assertEqual(mode.state, State.LISTENING)
+
     def test_cache_last_hit_type_reset_before_plugin_call(self):
         """cache.last_hit_type is None after processing when route_message doesn't set it."""
         mock_cache = Mock(spec_set=["last_hit_type"])

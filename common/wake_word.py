@@ -590,14 +590,18 @@ class WakeWordMode:
         if self.config.visual_state_indicator:
             print("🔊 Responding...")
 
-        if self.streaming_user_input is not None or self.streaming_response_text is not None:
+        has_response = self.streaming_user_input is not None or self.streaming_response_text is not None
+        if has_response:
             self._respond_streaming()
-            self._emit_request_summary()
 
         # Signal barge-in detector to stop and wait for it to finish
         # Wait for thread to finish to ensure PyAudio stream is closed before LISTENING reopens it
         barge_in_triggered = self.barge_in is not None and self.barge_in.is_triggered
         self._cleanup_barge_in(timeout=0.3)
+
+        # Emit per-request timing summary only for fully completed (non-interrupted) requests
+        if has_response and not barge_in_triggered:
+            self._emit_request_summary()
 
         # Clean up temporary recorded audio file
         self._remove_recorded_audio()
