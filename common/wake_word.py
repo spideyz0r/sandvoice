@@ -380,6 +380,9 @@ class WakeWordMode:
         # Play confirmation beep
         self._play_confirmation_beep()
 
+        # Record start time for the new request that follows barge-in
+        self._req_t_start = time.monotonic()
+
         # Go directly to LISTENING
         self.state = State.LISTENING
 
@@ -608,6 +611,9 @@ class WakeWordMode:
 
             # Play confirmation beep (consistent with _handle_immediate_barge_in)
             self._play_confirmation_beep()
+
+            # Record start time for the new request that follows barge-in
+            self._req_t_start = time.monotonic()
 
             self.state = State.LISTENING
         else:
