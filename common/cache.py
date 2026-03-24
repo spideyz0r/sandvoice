@@ -79,17 +79,17 @@ class VoiceCache:
             row = self._conn.execute(
                 "SELECT * FROM cache_entries WHERE key = ?", (key,)
             ).fetchone()
-        if row is None:
-            self.last_hit_type = "miss"
-            return None
-        entry = CacheEntry(
-            key=row["key"],
-            value=row["value"],
-            updated_at=row["updated_at"],
-            ttl_s=row["ttl_s"],
-            max_stale_s=row["max_stale_s"],
-        )
-        self.last_hit_type = "hit-fresh" if self.is_fresh(entry) else "hit-stale"
+            if row is None:
+                self.last_hit_type = "miss"
+                return None
+            entry = CacheEntry(
+                key=row["key"],
+                value=row["value"],
+                updated_at=row["updated_at"],
+                ttl_s=row["ttl_s"],
+                max_stale_s=row["max_stale_s"],
+            )
+            self.last_hit_type = "hit-fresh" if self.is_fresh(entry) else "hit-stale"
         return entry
 
     def set(self, key: str, value: str, ttl_s: int, max_stale_s: int):
