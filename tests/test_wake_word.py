@@ -1270,11 +1270,11 @@ class TestRequestTimingSummary(unittest.TestCase):
         self.assertIn("route=1.83s(gpt-4.1-nano→weather)", summary)
 
     def test_emit_summary_includes_plugin_field_with_cache_status(self):
-        mock_cache = Mock()
-        mock_cache.last_hit_type = "hit-fresh"
-        mode = self._make_mode(cache=mock_cache)
+        mode = self._make_mode()
         mode._req_t_start = time.monotonic() - 5.0
         mode._req_plugin_s = 0.05
+        # Summary reads the per-request snapshot, not cache.last_hit_type directly
+        mode._req_cache_hit_type = "hit-fresh"
         with patch("common.wake_word.logger") as mock_logger:
             mode._emit_request_summary()
         summary = mock_logger.info.call_args[0][0]
@@ -1384,6 +1384,33 @@ class TestRequestTimingSummary(unittest.TestCase):
 
         mock_logger.info.assert_not_called()
         self.assertEqual(mode.state, State.LISTENING)
+
+    def test_cache_hit_type_snapshotted_after_plugin_call(self):
+        """_req_cache_hit_type is snapshotted from cache.last_hit_type immediately after plugin."""
+        mock_cache = Mock(spec_set=["last_hit_type"])
+        mock_cache.last_hit_type = None
+        mode = self._make_mode(cache=mock_cache)
+        mode._req_t_start = time.monotonic()
+        mode.barge_in = Mock()
+        mode.barge_in.is_triggered = False
+        mode.barge_in.start = Mock()
+        mode.barge_in.run_with_polling = Mock(side_effect=lambda op, name: op())
+        mode.recorded_audio_path = "/tmp/fake.wav"
+        mode.plugins = {"weather": Mock()}
+
+        mode.ai.transcribe_and_translate.return_value = "What's the weather?"
+        mode.ai.define_route.return_value = {"route": "weather"}
+
+        def plugin_side_effect(user_input, route):
+            mock_cache.last_hit_type = "hit-stale"
+            return "Cloudy"
+        self.mock_route_message.side_effect = plugin_side_effect
+
+        with patch("common.wake_word.os.path.exists", return_value=True):
+            mode._state_processing()
+
+        # Snapshot must capture the value set by the plugin call
+        self.assertEqual(mode._req_cache_hit_type, "hit-stale")
 
     def test_cache_last_hit_type_reset_before_plugin_call(self):
         """cache.last_hit_type is None after processing when route_message doesn't set it."""

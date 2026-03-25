@@ -84,6 +84,7 @@ class WakeWordMode:
         self._req_route_s = None
         self._req_route_name = None
         self._req_plugin_s = None
+        self._req_cache_hit_type = None
         self._req_respond_s = None
 
         logger.debug("Initializing wake word mode")
@@ -476,6 +477,7 @@ class WakeWordMode:
         self._req_route_s = None
         self._req_route_name = None
         self._req_plugin_s = None
+        self._req_cache_hit_type = None
         self._req_respond_s = None
 
         try:
@@ -542,6 +544,10 @@ class WakeWordMode:
                 "plugin response",
             )
             self._req_plugin_s = time.monotonic() - _t0
+            # Snapshot cache hit type immediately so scheduler-thread cache lookups
+            # cannot overwrite it before _emit_request_summary() reads it.
+            if self.cache is not None:
+                self._req_cache_hit_type = self.cache.last_hit_type
             if response_text is _BARGE_IN:
                 return
 
@@ -670,8 +676,8 @@ class WakeWordMode:
 
         if self._req_plugin_s is not None:
             cache_status = "none"
-            if self.cache is not None and self.cache.last_hit_type is not None:
-                cache_status = self.cache.last_hit_type
+            if self._req_cache_hit_type is not None:
+                cache_status = self._req_cache_hit_type
             parts.append(f"plugin={self._req_plugin_s:.2f}s(cache:{cache_status})")
 
         if self._req_respond_s is not None:
