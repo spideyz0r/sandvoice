@@ -534,10 +534,6 @@ class WakeWordMode:
                 self.state = State.RESPONDING
                 return
 
-            # Reset cache hit type before plugin so stale state from prior request is cleared
-            if self.cache is not None:
-                self.cache.last_hit_type = None
-
             _t0 = time.monotonic()
             response_text = self._poll_op(
                 lambda: self.route_message(user_input, route),

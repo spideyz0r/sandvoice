@@ -1412,30 +1412,5 @@ class TestRequestTimingSummary(unittest.TestCase):
         # Snapshot must capture the value set by the plugin call
         self.assertEqual(mode._req_cache_hit_type, "hit-stale")
 
-    def test_cache_last_hit_type_reset_before_plugin_call(self):
-        """cache.last_hit_type is None after processing when route_message doesn't set it."""
-        mock_cache = Mock(spec_set=["last_hit_type"])
-        mock_cache.last_hit_type = "hit-fresh"  # stale from prior request
-        mode = self._make_mode(cache=mock_cache)
-        mode._req_t_start = time.monotonic()
-        mode.barge_in = Mock()
-        mode.barge_in.is_triggered = False
-        mode.barge_in.start = Mock()
-        mode.barge_in.run_with_polling = Mock(side_effect=lambda op, name: op())
-        mode.recorded_audio_path = "/tmp/fake.wav"
-        mode.plugins = {"weather": Mock()}
-
-        mode.ai.transcribe_and_translate.return_value = "What's the weather?"
-        mode.ai.define_route.return_value = {"route": "weather"}
-        self.mock_route_message.return_value = "Sunny"
-
-        with patch("common.wake_word.os.path.exists", return_value=True):
-            mode._state_processing()
-
-        # last_hit_type was reset to None before the plugin call;
-        # route_message mock doesn't set it, so it stays None
-        self.assertIsNone(mock_cache.last_hit_type)
-
-
 if __name__ == '__main__':
     unittest.main()
