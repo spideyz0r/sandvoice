@@ -583,7 +583,12 @@ if __name__ == "__main__":
             print(f"  {e}")
             sys.exit(1)
 
+        from common.terminal_ui import TerminalUI
         audio = Audio(sandvoice.config)
+        ui = TerminalUI(
+            wake_phrase=sandvoice.config.wake_phrase,
+            botname=sandvoice.config.botname,
+        )
         wake_word_mode = WakeWordMode(
             sandvoice.config,
             sandvoice.ai,
@@ -592,6 +597,7 @@ if __name__ == "__main__":
             plugins=sandvoice.plugins,
             audio_lock=sandvoice._ai_audio_lock,
             cache=sandvoice.cache,
+            ui=ui,
         )
         wake_word_mode.run()
     # Default mode (ESC key) or CLI mode
