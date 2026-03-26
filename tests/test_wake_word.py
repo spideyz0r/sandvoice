@@ -1217,5 +1217,200 @@ class TestHelperMethods(unittest.TestCase):
         self.assertIsNone(mode.recorded_audio_path)
 
 
+class TestRequestTimingSummary(unittest.TestCase):
+    """Tests for _emit_request_summary() and per-request timing instrumentation."""
+
+    def setUp(self):
+        logging.disable(logging.CRITICAL)
+
+        self.mock_config = Mock()
+        self.mock_config.debug = False
+        self.mock_config.visual_state_indicator = False
+        self.mock_config.gpt_route_model = "gpt-4.1-nano"
+
+        self.mock_ai = Mock()
+        self.mock_audio = Mock()
+        self.mock_route_message = Mock(return_value="Plugin response")
+
+    def tearDown(self):
+        logging.disable(logging.NOTSET)
+
+    def _make_mode(self, **kwargs):
+        return WakeWordMode(
+            self.mock_config, self.mock_ai, self.mock_audio,
+            **{"route_message": self.mock_route_message, **kwargs}
+        )
+
+    # --- _emit_request_summary ---
+
+    def test_emit_summary_no_op_when_t_start_is_none(self):
+        mode = self._make_mode()
+        mode._req_t_start = None
+        with patch("common.wake_word.logger") as mock_logger:
+            mode._emit_request_summary()
+        mock_logger.info.assert_not_called()
+
+    def test_emit_summary_includes_transcribe_field(self):
+        mode = self._make_mode()
+        mode._req_t_start = time.monotonic() - 5.0
+        mode._req_transcribe_s = 2.41
+        with patch("common.wake_word.logger") as mock_logger:
+            mode._emit_request_summary()
+        summary = mock_logger.info.call_args[0][0]
+        self.assertIn("transcribe=2.41s", summary)
+
+    def test_emit_summary_includes_route_field_with_model_and_name(self):
+        mode = self._make_mode()
+        mode._req_t_start = time.monotonic() - 5.0
+        mode._req_route_s = 1.83
+        mode._req_route_name = "weather"
+        with patch("common.wake_word.logger") as mock_logger:
+            mode._emit_request_summary()
+        summary = mock_logger.info.call_args[0][0]
+        self.assertIn("route=1.83s(gpt-4.1-nano→weather)", summary)
+
+    def test_emit_summary_includes_plugin_field_with_cache_status(self):
+        mode = self._make_mode()
+        mode._req_t_start = time.monotonic() - 5.0
+        mode._req_plugin_s = 0.05
+        # Summary reads the per-request snapshot, not cache.last_hit_type directly
+        mode._req_cache_hit_type = "hit-fresh"
+        with patch("common.wake_word.logger") as mock_logger:
+            mode._emit_request_summary()
+        summary = mock_logger.info.call_args[0][0]
+        self.assertIn("plugin=0.05s(cache:hit-fresh)", summary)
+
+    def test_emit_summary_cache_status_none_when_no_cache(self):
+        mode = self._make_mode(cache=None)
+        mode._req_t_start = time.monotonic() - 5.0
+        mode._req_plugin_s = 0.05
+        with patch("common.wake_word.logger") as mock_logger:
+            mode._emit_request_summary()
+        summary = mock_logger.info.call_args[0][0]
+        self.assertIn("plugin=0.05s(cache:none)", summary)
+
+    def test_emit_summary_cache_status_none_when_last_hit_type_not_set(self):
+        mock_cache = Mock()
+        mock_cache.last_hit_type = None
+        mode = self._make_mode(cache=mock_cache)
+        mode._req_t_start = time.monotonic() - 5.0
+        mode._req_plugin_s = 0.05
+        with patch("common.wake_word.logger") as mock_logger:
+            mode._emit_request_summary()
+        summary = mock_logger.info.call_args[0][0]
+        self.assertIn("plugin=0.05s(cache:none)", summary)
+
+    def test_emit_summary_includes_respond_field(self):
+        mode = self._make_mode()
+        mode._req_t_start = time.monotonic() - 5.0
+        mode._req_respond_s = 4.12
+        with patch("common.wake_word.logger") as mock_logger:
+            mode._emit_request_summary()
+        summary = mock_logger.info.call_args[0][0]
+        self.assertIn("respond=4.12s", summary)
+
+    def test_emit_summary_always_includes_total(self):
+        mode = self._make_mode()
+        mode._req_t_start = time.monotonic() - 3.0
+        with patch("common.wake_word.logger") as mock_logger:
+            mode._emit_request_summary()
+        summary = mock_logger.info.call_args[0][0]
+        self.assertIn("total=", summary)
+        self.assertIn("s", summary)
+
+    def test_emit_summary_omits_plugin_field_for_default_route(self):
+        mode = self._make_mode()
+        mode._req_t_start = time.monotonic() - 5.0
+        mode._req_transcribe_s = 2.0
+        mode._req_route_s = 1.0
+        mode._req_route_name = "default-route"
+        mode._req_plugin_s = None  # No plugin on default route
+        mode._req_respond_s = 3.0
+        with patch("common.wake_word.logger") as mock_logger:
+            mode._emit_request_summary()
+        summary = mock_logger.info.call_args[0][0]
+        self.assertNotIn("plugin=", summary)
+        self.assertIn("respond=3.00s", summary)
+
+    # --- timing fields set in _state_processing ---
+
+    def test_state_idle_sets_req_t_start_on_wake_word(self):
+        """_req_t_start is set when wake word is detected."""
+        mode = self._make_mode()
+        mode.porcupine = Mock()
+        mode.porcupine.sample_rate = 16000
+        mode.porcupine.frame_length = 512
+        mode.running = True
+        mode.state = State.IDLE
+
+        # Simulate: first frame no wake word, second frame detects wake word
+        call_count = [0]
+
+        def porcupine_process(pcm):
+            call_count[0] += 1
+            return 0 if call_count[0] >= 2 else -1
+
+        mode.porcupine.process.side_effect = porcupine_process
+        mode._play_confirmation_beep = Mock()
+
+        with patch("common.wake_word.pyaudio.PyAudio") as mock_pa_cls:
+            mock_pa = Mock()
+            mock_pa_cls.return_value = mock_pa
+            mock_stream = Mock()
+            mock_pa.open.return_value = mock_stream
+            mock_stream.read.return_value = b"\x00" * (512 * 2)  # 512 int16 samples
+            mode._state_idle()
+
+        self.assertIsNotNone(mode._req_t_start)
+
+    def test_summary_suppressed_when_barge_in_during_responding(self):
+        """_emit_request_summary is skipped when barge-in interrupts the response."""
+        mode = self._make_mode()
+        mode._req_t_start = time.monotonic()
+        mode.streaming_user_input = "tell me a joke"
+        mode.streaming_response_text = None
+
+        mock_barge_in = Mock()
+        mock_barge_in.is_triggered = True
+        mode.barge_in = mock_barge_in
+
+        mode._respond_streaming = Mock()
+        mode._cleanup_barge_in = Mock()
+        mode._remove_recorded_audio = Mock()
+        mode._play_confirmation_beep = Mock()
+
+        with patch("common.wake_word.logger") as mock_logger:
+            mode._state_responding()
+
+        mock_logger.info.assert_not_called()
+        self.assertEqual(mode.state, State.LISTENING)
+
+    def test_cache_hit_type_snapshotted_after_plugin_call(self):
+        """_req_cache_hit_type is snapshotted from cache.last_hit_type immediately after plugin."""
+        mock_cache = Mock(spec_set=["last_hit_type"])
+        mock_cache.last_hit_type = None
+        mode = self._make_mode(cache=mock_cache)
+        mode._req_t_start = time.monotonic()
+        mode.barge_in = Mock()
+        mode.barge_in.is_triggered = False
+        mode.barge_in.start = Mock()
+        mode.barge_in.run_with_polling = Mock(side_effect=lambda op, name: op())
+        mode.recorded_audio_path = "/tmp/fake.wav"
+        mode.plugins = {"weather": Mock()}
+
+        mode.ai.transcribe_and_translate.return_value = "What's the weather?"
+        mode.ai.define_route.return_value = {"route": "weather"}
+
+        def plugin_side_effect(user_input, route):
+            mock_cache.last_hit_type = "hit-stale"
+            return "Cloudy"
+        self.mock_route_message.side_effect = plugin_side_effect
+
+        with patch("common.wake_word.os.path.exists", return_value=True):
+            mode._state_processing()
+
+        # Snapshot must capture the value set by the plugin call
+        self.assertEqual(mode._req_cache_hit_type, "hit-stale")
+
 if __name__ == '__main__':
     unittest.main()

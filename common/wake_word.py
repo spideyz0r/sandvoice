@@ -3,6 +3,7 @@ import logging
 import os
 import struct
 import threading
+import time
 from enum import Enum
 
 import pvporcupine
@@ -38,7 +39,7 @@ class WakeWordMode:
     Returns to IDLE after each cycle.
     """
 
-    def __init__(self, config, ai_instance, audio_instance, route_message, plugins=None, audio_lock=None):
+    def __init__(self, config, ai_instance, audio_instance, route_message, plugins=None, audio_lock=None, cache=None):
         """Initialize wake word mode.
 
         Args:
@@ -62,6 +63,7 @@ class WakeWordMode:
         self.route_message = route_message
         self.plugins = plugins
         self._audio_lock = audio_lock
+        self.cache = cache
         self.state = State.IDLE
         self.running = False
 
@@ -75,6 +77,15 @@ class WakeWordMode:
         self.barge_in = None  # BargeInDetector instance (created in _initialize)
         self.vad_recorder = None  # VadRecorder instance (created in _initialize)
         self.responder = None  # StreamingResponder instance (created in _initialize)
+
+        # Per-request timing (reset each cycle)
+        self._req_t_start = None
+        self._req_transcribe_s = None
+        self._req_route_s = None
+        self._req_route_name = None
+        self._req_plugin_s = None
+        self._req_cache_hit_type = None
+        self._req_respond_s = None
 
         logger.debug("Initializing wake word mode")
 
@@ -306,6 +317,7 @@ class WakeWordMode:
 
                 if keyword_index >= 0:
                     logger.info("Wake word detected: '%s'", self.config.wake_phrase)
+                    self._req_t_start = time.monotonic()
 
                     self._play_confirmation_beep()
 
@@ -368,6 +380,9 @@ class WakeWordMode:
 
         # Play confirmation beep
         self._play_confirmation_beep()
+
+        # Record start time for the new request that follows barge-in
+        self._req_t_start = time.monotonic()
 
         # Go directly to LISTENING
         self.state = State.LISTENING
@@ -457,16 +472,26 @@ class WakeWordMode:
             raise RuntimeError("Barge-in detector is not initialized; ensure _initialize() has been called")
         self.barge_in.start()
 
+        # Reset per-request timing for this cycle
+        self._req_transcribe_s = None
+        self._req_route_s = None
+        self._req_route_name = None
+        self._req_plugin_s = None
+        self._req_cache_hit_type = None
+        self._req_respond_s = None
+
         try:
             # Capture path locally to avoid race with barge-in clearing self.recorded_audio_path
             audio_path = self.recorded_audio_path
 
             # Transcribe the audio
             logger.debug("Transcribing audio from: %s", audio_path)
+            _t0 = time.monotonic()
             user_input = self._poll_op(
                 lambda: self.ai.transcribe_and_translate(audio_file_path=audio_path),
                 "transcription",
             )
+            self._req_transcribe_s = time.monotonic() - _t0
             if user_input is _BARGE_IN:
                 return
 
@@ -480,13 +505,16 @@ class WakeWordMode:
                 return
 
             # Generate response via plugin routing
+            _t0 = time.monotonic()
             route = self._poll_op(
                 lambda: self.ai.define_route(user_input),
                 "route definition",
             )
+            self._req_route_s = time.monotonic() - _t0
             if route is _BARGE_IN:
                 return
 
+            self._req_route_name = route.get("route") if isinstance(route, dict) else str(route)
             logger.debug("Route: %s", route)
 
             stream_default_route = (
@@ -506,10 +534,16 @@ class WakeWordMode:
                 self.state = State.RESPONDING
                 return
 
+            _t0 = time.monotonic()
             response_text = self._poll_op(
                 lambda: self.route_message(user_input, route),
                 "plugin response",
             )
+            self._req_plugin_s = time.monotonic() - _t0
+            # Snapshot cache hit type immediately so scheduler-thread cache lookups
+            # cannot overwrite it before _emit_request_summary() reads it.
+            if self.cache is not None:
+                self._req_cache_hit_type = self.cache.last_hit_type
             if response_text is _BARGE_IN:
                 return
 
@@ -558,13 +592,18 @@ class WakeWordMode:
         if self.config.visual_state_indicator:
             print("🔊 Responding...")
 
-        if self.streaming_user_input is not None or self.streaming_response_text is not None:
+        has_response = self.streaming_user_input is not None or self.streaming_response_text is not None
+        if has_response:
             self._respond_streaming()
 
         # Signal barge-in detector to stop and wait for it to finish
         # Wait for thread to finish to ensure PyAudio stream is closed before LISTENING reopens it
         barge_in_triggered = self.barge_in is not None and self.barge_in.is_triggered
         self._cleanup_barge_in(timeout=0.3)
+
+        # Emit per-request timing summary only for fully completed (non-interrupted) requests
+        if has_response and not barge_in_triggered:
+            self._emit_request_summary()
 
         # Clean up temporary recorded audio file
         self._remove_recorded_audio()
@@ -578,6 +617,9 @@ class WakeWordMode:
 
             # Play confirmation beep (consistent with _handle_immediate_barge_in)
             self._play_confirmation_beep()
+
+            # Record start time for the new request that follows barge-in
+            self._req_t_start = time.monotonic()
 
             self.state = State.LISTENING
         else:
@@ -604,10 +646,42 @@ class WakeWordMode:
         # Ensure barge-in detection is running (always required in wake-word mode)
         self.barge_in.start()  # no-op if already running
 
+        _t0 = time.monotonic()
         self.responder.respond(user_input, precomputed_text)
+        self._req_respond_s = time.monotonic() - _t0
 
         # Reset streaming metadata
         self._reset_streaming_state()
+
+    def _emit_request_summary(self):
+        """Emit a single INFO line summarising timing and routing for the completed request."""
+        if self._req_t_start is None:
+            return
+
+        total_s = time.monotonic() - self._req_t_start
+
+        parts = ["[request]"]
+
+        if self._req_transcribe_s is not None:
+            parts.append(f"transcribe={self._req_transcribe_s:.2f}s")
+
+        if self._req_route_s is not None:
+            route_model = getattr(self.config, "gpt_route_model", "?")
+            route_name = self._req_route_name or "?"
+            parts.append(f"route={self._req_route_s:.2f}s({route_model}→{route_name})")
+
+        if self._req_plugin_s is not None:
+            cache_status = "none"
+            if self._req_cache_hit_type is not None:
+                cache_status = self._req_cache_hit_type
+            parts.append(f"plugin={self._req_plugin_s:.2f}s(cache:{cache_status})")
+
+        if self._req_respond_s is not None:
+            parts.append(f"respond={self._req_respond_s:.2f}s")
+
+        parts.append(f"total={total_s:.2f}s")
+
+        logger.info(" ".join(parts))
 
     def _cleanup(self):
         """Clean up Porcupine, VAD, barge-in thread, and audio resources."""

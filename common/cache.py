@@ -44,6 +44,12 @@ class VoiceCache:
             logger.warning("SQLite WAL/busy_timeout pragma unavailable, using defaults: %s", e)
         self._conn.row_factory = sqlite3.Row
         self._lock = threading.Lock()
+        # last_hit_type is a best-effort diagnostic set on each get() call so that
+        # wake-word request summaries can log cache status without changing plugin
+        # signatures.  It is NOT thread-safe: concurrent get() calls from the scheduler
+        # thread and the wake-word thread can overwrite each other.  The impact is
+        # limited to a single potentially-stale log field; correctness is unaffected.
+        self.last_hit_type: Optional[str] = None
         self._init_schema()
 
     def _init_schema(self):
@@ -60,22 +66,45 @@ class VoiceCache:
             self._conn.commit()
 
     def get(self, key: str) -> Optional[CacheEntry]:
-        """Return the cache entry for key, or None if not found or if the cache is closed."""
+        """Return the cache entry for key, or None if not found or if the cache is closed.
+
+        As a side effect, sets ``last_hit_type`` to:
+
+        * ``"miss"`` when no entry is found, when the cache is closed, or when an entry
+          exists but is beyond its ``max_stale_s`` (in which case the plugin will perform
+          a live fetch).
+        * ``"hit-fresh"`` when the entry is within its TTL.
+        * ``"hit-stale"`` when the entry is beyond its TTL but still within ``max_stale_s``
+          and can be served.
+
+        Callers may read ``last_hit_type`` after this call to surface cache status in logs.
+        """
         with self._lock:
             if self._conn is None:
+                self.last_hit_type = "miss"
                 return None
             row = self._conn.execute(
                 "SELECT * FROM cache_entries WHERE key = ?", (key,)
             ).fetchone()
-        if row is None:
-            return None
-        return CacheEntry(
-            key=row["key"],
-            value=row["value"],
-            updated_at=row["updated_at"],
-            ttl_s=row["ttl_s"],
-            max_stale_s=row["max_stale_s"],
-        )
+            if row is None:
+                self.last_hit_type = "miss"
+                return None
+            entry = CacheEntry(
+                key=row["key"],
+                value=row["value"],
+                updated_at=row["updated_at"],
+                ttl_s=row["ttl_s"],
+                max_stale_s=row["max_stale_s"],
+            )
+            if self.is_fresh(entry):
+                self.last_hit_type = "hit-fresh"
+            elif self.can_serve(entry):
+                self.last_hit_type = "hit-stale"
+            else:
+                # Entry exists but is beyond max_stale_s; plugin will do a live fetch.
+                # Report as "miss" so the summary reflects what the plugin actually used.
+                self.last_hit_type = "miss"
+        return entry
 
     def set(self, key: str, value: str, ttl_s: int, max_stale_s: int):
         """Insert or update a cache entry."""
