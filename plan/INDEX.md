@@ -111,6 +111,10 @@ plan/
 **Document**: [completed/36-wake-word-streaming-responder-extraction.md](./completed/36-wake-word-streaming-responder-extraction.md)
 **Description**: Extract the 265-line `_respond_streaming()` pipeline (text queue, TTS worker, audio player worker, barge-in polling) into `common/streaming_responder.py` with a `StreamingResponder` class. `_CompositeStopEvent` moved out of wake_word.py. ~240 lines removed, >80% test coverage on StreamingResponder. Requires Plan 35.
 
+### Priority 23: Request Timing Summary Log
+**Document**: [completed/23-request-timing-summary-log.md](./completed/23-request-timing-summary-log.md)
+**Description**: Emit a single INFO line per request summarising transcription, routing, plugin, and TTS timing plus cache status. Enables clean benchmarking without enabling `log_level: debug`. Per-request `_req_cache_hit_type` snapshot isolates summary from concurrent scheduler-thread cache reads. Requires Plan 28.
+
 ---
 
 ## In Progress 🚧
@@ -174,10 +178,6 @@ plan/
 ### Priority 22: Plugin Manifest System
 **Document**: [backlog/22-plugin-manifest-system.md](./backlog/22-plugin-manifest-system.md)
 **Description**: Self-contained plugin folders with plugin.yaml manifests that self-register routes, config defaults, and env var requirements — eliminating manual edits to routes.yaml when adding or removing plugins.
-
-### Priority 23: Request Timing Summary Log
-**Document**: [backlog/23-request-timing-summary-log.md](./backlog/23-request-timing-summary-log.md)
-**Description**: Emit a single INFO line per request summarising transcription, routing, plugin, and TTS timing plus cache status. Enables clean benchmarking without enabling `log_level: debug`. Requires Plan 28.
 
 ### Priority 25: Terminal UI
 **Document**: [backlog/25-terminal-ui.md](./backlog/25-terminal-ui.md)
