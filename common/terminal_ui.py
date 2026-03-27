@@ -123,10 +123,10 @@ class TerminalUI:
             print(f"[{label} {elapsed_s:.2f}s]")
 
     def print_exchange(self, speaker: str, text: str | None) -> None:
-        """Print a conversation turn below the status line.
+        """Print a conversation turn after clearing the status line.
 
-        When using ANSI, a newline is emitted first so the status line is
-        preserved on its own line before the exchange is printed beneath it.
+        When using ANSI, the current status line is cleared and a newline is
+        emitted before the exchange is printed on subsequent lines.
 
         Args:
             speaker: ``"you"`` for user input, bot name for the assistant.
@@ -169,7 +169,7 @@ class TerminalUI:
         self._spinner_stop.set()
         t = self._spinner_thread
         if t is not None and t.is_alive() and threading.current_thread() is not t:
-            t.join()  # spin loop exits within one 0.2s tick after stop event is set
+            t.join(timeout=0.5)  # spin loop exits within 0.2s; bound in case stdout blocks
         self._spinner_thread = None
 
     def _spin_loop(self) -> None:
