@@ -127,7 +127,7 @@ class TerminalUI:
         else:
             print(f"[{label} {elapsed_s:.2f}s]")
 
-    def print_exchange(self, speaker: str, text: str) -> None:
+    def print_exchange(self, speaker: str, text: str | None) -> None:
         """Print a conversation turn below the status line.
 
         When using ANSI, a newline is emitted first so the status line is
@@ -143,11 +143,12 @@ class TerminalUI:
 
         indent = "  "
         if speaker == "you":
-            speaker_str = f"{_DIM}you{_RESET}"
-            pad = " " * max(0, _SPEAKER_COL_WIDTH - len("you"))
+            label = "you"
+            speaker_str = f"{_DIM}{label}{_RESET}" if self._use_ansi else label
         else:
-            speaker_str = f"{_GREEN}{speaker}{_RESET}"
-            pad = " " * max(0, _SPEAKER_COL_WIDTH - len(speaker))
+            label = speaker
+            speaker_str = f"{_GREEN}{label}{_RESET}" if self._use_ansi else label
+        pad = " " * max(0, _SPEAKER_COL_WIDTH - len(label))
 
         continuation = " " * (len(indent) + _SPEAKER_COL_WIDTH)
         lines = (text or "").splitlines() or [""]

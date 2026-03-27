@@ -55,7 +55,8 @@ class WakeWordMode:
                 audio playback call to serialize mixer usage with other threads (e.g.,
                 the scheduler's TTS output). If None, no external locking is applied.
             ui: Optional TerminalUI instance for ANSI status line and conversation output.
-                If None, falls back to plain print() gated by config.visual_state_indicator.
+                If None, falls back to plain print() for conversation output; state prints
+                are additionally gated by config.visual_state_indicator.
         """
         if route_message is None:
             raise ValueError("route_message is required for wake-word mode")
@@ -115,11 +116,11 @@ class WakeWordMode:
                 elif self.state == State.RESPONDING:
                     self._state_responding()
         except KeyboardInterrupt:
-            if self.ui is not None:
-                self.ui.close()
-            elif self.config.visual_state_indicator:
+            if self.ui is None and self.config.visual_state_indicator:
                 print("\n👋 Exiting wake word mode...")
         finally:
+            if self.ui is not None:
+                self.ui.close()
             self._cleanup()
 
     def _initialize(self):

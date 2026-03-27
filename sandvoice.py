@@ -585,9 +585,13 @@ if __name__ == "__main__":
 
         from common.terminal_ui import TerminalUI
         audio = Audio(sandvoice.config)
-        ui = TerminalUI(
-            wake_phrase=sandvoice.config.wake_phrase,
-            botname=sandvoice.config.botname,
+        ui = (
+            TerminalUI(
+                wake_phrase=sandvoice.config.wake_phrase,
+                botname=sandvoice.config.botname,
+            )
+            if sandvoice.config.visual_state_indicator
+            else None
         )
         wake_word_mode = WakeWordMode(
             sandvoice.config,

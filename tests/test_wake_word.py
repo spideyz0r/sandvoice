@@ -1412,5 +1412,159 @@ class TestRequestTimingSummary(unittest.TestCase):
         # Snapshot must capture the value set by the plugin call
         self.assertEqual(mode._req_cache_hit_type, "hit-stale")
 
+class TestTerminalUIIntegration(unittest.TestCase):
+    """Tests that WakeWordMode routes state and conversation output through TerminalUI."""
+
+    def setUp(self):
+        logging.disable(logging.CRITICAL)
+
+        self.mock_config = Mock()
+        self.mock_config.debug = False
+        self.mock_config.visual_state_indicator = True
+        self.mock_config.vad_enabled = "enabled"
+        self.mock_config.wake_phrase = "hey bot"
+        self.mock_config.botname = "testbot"
+        self.mock_config.vad_aggressiveness = 1
+        self.mock_config.sample_rate = 16000
+        self.mock_config.frame_duration_ms = 30
+        self.mock_config.min_speech_frames = 3
+        self.mock_config.max_silence_frames = 10
+        self.mock_config.stream_responses = "enabled"
+        self.mock_config.stream_tts = "enabled"
+
+        self.mock_ai = Mock()
+        self.mock_audio = Mock()
+        self.mock_route_message = Mock(return_value="Plugin response")
+        self.mock_ui = Mock()
+
+    def tearDown(self):
+        logging.disable(logging.NOTSET)
+
+    def _make_mode(self, **kwargs):
+        return WakeWordMode(
+            self.mock_config, self.mock_ai, self.mock_audio,
+            route_message=self.mock_route_message,
+            ui=self.mock_ui,
+            **kwargs,
+        )
+
+    def test_state_idle_calls_ui_set_state_waiting(self):
+        mode = _build_mode_for_idle(self.mock_config, self.mock_ai, self.mock_audio,
+                                     self.mock_route_message, self.mock_ui)
+        # Simulate one idle cycle by calling _state_idle with a mocked porcupine
+        mode.porcupine = Mock()
+        mode.porcupine.frame_length = 512
+        mode.porcupine.process.return_value = -1  # no keyword
+        mode.vad_recorder = Mock()
+        mode.vad_recorder.read_frame.return_value = b"\x00" * 1024
+        mode.running = True
+        # Force state to leave IDLE after one iteration
+        def stop_after_one(*args, **kwargs):
+            mode.running = False
+        mode.porcupine.process.side_effect = stop_after_one
+
+        mode._state_idle()
+
+        self.mock_ui.set_state.assert_called_with("waiting")
+
+    def test_state_listening_calls_ui_set_state_listening(self):
+        mode = self._make_mode()
+        mode.vad_recorder = Mock()
+        mode.vad_recorder.record.return_value = "/tmp/fake.wav"
+        mode._play_confirmation_beep = Mock()
+        mode.barge_in = Mock()
+        mode.barge_in.run_with_polling = Mock(side_effect=lambda op, name: op())
+        mode.barge_in.is_triggered = False
+
+        mode._state_listening()
+
+        self.mock_ui.set_state.assert_any_call("listening")
+
+    def test_state_processing_calls_ui_set_state_processing(self):
+        mode = self._make_mode()
+        mode._req_t_start = time.monotonic()
+        mode.barge_in = Mock()
+        mode.barge_in.is_triggered = False
+        mode.barge_in.start = Mock()
+        mode.barge_in.run_with_polling = Mock(side_effect=lambda op, name: op())
+        mode.recorded_audio_path = "/tmp/fake.wav"
+        mode.plugins = {"weather": Mock()}
+        mode.ai.transcribe_and_translate.return_value = "What time is it?"
+        mode.ai.define_route.return_value = {"route": "default"}
+
+        with patch("common.wake_word.os.path.exists", return_value=True):
+            mode._state_processing()
+
+        self.mock_ui.set_state.assert_any_call("processing")
+
+    def test_state_processing_calls_ui_print_exchange_for_user_input(self):
+        mode = self._make_mode()
+        mode._req_t_start = time.monotonic()
+        mode.barge_in = Mock()
+        mode.barge_in.is_triggered = False
+        mode.barge_in.start = Mock()
+        mode.barge_in.run_with_polling = Mock(side_effect=lambda op, name: op())
+        mode.recorded_audio_path = "/tmp/fake.wav"
+        mode.plugins = {"weather": Mock()}
+        mode.ai.transcribe_and_translate.return_value = "hello"
+        mode.ai.define_route.return_value = {"route": "default"}
+
+        with patch("common.wake_word.os.path.exists", return_value=True):
+            mode._state_processing()
+
+        self.mock_ui.print_exchange.assert_any_call("you", "hello")
+
+    def test_state_responding_calls_ui_set_state_responding(self):
+        mode = self._make_mode()
+        mode._req_t_start = time.monotonic()
+        mode.streaming_user_input = None
+        mode.streaming_response_text = None
+        mode.barge_in = Mock()
+        mode.barge_in.is_triggered = False
+        mode._cleanup_barge_in = Mock()
+        mode._remove_recorded_audio = Mock()
+        mode._play_confirmation_beep = Mock()
+        mode.response_text = "hello"
+
+        mode._state_responding()
+
+        self.mock_ui.set_state.assert_any_call("responding")
+
+    def test_state_processing_calls_ui_print_exchange_for_bot_response(self):
+        # Plugin route (not default): route_message is called, response printed via print_exchange
+        mode = self._make_mode()
+        mode._req_t_start = time.monotonic()
+        mode.barge_in = Mock()
+        mode.barge_in.is_triggered = False
+        mode.barge_in.start = Mock()
+        mode.barge_in.run_with_polling = Mock(side_effect=lambda op, name: op())
+        mode.recorded_audio_path = "/tmp/fake.wav"
+        mode.plugins = {"weather": Mock()}
+        mode.ai.transcribe_and_translate.return_value = "What is the weather?"
+        # Route to "weather" plugin (present in plugins) → no stream_default_route
+        mode.ai.define_route.return_value = {"route": "weather"}
+        self.mock_route_message.return_value = "Sunny and warm"
+
+        with patch("common.wake_word.os.path.exists", return_value=True):
+            mode._state_processing()
+
+        self.mock_ui.print_exchange.assert_any_call("testbot", "Sunny and warm")
+
+    def test_run_finally_calls_ui_close(self):
+        mode = self._make_mode()
+        mode._initialize = Mock()
+        mode._cleanup = Mock()
+        mode.running = False  # exit loop immediately
+
+        mode.run()
+
+        self.mock_ui.close.assert_called_once()
+
+
+def _build_mode_for_idle(config, ai, audio, route_message, ui):
+    mode = WakeWordMode(config, ai, audio, route_message=route_message, ui=ui)
+    return mode
+
+
 if __name__ == '__main__':
     unittest.main()
