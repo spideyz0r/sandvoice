@@ -46,7 +46,7 @@ class TestWeatherPluginNoCache(unittest.TestCase):
     def tearDown(self):
         os.environ.pop('OPENWEATHERMAP_API_KEY', None)
 
-    @patch('plugins.weather.OpenWeatherReader')
+    @patch('plugins.weather.plugin.OpenWeatherReader')
     def test_fetches_and_returns_response(self, MockReader):
         MockReader.return_value.get_current_weather.return_value = _WEATHER_DATA
         s = _make_sandvoice(cache=None)
@@ -54,7 +54,7 @@ class TestWeatherPluginNoCache(unittest.TestCase):
         result = process("What's the weather?", {}, s)
         self.assertEqual(result, "It is 20°C in London.")
 
-    @patch('plugins.weather.OpenWeatherReader')
+    @patch('plugins.weather.plugin.OpenWeatherReader')
     def test_uses_route_location_and_unit(self, MockReader):
         MockReader.return_value.get_current_weather.return_value = _WEATHER_DATA
         s = _make_sandvoice(cache=None)
@@ -62,7 +62,7 @@ class TestWeatherPluginNoCache(unittest.TestCase):
         process("weather in Paris", {"location": "Paris", "unit": "imperial"}, s)
         MockReader.assert_called_once_with("Paris", "imperial", s.config.api_timeout)
 
-    @patch('plugins.weather.OpenWeatherReader')
+    @patch('plugins.weather.plugin.OpenWeatherReader')
     def test_falls_back_to_config_location(self, MockReader):
         MockReader.return_value.get_current_weather.return_value = _WEATHER_DATA
         s = _make_sandvoice(cache=None, location="Berlin")
@@ -77,7 +77,7 @@ class TestWeatherPluginNoCache(unittest.TestCase):
         result = process("weather", {}, s)
         self.assertIn("Unable to fetch", result)
 
-    @patch('plugins.weather.OpenWeatherReader')
+    @patch('plugins.weather.plugin.OpenWeatherReader')
     def test_refresh_only_returns_none(self, MockReader):
         MockReader.return_value.get_current_weather.return_value = _WEATHER_DATA
         s = _make_sandvoice(cache=None)
@@ -99,7 +99,7 @@ class TestWeatherPluginWithCache(unittest.TestCase):
         self.cache.close()
         shutil.rmtree(self.tmp, ignore_errors=True)
 
-    @patch('plugins.weather.OpenWeatherReader')
+    @patch('plugins.weather.plugin.OpenWeatherReader')
     def test_fresh_cache_hit_skips_api(self, MockReader):
         self.cache.set(
             _CACHE_KEY, "It is 20°C in London.",
@@ -112,7 +112,7 @@ class TestWeatherPluginWithCache(unittest.TestCase):
         s.ai.generate_response.assert_not_called()
         self.assertEqual(result, "It is 20°C in London.")
 
-    @patch('plugins.weather.OpenWeatherReader')
+    @patch('plugins.weather.plugin.OpenWeatherReader')
     def test_cache_miss_fetches_and_populates_cache(self, MockReader):
         MockReader.return_value.get_current_weather.return_value = _WEATHER_DATA
         s = _make_sandvoice(cache=self.cache)
@@ -123,7 +123,7 @@ class TestWeatherPluginWithCache(unittest.TestCase):
         self.assertIsNotNone(entry)
         self.assertEqual(entry.value, "It is 20°C in London.")
 
-    @patch('plugins.weather.OpenWeatherReader')
+    @patch('plugins.weather.plugin.OpenWeatherReader')
     def test_refresh_only_bypasses_cache_read(self, MockReader):
         # Pre-populate cache with fresh data
         self.cache.set(
@@ -141,7 +141,7 @@ class TestWeatherPluginWithCache(unittest.TestCase):
         # Return value should be None for refresh_only
         self.assertIsNone(result)
 
-    @patch('plugins.weather.OpenWeatherReader')
+    @patch('plugins.weather.plugin.OpenWeatherReader')
     def test_refresh_only_updates_cache(self, MockReader):
         MockReader.return_value.get_current_weather.return_value = _WEATHER_DATA
         s = _make_sandvoice(cache=self.cache)
@@ -151,7 +151,7 @@ class TestWeatherPluginWithCache(unittest.TestCase):
         self.assertIsNotNone(entry)
         self.assertEqual(entry.value, "It is 20°C in London.")
 
-    @patch('plugins.weather.OpenWeatherReader')
+    @patch('plugins.weather.plugin.OpenWeatherReader')
     def test_api_error_does_not_cache(self, MockReader):
         MockReader.return_value.get_current_weather.return_value = {"error": "bad"}
         s = _make_sandvoice(cache=self.cache)
@@ -160,7 +160,7 @@ class TestWeatherPluginWithCache(unittest.TestCase):
         s.ai.generate_response.assert_called_once()
         self.assertIsNone(self.cache.get(_CACHE_KEY))
 
-    @patch('plugins.weather.OpenWeatherReader')
+    @patch('plugins.weather.plugin.OpenWeatherReader')
     def test_expired_cache_falls_through_to_api(self, MockReader):
         old_ts = (datetime.now(timezone.utc) - timedelta(hours=10)).isoformat()
         self.cache.set_with_timestamp(
@@ -174,7 +174,7 @@ class TestWeatherPluginWithCache(unittest.TestCase):
         # Cache was expired (beyond max_stale), so API should be called
         MockReader.assert_called_once()
 
-    @patch('plugins.weather.OpenWeatherReader')
+    @patch('plugins.weather.plugin.OpenWeatherReader')
     def test_stale_but_valid_cache_hit(self, MockReader):
         # Insert entry that is expired (past TTL) but within max_stale
         old_ts = (datetime.now(timezone.utc) - timedelta(hours=2)).isoformat()
@@ -190,7 +190,7 @@ class TestWeatherPluginWithCache(unittest.TestCase):
         s.ai.generate_response.assert_not_called()
         self.assertEqual(result, "It is 20°C in London.")
 
-    @patch('plugins.weather.OpenWeatherReader')
+    @patch('plugins.weather.plugin.OpenWeatherReader')
     def test_cache_read_failure_falls_back_to_live(self, MockReader):
         MockReader.return_value.get_current_weather.return_value = _WEATHER_DATA
         s = _make_sandvoice(cache=self.cache)
@@ -202,7 +202,7 @@ class TestWeatherPluginWithCache(unittest.TestCase):
         MockReader.assert_called_once()
         self.assertEqual(result, "It is 20°C in London.")
 
-    @patch('plugins.weather.OpenWeatherReader')
+    @patch('plugins.weather.plugin.OpenWeatherReader')
     def test_cache_write_failure_still_returns_response(self, MockReader):
         MockReader.return_value.get_current_weather.return_value = _WEATHER_DATA
         s = _make_sandvoice(cache=self.cache)
@@ -213,7 +213,7 @@ class TestWeatherPluginWithCache(unittest.TestCase):
         # Response should still be returned despite cache write failure
         self.assertEqual(result, "It is 20°C in London.")
 
-    @patch('plugins.weather.OpenWeatherReader')
+    @patch('plugins.weather.plugin.OpenWeatherReader')
     def test_legacy_json_cache_entry_falls_back_to_live(self, MockReader):
         # Seed cache with old-format raw weather JSON (pre-migration payload)
         self.cache.set(
@@ -241,22 +241,22 @@ class TestWeatherPluginDebugPaths(unittest.TestCase):
     def tearDown(self):
         os.environ.pop('OPENWEATHERMAP_API_KEY', None)
 
-    @patch('plugins.weather.OpenWeatherReader')
+    @patch('plugins.weather.plugin.OpenWeatherReader')
     def test_debug_log_when_location_missing(self, MockReader):
         MockReader.return_value.get_current_weather.return_value = _WEATHER_DATA
         s = _make_sandvoice(cache=None, debug=False, location="Tokyo")
         from plugins.weather import process
-        with patch('plugins.weather.logger') as mock_logger:
+        with patch('plugins.weather.plugin.logger') as mock_logger:
             process("weather", {}, s)
         debug_calls = [str(call) for call in mock_logger.debug.call_args_list]
         self.assertTrue(any("location" in c for c in debug_calls))
 
-    @patch('plugins.weather.OpenWeatherReader')
+    @patch('plugins.weather.plugin.OpenWeatherReader')
     def test_debug_log_when_unit_missing(self, MockReader):
         MockReader.return_value.get_current_weather.return_value = _WEATHER_DATA
         s = _make_sandvoice(cache=None, debug=False, unit="imperial")
         from plugins.weather import process
-        with patch('plugins.weather.logger') as mock_logger:
+        with patch('plugins.weather.plugin.logger') as mock_logger:
             process("weather", {"location": "Tokyo"}, s)
         debug_calls = [str(call) for call in mock_logger.debug.call_args_list]
         self.assertTrue(any("unit" in c for c in debug_calls))
@@ -275,7 +275,7 @@ class TestWeatherPluginDebugPaths(unittest.TestCase):
         result = process("weather", {"refresh_only": True}, s)
         self.assertIsNone(result)
 
-    @patch('plugins.weather.OpenWeatherReader')
+    @patch('plugins.weather.plugin.OpenWeatherReader')
     def test_generic_exception_returns_error(self, MockReader):
         MockReader.side_effect = RuntimeError("unexpected error")
         s = _make_sandvoice(cache=None, debug=False)
@@ -283,7 +283,7 @@ class TestWeatherPluginDebugPaths(unittest.TestCase):
         result = process("weather", {}, s)
         self.assertIn("Unable to fetch", result)
 
-    @patch('plugins.weather.OpenWeatherReader')
+    @patch('plugins.weather.plugin.OpenWeatherReader')
     def test_generic_exception_refresh_only_returns_none(self, MockReader):
         MockReader.side_effect = RuntimeError("unexpected error")
         s = _make_sandvoice(cache=None)
@@ -307,7 +307,7 @@ class TestOpenWeatherReader(unittest.TestCase):
         with self.assertRaises(ValueError):
             OpenWeatherReader("London")
 
-    @patch('plugins.weather.requests.get')
+    @patch('plugins.weather.plugin.requests.get')
     def test_get_current_weather_success(self, mock_get):
         mock_resp = Mock()
         mock_resp.json.return_value = _WEATHER_DATA
@@ -318,7 +318,7 @@ class TestOpenWeatherReader(unittest.TestCase):
         result = reader.get_current_weather()
         self.assertEqual(result, _WEATHER_DATA)
 
-    @patch('plugins.weather.requests.get')
+    @patch('plugins.weather.plugin.requests.get')
     def test_get_current_weather_request_exception(self, mock_get):
         mock_get.side_effect = req_lib.exceptions.RequestException("network error")
         from plugins.weather import OpenWeatherReader
@@ -326,7 +326,7 @@ class TestOpenWeatherReader(unittest.TestCase):
         result = reader.get_current_weather()
         self.assertIn("error", result)
 
-    @patch('plugins.weather.requests.get')
+    @patch('plugins.weather.plugin.requests.get')
     def test_get_current_weather_generic_exception(self, mock_get):
         mock_get.side_effect = RuntimeError("unexpected")
         from plugins.weather import OpenWeatherReader

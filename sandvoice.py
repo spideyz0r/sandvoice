@@ -10,8 +10,9 @@ from common.error_handling import handle_api_error
 from common.cache import VoiceCache
 from common.db import SchedulerDB
 from common.scheduler import TaskScheduler
+from common.plugin_loader import load_manifest, check_env_vars, build_extra_routes_text
 
-import argparse, atexit, importlib, logging, os, signal, sys
+import argparse, atexit, importlib, importlib.util, logging, os, signal, sys
 import queue, threading, time
 import re
 
@@ -87,6 +88,7 @@ class SandVoice:
         if not os.path.exists(self.config.tmp_files_path):
             os.makedirs(self.config.tmp_files_path)
         self.plugins = {}
+        self._plugin_manifests = []
         self.load_plugins()
         self._ai_audio_lock = threading.Lock()
         self._scheduler_audio = None  # lazily created on first scheduler voice task
@@ -119,69 +121,136 @@ class SandVoice:
             print(f"Plugin path {self.config.plugin_path} does not exist")
             exit(1)
         logger.debug("Loading plugins from %s", self.config.plugin_path)
-        plugins_dir = self.config.plugin_path
-        for filename in os.listdir(plugins_dir):
-            if filename.endswith(".py"):
-                try:
-                    raw_module_name = os.path.splitext(filename)[0]
-                    module_name = normalize_plugin_name(raw_module_name)
-                    if raw_module_name != module_name:
-                        suggested_name = (
-                            module_name
-                            if is_valid_plugin_module_name(module_name)
-                            else suggested_plugin_module_name(raw_module_name)
-                        )
-                        logger.warning(
-                            "Plugin filename %s is not underscore-safe; rename it to %s.py",
-                            filename,
-                            suggested_name,
-                        )
-                        continue
-                    if not is_valid_plugin_module_name(module_name):
-                        suggested_name = suggested_plugin_module_name(raw_module_name)
-                        logger.warning(
-                            "Plugin filename %s is not a valid Python module identifier; rename it to %s.py",
-                            filename,
-                            suggested_name,
-                        )
-                        continue
-                    module = importlib.import_module(f"plugins.{module_name}")
-                except Exception as e:
-                    logger.warning("Error loading plugin %s: %s", filename, e)
-                    if logger.isEnabledFor(logging.DEBUG):
-                        logger.debug("Plugin load traceback for %s", filename, exc_info=True)
-                    continue
+        self._plugin_manifests = []
+        for entry in os.scandir(self.config.plugin_path):
+            if entry.is_dir():
+                self._load_plugin_folder(entry)
+            elif entry.name.endswith(".py"):
+                self._load_plugin_file(entry)
+        self.config.merge_plugin_defaults(self._plugin_manifests)
 
-                try:
-                    # Expect a class named 'Plugin' or a top-level 'process' function
-                    if hasattr(module, 'Plugin'):
-                        plugin_instance = module.Plugin()
-                        plugin = getattr(plugin_instance, "process", None)
-                    elif hasattr(module, 'process'):
-                        plugin = module.process
-                    else:
-                        logger.warning(
-                            "Plugin %s has no supported entrypoint; expected Plugin or process",
-                            filename,
-                        )
-                        continue
-                except Exception as e:
-                    logger.warning("Error initializing plugin %s: %s", filename, e)
-                    if logger.isEnabledFor(logging.DEBUG):
-                        logger.debug("Plugin init traceback for %s", filename, exc_info=True)
-                    continue
+    def _load_plugin_file(self, entry):
+        """Load a single-file .py plugin (backward-compatible path)."""
+        filename = entry.name
+        try:
+            raw_module_name = os.path.splitext(filename)[0]
+            module_name = normalize_plugin_name(raw_module_name)
+            if raw_module_name != module_name:
+                suggested_name = (
+                    module_name
+                    if is_valid_plugin_module_name(module_name)
+                    else suggested_plugin_module_name(raw_module_name)
+                )
+                logger.warning(
+                    "Plugin filename %s is not underscore-safe; rename it to %s.py",
+                    filename,
+                    suggested_name,
+                )
+                return
+            if not is_valid_plugin_module_name(module_name):
+                suggested_name = suggested_plugin_module_name(raw_module_name)
+                logger.warning(
+                    "Plugin filename %s is not a valid Python module identifier; rename it to %s.py",
+                    filename,
+                    suggested_name,
+                )
+                return
+            module = importlib.import_module(f"plugins.{module_name}")
+        except Exception as e:
+            logger.warning("Error loading plugin %s: %s", filename, e)
+            if logger.isEnabledFor(logging.DEBUG):
+                logger.debug("Plugin load traceback for %s", filename, exc_info=True)
+            return
+        self._register_plugin_module(module, module_name)
 
-                if not callable(plugin):
-                    logger.warning(
-                        "Plugin %s does not expose a callable process function; skipping",
-                        filename,
-                    )
-                    continue
+    def _load_plugin_folder(self, entry):
+        """Load a folder-based plugin driven by a plugin.yaml manifest."""
+        folder_path = entry.path
+        folder_name = entry.name
+        if folder_name.startswith("_"):
+            return
 
-                self.plugins[module_name] = plugin
-                alias = plugin_route_alias(module_name)
-                if alias != module_name:
-                    self.plugins[alias] = plugin
+        manifest = load_manifest(folder_path)
+        if manifest is None:
+            logger.debug("No valid plugin.yaml in %s; skipping folder", folder_path)
+            return
+
+        missing = check_env_vars(manifest)
+        if missing:
+            noun = "vars" if len(missing) > 1 else "var"
+            print(
+                f"[sandvoice] {manifest.name} plugin disabled: "
+                f"missing env {noun} {', '.join(missing)}"
+            )
+            logger.warning(
+                "Plugin '%s' disabled: missing env vars: %s",
+                manifest.name,
+                ", ".join(missing),
+            )
+            return
+
+        plugin_py = os.path.join(folder_path, "plugin.py")
+        if not os.path.isfile(plugin_py):
+            logger.warning(
+                "Plugin folder %s has plugin.yaml but no plugin.py; skipping", folder_path
+            )
+            return
+
+        module_name = normalize_plugin_name(manifest.name)
+        try:
+            spec = importlib.util.spec_from_file_location(
+                f"plugins.{module_name}", plugin_py
+            )
+            module = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(module)
+        except Exception as e:
+            logger.warning("Error loading plugin folder %s: %s", folder_name, e)
+            if logger.isEnabledFor(logging.DEBUG):
+                logger.debug("Plugin load traceback for %s", folder_name, exc_info=True)
+            return
+
+        if self._register_plugin_module(module, module_name, folder_name):
+            self._plugin_manifests.append(manifest)
+
+    def _register_plugin_module(self, module, module_name, source_label=None):
+        """Register a loaded module's callable. Returns True on success.
+
+        Args:
+            module:       Loaded module object.
+            module_name:  Pre-normalised module name used as the plugin dict key.
+            source_label: Human-readable name for log messages (defaults to module_name).
+        """
+        label = source_label or module_name
+        try:
+            if hasattr(module, "Plugin"):
+                plugin_instance = module.Plugin()
+                plugin = getattr(plugin_instance, "process", None)
+            elif hasattr(module, "process"):
+                plugin = module.process
+            else:
+                logger.warning(
+                    "Plugin %s has no supported entrypoint; expected Plugin or process",
+                    label,
+                )
+                return False
+        except Exception as e:
+            logger.warning("Error initializing plugin %s: %s", label, e)
+            if logger.isEnabledFor(logging.DEBUG):
+                logger.debug("Plugin init traceback for %s", label, exc_info=True)
+            return False
+
+        if not callable(plugin):
+            logger.warning(
+                "Plugin %s does not expose a callable process function; skipping",
+                label,
+            )
+            return False
+
+        self.plugins[module_name] = plugin
+        alias = plugin_route_alias(module_name)
+        if alias != module_name:
+            self.plugins[alias] = plugin
+        return True
 
     def _init_cache(self):
         """Initialise VoiceCache if cache_enabled, using the same DB file as the scheduler."""
@@ -292,7 +361,10 @@ class SandVoice:
             user_input = self.ai.transcribe_and_translate()
             print(f"You: {user_input}")
 
-        route = self.ai.define_route(user_input)
+        route = self.ai.define_route(
+            user_input,
+            extra_routes=build_extra_routes_text(self._plugin_manifests, location=self.config.location),
+        )
 
         # Plan 08 Phase 2 (default route only): stream LLM response and start TTS playback early.
         can_stream_default = (
@@ -599,6 +671,9 @@ if __name__ == "__main__":
             audio_lock=sandvoice._ai_audio_lock,
             cache=sandvoice.cache,
             ui=ui,
+            extra_routes=build_extra_routes_text(
+                sandvoice._plugin_manifests, location=sandvoice.config.location
+            ),
         )
         wake_word_mode.run()
     # Default mode (ESC key) or CLI mode

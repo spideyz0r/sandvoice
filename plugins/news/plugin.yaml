@@ -1,0 +1,13 @@
+name: news
+version: 1.0.0
+
+route_description: >
+  The user is asking for news, not Hacker News. For example: "What are the
+  news today?" Another example: "What are the news of the day?"
+
+config_defaults:
+  rss_news: "https://feeds.bbci.co.uk/news/rss.xml"
+  rss_news_max_items: "5"
+
+dependencies:
+  - feedparser

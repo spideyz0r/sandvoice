@@ -133,9 +133,11 @@ class Config:
 
     def load_defaults(self):
         if not os.path.exists(self.config_file):
-            return self.defaults
+            self._user_keys: set = set()
+            return dict(self.defaults)
         with open(self.config_file, "r") as f:
             data = yaml.safe_load(f)
+        self._user_keys: set = set((data or {}).keys())
         return {**self.defaults, **(data or {})}
 
     def load_config(self):
@@ -402,7 +404,42 @@ class Config:
             raise ValueError(error_msg)
 
     def get(self, key):
-        return self.config.get(key, self.defaults[key])
+        return self.config.get(key, self.defaults.get(key))
+
+    def merge_plugin_defaults(self, manifests):
+        """Merge config defaults from plugin manifests at the lowest priority.
+
+        For each key in a manifest's ``config_defaults``, the value is only
+        applied when the user has not explicitly set that key in their
+        ``config.yaml``.  User config and built-in code defaults both win over
+        manifest defaults.
+
+        Args:
+            manifests: Iterable of :class:`~common.plugin_loader.PluginManifest`.
+        """
+        changed = False
+        for manifest in manifests:
+            for key, value in manifest.config_defaults.items():
+                if key not in self._user_keys and key not in self.config:
+                    self.config[key] = value
+                    changed = True
+        if changed:
+            self._apply_plugin_config_properties()
+
+    def _apply_plugin_config_properties(self):
+        """Re-apply the subset of config properties that plugins may supply defaults for."""
+        if "location" in self.config:
+            self.location = self.get("location")
+        if "unit" in self.config:
+            self.unit = self.get("unit")
+        if "rss_news" in self.config:
+            self.rss_news = self.get("rss_news")
+        if "rss_news_max_items" in self.config:
+            self.rss_news_max_items = self.get("rss_news_max_items")
+        if "summary_words" in self.config:
+            self.summary_words = self.get("summary_words")
+        if "search_sources" in self.config:
+            self.search_sources = self.get("search_sources")
 
     def _load_tasks_file(self):
         if not self.tasks_file_exists:

@@ -1,0 +1,29 @@
+name: weather
+version: 1.0.0
+
+route_description: >
+  The user is asking how the weather is or feels like, the user may or may not
+  mention what is the location. For example: "How is the weather outside now?"
+  The JSON answer must also include the keys location and unit. If no location
+  is defined, consider {{ location }}. Add a key "location" to the json with
+  the location. Convert the location to the following convention: City name,
+  state code (only for the US) and country code divided by comma. Also add a
+  key called "unit". The key unit, if not informed, is "metric" by default,
+  the other option is "imperial". Trim all spaces. Please use ISO 3166 country
+  codes. For example: Toronto,ON,CA. Example of result:
+  {"route": "weather", "reason": "The user asked for the weather",
+  "location": "Toronto,ON,CA", "unit": "metric"}
+
+route_extra_keys:
+  - location
+  - unit
+
+env_vars:
+  - OPENWEATHERMAP_API_KEY
+
+config_defaults:
+  location: "Toronto, ON, CA"
+  unit: metric
+
+dependencies:
+  - requests

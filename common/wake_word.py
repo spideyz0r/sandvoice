@@ -39,7 +39,7 @@ class WakeWordMode:
     Returns to IDLE after each cycle.
     """
 
-    def __init__(self, config, ai_instance, audio_instance, route_message, plugins=None, audio_lock=None, cache=None, ui=None):
+    def __init__(self, config, ai_instance, audio_instance, route_message, plugins=None, audio_lock=None, cache=None, ui=None, extra_routes=None):
         """Initialize wake word mode.
 
         Args:
@@ -57,6 +57,8 @@ class WakeWordMode:
             ui: Optional TerminalUI instance for ANSI status line and conversation output.
                 If None, falls back to plain print() for conversation output; state prints
                 are additionally gated by config.visual_state_indicator.
+            extra_routes: Optional pre-rendered route description string assembled from plugin
+                manifests. Appended to the core routing prompt in define_route calls.
         """
         if route_message is None:
             raise ValueError("route_message is required for wake-word mode")
@@ -68,6 +70,7 @@ class WakeWordMode:
         self._audio_lock = audio_lock
         self.cache = cache
         self.ui = ui
+        self._extra_routes = extra_routes or ""
         self.state = State.IDLE
         self.running = False
 
@@ -525,7 +528,7 @@ class WakeWordMode:
             # Generate response via plugin routing
             _t0 = time.monotonic()
             route = self._poll_op(
-                lambda: self.ai.define_route(user_input),
+                lambda: self.ai.define_route(user_input, extra_routes=self._extra_routes or None),
                 "route definition",
             )
             self._req_route_s = time.monotonic() - _t0

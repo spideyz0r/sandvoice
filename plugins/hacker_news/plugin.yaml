@@ -1,0 +1,10 @@
+name: hacker-news
+version: 1.0.0
+
+route_description: >
+  The user might be asking about real time Hacker News. This is just gonna
+  list the topics. For example: "What are the hacker news today?" Another
+  example: "What are the top 5 hacker news today?"
+
+config_defaults:
+  summary_words: "100"
