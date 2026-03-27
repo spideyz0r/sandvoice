@@ -39,7 +39,7 @@ class WakeWordMode:
     Returns to IDLE after each cycle.
     """
 
-    def __init__(self, config, ai_instance, audio_instance, route_message, plugins=None, audio_lock=None, cache=None):
+    def __init__(self, config, ai_instance, audio_instance, route_message, plugins=None, audio_lock=None, cache=None, ui=None):
         """Initialize wake word mode.
 
         Args:
@@ -54,6 +54,9 @@ class WakeWordMode:
             audio_lock: Optional threading.Lock (or compatible) acquired around every
                 audio playback call to serialize mixer usage with other threads (e.g.,
                 the scheduler's TTS output). If None, no external locking is applied.
+            ui: Optional TerminalUI instance for ANSI status line and conversation output.
+                If None, falls back to plain print() for conversation output; state prints
+                are additionally gated by config.visual_state_indicator.
         """
         if route_message is None:
             raise ValueError("route_message is required for wake-word mode")
@@ -64,6 +67,7 @@ class WakeWordMode:
         self.plugins = plugins
         self._audio_lock = audio_lock
         self.cache = cache
+        self.ui = ui
         self.state = State.IDLE
         self.running = False
 
@@ -112,9 +116,14 @@ class WakeWordMode:
                 elif self.state == State.RESPONDING:
                     self._state_responding()
         except KeyboardInterrupt:
-            if self.config.visual_state_indicator:
+            if self.ui is None and self.config.visual_state_indicator:
                 print("\n👋 Exiting wake word mode...")
         finally:
+            if self.ui is not None:
+                try:
+                    self.ui.close()
+                except Exception as e:
+                    logger.debug("UI close failed during wake word shutdown: %s", e)
             self._cleanup()
 
     def _initialize(self):
@@ -235,7 +244,7 @@ class WakeWordMode:
 
         self.responder = StreamingResponder(
             self.ai, self.audio, self._audio_lock, self.barge_in,
-            pop_streaming_chunk, self.config,
+            pop_streaming_chunk, self.config, ui=self.ui,
         )
 
     def _create_porcupine_instance(self):
@@ -293,7 +302,9 @@ class WakeWordMode:
         Listens for wake word in a blocking loop until detected.
         Plays confirmation beep and transitions to LISTENING.
         """
-        if self.config.visual_state_indicator:
+        if self.ui is not None:
+            self.ui.set_state("waiting")
+        elif self.config.visual_state_indicator:
             print(f"⏸️  Waiting for wake word ('{self.config.wake_phrase}')...")
 
         pa = None
@@ -338,7 +349,9 @@ class WakeWordMode:
         Records audio frames and runs VAD to detect end of speech.
         Saves recording and transitions to PROCESSING.
         """
-        if self.config.visual_state_indicator:
+        if self.ui is not None:
+            self.ui.set_state("listening")
+        elif self.config.visual_state_indicator:
             print("🎤 Listening...")
 
         if self.config.debug:
@@ -450,7 +463,9 @@ class WakeWordMode:
         Supports barge-in: can be interrupted at any step by wake word detection.
         Transitions to RESPONDING or LISTENING (if interrupted).
         """
-        if self.config.visual_state_indicator:
+        if self.ui is not None:
+            self.ui.set_state("processing")
+        elif self.config.visual_state_indicator:
             print("🤔 Processing...")
 
         # Debug: Check if any audio is unexpectedly playing when we enter PROCESSING
@@ -496,7 +511,10 @@ class WakeWordMode:
                 return
 
             logger.debug("Transcription: %s", user_input)
-            print(f"You: {user_input}")
+            if self.ui is not None:
+                self.ui.print_exchange("you", user_input)
+            else:
+                print(f"You: {user_input}")
 
             # Check for barge-in before starting response generation
             if self.barge_in.is_triggered:
@@ -551,7 +569,10 @@ class WakeWordMode:
             self.streaming_response_text = response_text
 
             logger.debug("Response: %s", self.response_text)
-            print(f"{self.config.botname}: {self.response_text}\n")
+            if self.ui is not None:
+                self.ui.print_exchange(self.config.botname, self.response_text)
+            else:
+                print(f"{self.config.botname}: {self.response_text}\n")
 
             # Final barge-in check before transitioning to RESPONDING
             if self.barge_in.is_triggered:
@@ -589,7 +610,9 @@ class WakeWordMode:
         """
         logger.debug("=== ENTERING RESPONDING === thread=%s", threading.current_thread().name)
 
-        if self.config.visual_state_indicator:
+        if self.ui is not None:
+            self.ui.set_state("responding")
+        elif self.config.visual_state_indicator:
             print("🔊 Responding...")
 
         has_response = self.streaming_user_input is not None or self.streaming_response_text is not None
