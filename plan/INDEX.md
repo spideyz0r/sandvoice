@@ -111,9 +111,17 @@ plan/
 **Document**: [completed/36-wake-word-streaming-responder-extraction.md](./completed/36-wake-word-streaming-responder-extraction.md)
 **Description**: Extract the 265-line `_respond_streaming()` pipeline (text queue, TTS worker, audio player worker, barge-in polling) into `common/streaming_responder.py` with a `StreamingResponder` class. `_CompositeStopEvent` moved out of wake_word.py. ~240 lines removed, >80% test coverage on StreamingResponder. Requires Plan 35.
 
+### Priority 11: Plugin Route Name Normalization
+**Document**: [completed/11-plugin-route-name-normalization.md](./completed/11-plugin-route-name-normalization.md)
+**Description**: Standardized plugin modules to underscore form (`hacker_news.py`). Added `normalize_plugin_name()`, `resolve_plugin_route_name()`, and hyphen aliases so route names like `hacker-news` dispatch correctly. Both forms registered in the plugin dict; invalid filenames logged with a rename hint.
+
 ### Priority 23: Request Timing Summary Log
 **Document**: [completed/23-request-timing-summary-log.md](./completed/23-request-timing-summary-log.md)
 **Description**: Emit a single INFO line per request summarising transcription, routing, plugin, and TTS timing plus cache status. Enables clean benchmarking without enabling `log_level: debug`. Per-request `_req_cache_hit_type` snapshot isolates summary from concurrent scheduler-thread cache reads. Requires Plan 28.
+
+### Priority 25: Terminal UI
+**Document**: [completed/25-terminal-ui.md](./completed/25-terminal-ui.md)
+**Description**: ANSI terminal UI for wake-word mode: in-place status line, animated ●●● spinner, and formatted conversation output. Falls back to plain print() on non-TTY / TERM=dumb. Wired into WakeWordMode and StreamingResponder.
 
 ---
 
@@ -151,10 +159,6 @@ plan/
 **Document**: [backlog/10-speech-to-text-task-and-language.md](./backlog/10-speech-to-text-task-and-language.md)
 **Description**: Make Whisper behavior configurable (transcribe vs translate) and allow explicit language hints for better accuracy.
 
-### Priority 11: Plugin Route Name Normalization
-**Document**: [backlog/11-plugin-route-name-normalization.md](./backlog/11-plugin-route-name-normalization.md)
-**Description**: Standardize plugin module naming (underscore) while supporting hyphenated route names (e.g., hacker-news) via normalization/aliases.
-
 ### Priority 13: VAD Robustness - Timeout and Tuning
 **Document**: [backlog/13-vad-robustness-timeout-tuning.md](./backlog/13-vad-robustness-timeout-tuning.md)
 **Description**: Make VAD more robust in noisy environments via timeout enforcement, better feedback, and tuning/presets.
@@ -178,10 +182,6 @@ plan/
 ### Priority 22: Plugin Manifest System
 **Document**: [backlog/22-plugin-manifest-system.md](./backlog/22-plugin-manifest-system.md)
 **Description**: Self-contained plugin folders with plugin.yaml manifests that self-register routes, config defaults, and env var requirements — eliminating manual edits to routes.yaml when adding or removing plugins.
-
-### Priority 25: Terminal UI
-**Document**: [backlog/25-terminal-ui.md](./backlog/25-terminal-ui.md)
-**Description**: Replace flat emoji-based terminal output with a high-end CLI UI: ANSI colors, animated waiting dots, in-place status line updates, inline timing per phase, and clear conversation/status separation. Pure ANSI — no external dependencies, Pi-compatible.
 
 ### Future Enhancements
 **Document**: [backlog/FUTURE.md](./backlog/FUTURE.md)

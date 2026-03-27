@@ -89,8 +89,8 @@ def process(user_input, route_data, s):
             "Don't read the URLs. "
             "Use your knowledge to give some context to each news item if possible. "
             "Answer the question as if you're on a report news podcast style. "
-            "Make sure to include the take away for each news. "
-            "Make sure to include your opinion."
+            "Make sure to include your opinion, but frame it naturally."
+            " Format the text in a natural way to present the news, as if you were telling it to someone you know, and highlight the key take away for the listener."
         )
 
         response = s.ai.generate_response(user_input, extra_info)
