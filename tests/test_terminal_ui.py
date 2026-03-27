@@ -108,9 +108,9 @@ class TestSpinner(unittest.TestCase):
         ui = _make_ui(ansi=True)
         with patch("sys.stdout"):
             ui.start_spinner("routing")
-        self.assertIsNotNone(ui._spinner_thread)
-        self.assertTrue(ui._spinner_thread.is_alive())
-        ui.close()  # clean up
+            self.assertIsNotNone(ui._spinner_thread)
+            self.assertTrue(ui._spinner_thread.is_alive())
+            ui.close()  # clean up inside patch so thread doesn't outlive it
 
     def test_stop_spinner_ansi_stops_thread(self):
         ui = _make_ui(ansi=True)
@@ -125,9 +125,9 @@ class TestSpinner(unittest.TestCase):
             ui.start_spinner("first")
             first_thread = ui._spinner_thread
             ui.start_spinner("second")
-        # Old thread should have been stopped and replaced
-        self.assertIsNot(ui._spinner_thread, first_thread)
-        ui.close()
+            # Old thread should have been stopped and replaced
+            self.assertIsNot(ui._spinner_thread, first_thread)
+            ui.close()  # stop thread inside patch so it doesn't outlive the mock
 
 
 # ── print_exchange ────────────────────────────────────────────────────────────
@@ -213,8 +213,7 @@ class TestClose(unittest.TestCase):
         ui = _make_ui(ansi=True)
         with patch("sys.stdout"):
             ui.start_spinner("waiting")
-        with patch("sys.stdout"):
-            ui.close()
+            ui.close()  # single patch scope so thread never writes outside it
         self.assertTrue(ui._spinner_stop.is_set())
 
     def test_close_idempotent(self):

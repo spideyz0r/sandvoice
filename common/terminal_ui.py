@@ -1,11 +1,8 @@
-import logging
 import os
 import re
 import shutil
 import sys
 import threading
-
-logger = logging.getLogger(__name__)
 
 _GREEN = "\033[32m"
 _DIM = "\033[2m"
@@ -137,26 +134,28 @@ class TerminalUI:
             speaker: ``"you"`` for user input, bot name for the assistant.
             text:    The spoken/typed text.
         """
-        if self._use_ansi:
-            sys.stdout.write("\n")
-            sys.stdout.flush()
+        self._stop_spinner_thread()
+        with self._lock:
+            if self._use_ansi:
+                sys.stdout.write("\n")
+                sys.stdout.flush()
 
-        indent = "  "
-        if speaker == "you":
-            label = "you"
-            speaker_str = f"{_DIM}{label}{_RESET}" if self._use_ansi else label
-        else:
-            label = speaker
-            speaker_str = f"{_GREEN}{label}{_RESET}" if self._use_ansi else label
-        pad = " " * max(0, _SPEAKER_COL_WIDTH - len(label))
+            indent = "  "
+            if speaker == "you":
+                label = "you"
+                speaker_str = f"{_DIM}{label}{_RESET}" if self._use_ansi else label
+            else:
+                label = speaker
+                speaker_str = f"{_GREEN}{label}{_RESET}" if self._use_ansi else label
+            pad = " " * max(0, _SPEAKER_COL_WIDTH - len(label))
 
-        continuation = " " * (len(indent) + _SPEAKER_COL_WIDTH)
-        lines = (text or "").splitlines() or [""]
-        print(f"{indent}{speaker_str}{pad}{lines[0]}")
-        for line in lines[1:]:
-            print(f"{continuation}{line}")
-        if speaker != "you":
-            print()  # blank line after bot response
+            continuation = " " * (len(indent) + _SPEAKER_COL_WIDTH)
+            lines = (text or "").splitlines() or [""]
+            print(f"{indent}{speaker_str}{pad}{lines[0]}")
+            for line in lines[1:]:
+                print(f"{continuation}{line}")
+            if speaker != "you":
+                print()  # blank line after bot response
 
     def close(self) -> None:
         """Stop any running spinner and clear the status line."""

@@ -1454,16 +1454,21 @@ class TestTerminalUIIntegration(unittest.TestCase):
         # Simulate one idle cycle by calling _state_idle with a mocked porcupine
         mode.porcupine = Mock()
         mode.porcupine.frame_length = 512
+        mode.porcupine.sample_rate = 16000
         mode.porcupine.process.return_value = -1  # no keyword
-        mode.vad_recorder = Mock()
-        mode.vad_recorder.read_frame.return_value = b"\x00" * 1024
         mode.running = True
         # Force state to leave IDLE after one iteration
         def stop_after_one(*args, **kwargs):
             mode.running = False
         mode.porcupine.process.side_effect = stop_after_one
 
-        mode._state_idle()
+        mock_stream = Mock()
+        mock_stream.read.return_value = b"\x00" * 1024
+        mock_pa = Mock()
+        mock_pa.open.return_value = mock_stream
+
+        with patch("common.wake_word.pyaudio.PyAudio", return_value=mock_pa):
+            mode._state_idle()
 
         self.mock_ui.set_state.assert_called_with("waiting")
 
@@ -1554,7 +1559,9 @@ class TestTerminalUIIntegration(unittest.TestCase):
         mode = self._make_mode()
         mode._initialize = Mock()
         mode._cleanup = Mock()
-        mode.running = False  # exit loop immediately
+        # run() sets self.running = True before the loop, so we must stop it
+        # from inside _state_idle instead of pre-setting running=False.
+        mode._state_idle = Mock(side_effect=lambda: setattr(mode, "running", False))
 
         mode.run()
 
