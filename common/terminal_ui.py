@@ -171,7 +171,10 @@ class TerminalUI:
         t = self._spinner_thread
         if t is not None and t.is_alive() and threading.current_thread() is not t:
             t.join(timeout=0.5)  # spin loop exits within 0.2s; bound in case stdout blocks
-        self._spinner_thread = None
+        # Only drop the reference once the thread has actually exited; if the join
+        # timed out (e.g. stdout blocked), keep the reference so the next call can retry.
+        if t is None or not t.is_alive():
+            self._spinner_thread = None
 
     def _spin_loop(self) -> None:
         i = 0
