@@ -244,7 +244,7 @@ class WakeWordMode:
 
         self.responder = StreamingResponder(
             self.ai, self.audio, self._audio_lock, self.barge_in,
-            pop_streaming_chunk, self.config,
+            pop_streaming_chunk, self.config, ui=self.ui,
         )
 
     def _create_porcupine_instance(self):

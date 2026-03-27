@@ -41,7 +41,7 @@ class StreamingResponder:
     checks it after respond() returns to decide whether to transition to LISTENING.
     """
 
-    def __init__(self, ai, audio, audio_lock, barge_in, pop_chunk_fn, config):
+    def __init__(self, ai, audio, audio_lock, barge_in, pop_chunk_fn, config, ui=None):
         """
         Args:
             ai:           AI instance (stream_response_deltas, text_to_speech).
@@ -52,6 +52,8 @@ class StreamingResponder:
                           common.ai. Injected rather than called via ai because it is
                           a module-level function, not an instance method.
             config:       Config instance (reads stream_tts_boundary, debug, botname).
+            ui:           Optional TerminalUI instance. When present, the assembled
+                          response is printed via ui.print_exchange() instead of print().
         """
         self._ai = ai
         self._audio = audio
@@ -59,6 +61,7 @@ class StreamingResponder:
         self._barge_in = barge_in
         self._pop_chunk_fn = pop_chunk_fn
         self._config = config
+        self._ui = ui
 
     def respond(self, user_input=None, response_text=None):
         """Stream a response to the user.
@@ -308,7 +311,10 @@ class StreamingResponder:
         # Print final text (unless we are in debug mode or barge-in occurred)
         if response_text_assembled and not self._config.debug:
             if not (barge_in_event and barge_in_event.is_set()):
-                print(f"{self._config.botname}: {response_text_assembled}\n")
+                if self._ui is not None:
+                    self._ui.print_exchange(self._config.botname, response_text_assembled)
+                else:
+                    print(f"{self._config.botname}: {response_text_assembled}\n")
 
         if production_failed_event.is_set() and tts_error[0]:
             logger.warning("Wake-word streaming TTS production failed: %s", tts_error[0])
