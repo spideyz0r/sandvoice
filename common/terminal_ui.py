@@ -25,14 +25,12 @@ class TerminalUI:
     not a TTY or ``$TERM`` is ``dumb``.
     """
 
-    def __init__(self, wake_phrase: str = "sand voice", botname: str = "sandbot"):
+    def __init__(self, wake_phrase: str = "sand voice"):
         """
         Args:
             wake_phrase: Name shown in the status line (e.g. ``"sand voice"``).
-            botname: Bot name shown in conversation output (e.g. ``"sandbot"``).
         """
         self._wake_phrase = wake_phrase
-        self._botname = botname
         self._use_ansi = (
             sys.stdout.isatty()
             and os.environ.get("TERM", "") not in ("dumb", "")

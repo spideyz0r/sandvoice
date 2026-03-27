@@ -1457,9 +1457,10 @@ class TestTerminalUIIntegration(unittest.TestCase):
         mode.porcupine.sample_rate = 16000
         mode.porcupine.process.return_value = -1  # no keyword
         mode.running = True
-        # Force state to leave IDLE after one iteration
+        # Force state to leave IDLE after one iteration while returning "no keyword"
         def stop_after_one(*args, **kwargs):
             mode.running = False
+            return -1
         mode.porcupine.process.side_effect = stop_after_one
 
         mock_stream = Mock()

@@ -9,7 +9,7 @@ from common.terminal_ui import TerminalUI, _ANSI_RE, _SPINNER_FRAMES
 
 def _make_ui(ansi: bool = False) -> TerminalUI:
     """Return a TerminalUI with ANSI forced on or off for testing."""
-    ui = TerminalUI(wake_phrase="test bot", botname="testbot")
+    ui = TerminalUI(wake_phrase="test bot")
     ui._use_ansi = ansi
     return ui
 
@@ -18,13 +18,11 @@ class TestTerminalUIInit(unittest.TestCase):
     def test_default_attributes(self):
         ui = TerminalUI()
         self.assertEqual(ui._wake_phrase, "sand voice")
-        self.assertEqual(ui._botname, "sandbot")
         self.assertIsNone(ui._spinner_thread)
 
-    def test_custom_wake_phrase_and_botname(self):
-        ui = TerminalUI(wake_phrase="hey bot", botname="mybot")
+    def test_custom_wake_phrase(self):
+        ui = TerminalUI(wake_phrase="hey bot")
         self.assertEqual(ui._wake_phrase, "hey bot")
-        self.assertEqual(ui._botname, "mybot")
 
     def test_non_tty_disables_ansi(self):
         with patch("sys.stdout") as mock_stdout:
