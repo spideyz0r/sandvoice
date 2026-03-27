@@ -1,6 +1,5 @@
 import io
 import threading
-import time
 import unittest
 from unittest.mock import patch
 
@@ -259,20 +258,21 @@ class TestSpinnerFrames(unittest.TestCase):
         ui._spinner_label = "test"
         written = []
 
+        call_count = {"n": 0}
+
+        def fake_wait(timeout=None):
+            call_count["n"] += 1
+            if call_count["n"] >= 3:
+                return True  # signal stop on 3rd call so 2 frames are written first
+            return False
+
         with patch("sys.stdout") as mock_stdout:
             mock_stdout.write.side_effect = written.append
             mock_stdout.flush = lambda: None
-            ui._spinner_stop.clear()
-            t = threading.Thread(target=ui._spin_loop, daemon=True)
-            t.start()
-            # Wait deterministically for at least 2 frames with a generous timeout
-            deadline = time.time() + 2.0
-            while len(written) < 2 and time.time() < deadline:
-                time.sleep(0.01)
-            ui._spinner_stop.set()
-            t.join(timeout=1.0)
+            with patch.object(ui._spinner_stop, "wait", side_effect=fake_wait):
+                ui._spin_loop()  # runs synchronously, no real time passes
 
-        # Should have observed at least 2 frames (one every 0.2s)
+        # Should have written 2 frames (iterations 1 and 2 before stop on iteration 3)
         self.assertGreaterEqual(len(written), 2)
 
 

@@ -146,9 +146,10 @@ class TerminalUI:
             else:
                 label = speaker
                 speaker_str = f"{_GREEN}{label}{_RESET}" if self._use_ansi else label
-            pad = " " * max(0, _SPEAKER_COL_WIDTH - len(label))
+            label_col_width = max(_SPEAKER_COL_WIDTH, len(label))
+            pad = " " * max(0, label_col_width - len(label))
 
-            continuation = " " * (len(indent) + _SPEAKER_COL_WIDTH)
+            continuation = " " * (len(indent) + label_col_width)
             lines = (text or "").splitlines() or [""]
             print(f"{indent}{speaker_str}{pad}{lines[0]}")
             for line in lines[1:]:
