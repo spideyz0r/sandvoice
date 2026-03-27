@@ -120,7 +120,10 @@ class WakeWordMode:
                 print("\n👋 Exiting wake word mode...")
         finally:
             if self.ui is not None:
-                self.ui.close()
+                try:
+                    self.ui.close()
+                except Exception as e:
+                    logger.debug("UI close failed during wake word shutdown: %s", e)
             self._cleanup()
 
     def _initialize(self):

@@ -135,6 +135,7 @@ class TerminalUI:
         self._stop_spinner_thread()
         with self._lock:
             if self._use_ansi:
+                self._clear_status()  # erase stranded status line before scrolling
                 sys.stdout.write("\n")
                 sys.stdout.flush()
 
@@ -168,7 +169,7 @@ class TerminalUI:
         self._spinner_stop.set()
         t = self._spinner_thread
         if t is not None and t.is_alive() and threading.current_thread() is not t:
-            t.join(timeout=0.5)
+            t.join()  # spin loop exits within one 0.2s tick after stop event is set
         self._spinner_thread = None
 
     def _spin_loop(self) -> None:

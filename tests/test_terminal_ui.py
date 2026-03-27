@@ -265,11 +265,14 @@ class TestSpinnerFrames(unittest.TestCase):
             ui._spinner_stop.clear()
             t = threading.Thread(target=ui._spin_loop, daemon=True)
             t.start()
-            time.sleep(0.7)
+            # Wait deterministically for at least 2 frames with a generous timeout
+            deadline = time.time() + 2.0
+            while len(written) < 2 and time.time() < deadline:
+                time.sleep(0.01)
             ui._spinner_stop.set()
             t.join(timeout=1.0)
 
-        # Should have written at least 2 frames in 0.7s (one every 0.2s)
+        # Should have observed at least 2 frames (one every 0.2s)
         self.assertGreaterEqual(len(written), 2)
 
 
