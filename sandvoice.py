@@ -124,10 +124,21 @@ class SandVoice:
         self._plugin_manifests = []
         with os.scandir(self.config.plugin_path) as it:
             entries = sorted(it, key=lambda e: e.name)
+        folder_manifest_stems = {
+            e.name for e in entries
+            if e.is_dir() and os.path.isfile(os.path.join(e.path, "plugin.yaml"))
+        }
         for entry in entries:
             if entry.is_dir():
                 self._load_plugin_folder(entry)
             elif entry.name.endswith(".py"):
+                stem = os.path.splitext(entry.name)[0]
+                if normalize_plugin_name(stem) in {normalize_plugin_name(s) for s in folder_manifest_stems}:
+                    logger.debug(
+                        "Skipping legacy single-file plugin %s: folder plugin with manifest exists",
+                        entry.name,
+                    )
+                    continue
                 self._load_plugin_file(entry)
         self.config.merge_plugin_defaults(self._plugin_manifests)
 
