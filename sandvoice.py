@@ -207,9 +207,12 @@ class SandVoice:
                 logger.warning("Error loading plugin folder %s: could not create module spec", folder_name)
                 return
             try:
+                full_module_name = f"plugins.{module_name}.plugin"
                 module = importlib.util.module_from_spec(spec)
+                sys.modules[full_module_name] = module
                 spec.loader.exec_module(module)
             except Exception as e:
+                sys.modules.pop(full_module_name, None)
                 logger.warning("Error loading plugin folder %s: %s", folder_name, e)
                 if logger.isEnabledFor(logging.DEBUG):
                     logger.debug("Plugin load traceback for %s", folder_name, exc_info=True)

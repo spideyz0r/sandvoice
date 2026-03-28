@@ -89,6 +89,21 @@ def load_manifest(folder_path):
         )
         return None
 
+    for list_field in ("route_extra_keys", "env_vars", "dependencies"):
+        value = data.get(list_field)
+        if value is not None and not isinstance(value, (list, tuple)):
+            logger.warning(
+                "plugin.yaml for '%s' has non-list '%s'; skipping", name, list_field
+            )
+            return None
+
+    config_defaults = data.get("config_defaults")
+    if config_defaults is not None and not isinstance(config_defaults, dict):
+        logger.warning(
+            "plugin.yaml for '%s' has non-dict 'config_defaults'; skipping", name
+        )
+        return None
+
     return PluginManifest(
         name=name.strip(),
         version=str(data.get("version", "0.0.0")),

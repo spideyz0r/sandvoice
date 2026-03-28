@@ -142,6 +142,30 @@ dependencies:
         self.assertIsNotNone(m)
         self.assertEqual(m.name, "weather")
 
+    def test_non_list_env_vars_returns_none(self):
+        with tempfile.TemporaryDirectory() as d:
+            _write_yaml(d, "name: x\nroute_description: desc\nenv_vars: SINGLE_STRING\n")
+            with self.assertLogs("common.plugin_loader", level="WARNING") as cm:
+                result = load_manifest(d)
+        self.assertIsNone(result)
+        self.assertTrue(any("env_vars" in msg for msg in cm.output))
+
+    def test_non_list_dependencies_returns_none(self):
+        with tempfile.TemporaryDirectory() as d:
+            _write_yaml(d, "name: x\nroute_description: desc\ndependencies: requests\n")
+            with self.assertLogs("common.plugin_loader", level="WARNING") as cm:
+                result = load_manifest(d)
+        self.assertIsNone(result)
+        self.assertTrue(any("dependencies" in msg for msg in cm.output))
+
+    def test_non_dict_config_defaults_returns_none(self):
+        with tempfile.TemporaryDirectory() as d:
+            _write_yaml(d, "name: x\nroute_description: desc\nconfig_defaults: not_a_dict\n")
+            with self.assertLogs("common.plugin_loader", level="WARNING") as cm:
+                result = load_manifest(d)
+        self.assertIsNone(result)
+        self.assertTrue(any("config_defaults" in msg for msg in cm.output))
+
 
 class TestCheckEnvVars(unittest.TestCase):
     def test_all_set_returns_empty(self):
