@@ -198,11 +198,22 @@ class SandVoice:
 
         module_name = normalize_plugin_name(manifest.name)
         try:
+            module = importlib.import_module(f"plugins.{module_name}.plugin")
+        except ImportError:
             spec = importlib.util.spec_from_file_location(
-                f"plugins.{module_name}", plugin_py
+                f"plugins.{module_name}.plugin", plugin_py
             )
-            module = importlib.util.module_from_spec(spec)
-            spec.loader.exec_module(module)
+            if spec is None or spec.loader is None:
+                logger.warning("Error loading plugin folder %s: could not create module spec", folder_name)
+                return
+            try:
+                module = importlib.util.module_from_spec(spec)
+                spec.loader.exec_module(module)
+            except Exception as e:
+                logger.warning("Error loading plugin folder %s: %s", folder_name, e)
+                if logger.isEnabledFor(logging.DEBUG):
+                    logger.debug("Plugin load traceback for %s", folder_name, exc_info=True)
+                return
         except Exception as e:
             logger.warning("Error loading plugin folder %s: %s", folder_name, e)
             if logger.isEnabledFor(logging.DEBUG):

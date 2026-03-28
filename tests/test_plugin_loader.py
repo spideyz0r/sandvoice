@@ -197,7 +197,8 @@ class TestBuildExtraRoutesText(unittest.TestCase):
         m1 = PluginManifest(name="weather", route_description="Weather desc.")
         m2 = PluginManifest(name="news", route_description="News desc.")
         result = build_extra_routes_text([m1, m2])
-        self.assertLess(result.index("weather:"), result.index("news:"))
+        # manifests are sorted by name; "news" sorts before "weather"
+        self.assertLess(result.index("news:"), result.index("weather:"))
 
     def test_jinja2_location_placeholder_rendered(self):
         m = PluginManifest(

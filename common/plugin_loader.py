@@ -131,7 +131,7 @@ def build_extra_routes_text(manifests, location=""):
         A single string (possibly empty) to append to the routing prompt.
     """
     lines = []
-    for manifest in manifests:
+    for manifest in sorted(manifests, key=lambda m: m.name):
         if not manifest.route_description:
             continue
         try:
