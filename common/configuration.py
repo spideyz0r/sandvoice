@@ -411,17 +411,19 @@ class Config:
 
         For each key in a manifest's ``config_defaults``, the value is only
         applied when the user has not explicitly set that key in their
-        ``config.yaml``.  User config and built-in code defaults both win over
-        manifest defaults.
+        ``config.yaml``.  User config wins over manifest defaults; when
+        multiple manifests provide the same key the first one wins.
 
         Args:
             manifests: Iterable of :class:`~common.plugin_loader.PluginManifest`.
         """
         changed = False
+        plugin_keys_applied: set = set()
         for manifest in manifests:
             for key, value in manifest.config_defaults.items():
-                if key not in self._user_keys and key not in self.config:
+                if key not in self._user_keys and key not in plugin_keys_applied:
                     self.config[key] = value
+                    plugin_keys_applied.add(key)
                     changed = True
         if changed:
             self._apply_plugin_config_properties()

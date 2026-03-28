@@ -122,11 +122,12 @@ class SandVoice:
             exit(1)
         logger.debug("Loading plugins from %s", self.config.plugin_path)
         self._plugin_manifests = []
-        for entry in os.scandir(self.config.plugin_path):
-            if entry.is_dir():
-                self._load_plugin_folder(entry)
-            elif entry.name.endswith(".py"):
-                self._load_plugin_file(entry)
+        with os.scandir(self.config.plugin_path) as it:
+            for entry in it:
+                if entry.is_dir():
+                    self._load_plugin_folder(entry)
+                elif entry.name.endswith(".py"):
+                    self._load_plugin_file(entry)
         self.config.merge_plugin_defaults(self._plugin_manifests)
 
     def _load_plugin_file(self, entry):
@@ -161,7 +162,7 @@ class SandVoice:
             if logger.isEnabledFor(logging.DEBUG):
                 logger.debug("Plugin load traceback for %s", filename, exc_info=True)
             return
-        self._register_plugin_module(module, module_name)
+        self._register_plugin_module(module, module_name, source_label=filename)
 
     def _load_plugin_folder(self, entry):
         """Load a folder-based plugin driven by a plugin.yaml manifest."""

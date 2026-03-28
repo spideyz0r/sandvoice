@@ -775,5 +775,59 @@ class TestLogLevel(_TempHomeBase):
         config = Config()
         self.assertTrue(config.debug)
 
+class TestMergePluginDefaults(unittest.TestCase):
+    def setUp(self):
+        self.temp_dir = tempfile.mkdtemp()
+        self.original_home = os.environ.get('HOME')
+        os.environ['HOME'] = self.temp_dir
+        os.makedirs(os.path.join(self.temp_dir, ".sandvoice"), exist_ok=True)
+        self.config_file = os.path.join(self.temp_dir, ".sandvoice", "config.yaml")
+
+    def tearDown(self):
+        if self.original_home is not None:
+            os.environ['HOME'] = self.original_home
+
+    def write_config(self, data):
+        with open(self.config_file, "w") as f:
+            yaml.dump(data, f)
+
+    def _make_manifest(self, defaults):
+        from common.plugin_loader import PluginManifest
+        return PluginManifest(name="test", route_description="test", config_defaults=defaults)
+
+    def test_plugin_default_fills_builtin_default_key_when_user_not_set(self):
+        """Plugin manifest can override a built-in default when the user hasn't set the key."""
+        self.write_config({"openai_api_key": "key"})
+        config = Config()
+        manifest = self._make_manifest({"location": "Paris, FR"})
+        config.merge_plugin_defaults([manifest])
+        self.assertEqual(config.location, "Paris, FR")
+
+    def test_user_config_wins_over_plugin_default(self):
+        """User-set keys always take priority over plugin manifest defaults."""
+        self.write_config({"openai_api_key": "key", "location": "Berlin, DE"})
+        config = Config()
+        manifest = self._make_manifest({"location": "Paris, FR"})
+        config.merge_plugin_defaults([manifest])
+        self.assertEqual(config.location, "Berlin, DE")
+
+    def test_first_plugin_wins_for_same_key(self):
+        """When two manifests provide the same key, the first one wins."""
+        self.write_config({"openai_api_key": "key"})
+        config = Config()
+        m1 = self._make_manifest({"location": "Paris, FR"})
+        m2 = self._make_manifest({"location": "Tokyo, JP"})
+        config.merge_plugin_defaults([m1, m2])
+        self.assertEqual(config.location, "Paris, FR")
+
+    def test_plugin_only_key_applied(self):
+        """A key not in built-in defaults and not set by user is applied from manifest."""
+        self.write_config({"openai_api_key": "key"})
+        config = Config()
+        manifest = self._make_manifest({"my_plugin_key": "plugin_value"})
+        config.merge_plugin_defaults([manifest])
+        self.assertEqual(config.get("my_plugin_key"), "plugin_value")
+
+
 if __name__ == '__main__':
     unittest.main()
