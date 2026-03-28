@@ -70,9 +70,15 @@ def load_manifest(folder_path):
 
     try:
         with open(yaml_path, "r") as fh:
-            data = yaml.safe_load(fh) or {}
+            data = yaml.safe_load(fh)
     except Exception as e:
         logger.warning("Failed to parse %s: %s", yaml_path, e)
+        return None
+
+    if data is None:
+        data = {}
+    elif not isinstance(data, dict):
+        logger.warning("plugin.yaml in %s did not parse to a mapping; skipping", folder_path)
         return None
 
     name = data.get("name")

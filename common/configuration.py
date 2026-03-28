@@ -137,8 +137,16 @@ class Config:
             return dict(self.defaults)
         with open(self.config_file, "r") as f:
             data = yaml.safe_load(f)
-        self._user_keys: set = set((data or {}).keys())
-        return {**self.defaults, **(data or {})}
+        if data is None:
+            data = {}
+        elif not isinstance(data, dict):
+            logger.warning(
+                "Config file %s must be a YAML mapping; ignoring malformed content",
+                self.config_file,
+            )
+            data = {}
+        self._user_keys: set = set(data.keys())
+        return {**self.defaults, **data}
 
     def load_config(self):
         self.channels = self.get("channels")

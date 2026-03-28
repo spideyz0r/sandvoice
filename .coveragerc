@@ -2,6 +2,6 @@
 omit =
     env/*
     /tmp/*
+    /private/*
 
 [report]
-ignore_errors = True
