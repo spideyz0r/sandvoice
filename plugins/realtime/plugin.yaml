@@ -1,0 +1,9 @@
+name: realtime
+version: 1.0.0
+
+route_description: >
+  Legacy real time search route (scraping-based). Prefer realtime_websearch.
+
+dependencies:
+  - googlesearch-python
+  - beautifulsoup4

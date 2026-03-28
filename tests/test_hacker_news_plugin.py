@@ -4,6 +4,7 @@ from unittest.mock import Mock, patch
 
 
 hn_plugin = importlib.import_module('plugins.hacker_news')
+hn_plugin_module = importlib.import_module('plugins.hacker_news.plugin')
 
 
 class TestHackerNewsPlugin(unittest.TestCase):
@@ -45,7 +46,7 @@ class TestHackerNewsPlugin(unittest.TestCase):
         self.assertEqual(args[0], 'gimme the hacker news')
         self.assertIn('Hacker News', args[1])
         self.assertIn('podcast', args[1])
-        self.assertIn('take away', args[1])
+        self.assertIn('opinion', args[1])
 
 
 class TestHackerNewsClient(unittest.TestCase):
@@ -66,7 +67,7 @@ class TestHackerNewsClient(unittest.TestCase):
                 raise AssertionError(f'Unexpected URL: {url}')
             return r
 
-        with patch.object(hn_plugin.requests, 'get', side_effect=fake_get):
+        with patch.object(hn_plugin_module.requests, 'get', side_effect=fake_get):
             briefs = hn.get_best_story_briefs()
 
         self.assertEqual(len(briefs), 2)

@@ -456,7 +456,7 @@ class AI:
                 self.conversation_history.append(f"{self.config.botname}: " + assistant_content)
 
     @retry_with_backoff(max_attempts=3, initial_delay=1)
-    def define_route(self, user_input, model = None):
+    def define_route(self, user_input, model=None, extra_routes=None):
         try:
             if not model:
                 model = self.config.gpt_route_model
@@ -465,15 +465,22 @@ class AI:
             template = Template(template_str)
             rendered_config = template.render(location=self.config.location)
             system_role = yaml.safe_load(rendered_config)
+            route_role_text = system_role['route_role']
+            if extra_routes:
+                route_role_text = route_role_text.rstrip() + extra_routes
 
+            logger.info("Routing: %r", user_input)
             completion = self.openai_client.chat.completions.create(
-            model = model,
-            messages = [
-                {"role": "system", "content": system_role['route_role']},
-                {"role": "user", "content": user_input}
-            ])
+                model=model,
+                messages=[
+                    {"role": "system", "content": route_role_text},
+                    {"role": "user", "content": user_input},
+                ]
+            )
             route = json.loads(completion.choices[0].message.content)
-            return _normalize_route_response(route)
+            result = _normalize_route_response(route)
+            logger.info("Route chosen: %s", result)
+            return result
         except FileNotFoundError as e:
             error_msg = handle_file_error(e, operation="read", filename="routes.yaml")
             logger.error("Routes file error: %s", e)

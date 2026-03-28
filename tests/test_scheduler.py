@@ -803,6 +803,27 @@ class TestSandVoiceSchedulerInit(unittest.TestCase):
         sv.ai.generate_response.assert_not_called()
         self.assertEqual(result, "plugin output")
 
+    # ── load_plugins helpers ──────────────────────────────────────────────────
+
+    @staticmethod
+    def _make_file_entry(filename, base="/tmp/plugins"):
+        """Return a mock DirEntry for a .py file (not a directory)."""
+        entry = MagicMock()
+        entry.name = filename
+        entry.path = f"{base}/{filename}"
+        entry.is_dir.return_value = False
+        return entry
+
+    @staticmethod
+    def _make_scandir_mock(entries):
+        """Return a mock for os.scandir that works as a context manager yielding entries."""
+        cm = MagicMock()
+        cm.__enter__ = MagicMock(return_value=iter(entries))
+        cm.__exit__ = MagicMock(return_value=False)
+        return MagicMock(return_value=cm)
+
+    # ── load_plugins tests ────────────────────────────────────────────────────
+
     def test_load_plugins_registers_hyphen_alias_for_underscore_module(self):
         """load_plugins() must register both canonical underscore and hyphen aliases."""
         from sandvoice import SandVoice
@@ -815,8 +836,9 @@ class TestSandVoiceSchedulerInit(unittest.TestCase):
         module = MagicMock(spec=["process"])
         module.process = MagicMock()
 
+        entries = [self._make_file_entry("hacker_news.py")]
         with patch("sandvoice.os.path.exists", return_value=True), \
-             patch("sandvoice.os.listdir", return_value=["hacker_news.py"]), \
+             patch("sandvoice.os.scandir", self._make_scandir_mock(entries)), \
              patch("sandvoice.importlib.import_module", return_value=module):
             sv.load_plugins()
 
@@ -832,8 +854,9 @@ class TestSandVoiceSchedulerInit(unittest.TestCase):
         sv.config.plugin_path = "/tmp/plugins"
         sv.plugins = {}
 
+        entries = [self._make_file_entry("hacker-news.py")]
         with patch("sandvoice.os.path.exists", return_value=True), \
-             patch("sandvoice.os.listdir", return_value=["hacker-news.py"]), \
+             patch("sandvoice.os.scandir", self._make_scandir_mock(entries)), \
              patch("sandvoice.importlib.import_module") as import_module, \
              self.assertLogs("sandvoice", level="WARNING") as logs:
             sv.load_plugins()
@@ -853,8 +876,9 @@ class TestSandVoiceSchedulerInit(unittest.TestCase):
         sv.config.plugin_path = "/tmp/plugins"
         sv.plugins = {}
 
+        entries = [self._make_file_entry("123-plugin.py")]
         with patch("sandvoice.os.path.exists", return_value=True), \
-             patch("sandvoice.os.listdir", return_value=["123-plugin.py"]), \
+             patch("sandvoice.os.scandir", self._make_scandir_mock(entries)), \
              patch("sandvoice.importlib.import_module") as import_module, \
              self.assertLogs("sandvoice", level="WARNING") as logs:
             sv.load_plugins()
@@ -874,8 +898,9 @@ class TestSandVoiceSchedulerInit(unittest.TestCase):
         sv.config.plugin_path = "/tmp/plugins"
         sv.plugins = {}
 
+        entries = [self._make_file_entry("123plugin.py")]
         with patch("sandvoice.os.path.exists", return_value=True), \
-             patch("sandvoice.os.listdir", return_value=["123plugin.py"]), \
+             patch("sandvoice.os.scandir", self._make_scandir_mock(entries)), \
              patch("sandvoice.importlib.import_module") as import_module, \
              self.assertLogs("sandvoice", level="WARNING") as logs:
             sv.load_plugins()
@@ -904,8 +929,9 @@ class TestSandVoiceSchedulerInit(unittest.TestCase):
         module = MagicMock(spec=["Plugin"])
         module.Plugin = MagicMock(return_value=plugin_instance)
 
+        entries = [self._make_file_entry("weather_plugin.py")]
         with patch("sandvoice.os.path.exists", return_value=True), \
-             patch("sandvoice.os.listdir", return_value=["weather_plugin.py"]), \
+             patch("sandvoice.os.scandir", self._make_scandir_mock(entries)), \
              patch("sandvoice.importlib.import_module", return_value=module):
             sv.load_plugins()
 
@@ -925,8 +951,9 @@ class TestSandVoiceSchedulerInit(unittest.TestCase):
         module = MagicMock(spec=["Plugin"])
         module.Plugin = MagicMock(return_value=plugin_instance)
 
+        entries = [self._make_file_entry("weather_plugin.py")]
         with patch("sandvoice.os.path.exists", return_value=True), \
-             patch("sandvoice.os.listdir", return_value=["weather_plugin.py"]), \
+             patch("sandvoice.os.scandir", self._make_scandir_mock(entries)), \
              patch("sandvoice.importlib.import_module", return_value=module), \
              self.assertLogs("sandvoice", level="WARNING") as logs:
             sv.load_plugins()
@@ -947,8 +974,9 @@ class TestSandVoiceSchedulerInit(unittest.TestCase):
 
         module = MagicMock(spec=[])
 
+        entries = [self._make_file_entry("weather_plugin.py")]
         with patch("sandvoice.os.path.exists", return_value=True), \
-             patch("sandvoice.os.listdir", return_value=["weather_plugin.py"]), \
+             patch("sandvoice.os.scandir", self._make_scandir_mock(entries)), \
              patch("sandvoice.importlib.import_module", return_value=module), \
              self.assertLogs("sandvoice", level="WARNING") as logs:
             sv.load_plugins()
@@ -979,8 +1007,12 @@ class TestSandVoiceSchedulerInit(unittest.TestCase):
                 return good_module
             raise AssertionError(name)
 
+        entries = [
+            self._make_file_entry("bad_plugin.py"),
+            self._make_file_entry("good_plugin.py"),
+        ]
         with patch("sandvoice.os.path.exists", return_value=True), \
-             patch("sandvoice.os.listdir", return_value=["bad_plugin.py", "good_plugin.py"]), \
+             patch("sandvoice.os.scandir", self._make_scandir_mock(entries)), \
              patch("sandvoice.importlib.import_module", side_effect=import_side_effect), \
              self.assertLogs("sandvoice", level="WARNING") as logs:
             sv.load_plugins()
@@ -988,7 +1020,7 @@ class TestSandVoiceSchedulerInit(unittest.TestCase):
         self.assertIs(sv.plugins["good_plugin"], good_module.process)
         self.assertIs(sv.plugins["good-plugin"], good_module.process)
         self.assertTrue(
-            any("Error initializing plugin bad_plugin.py: boom" in message for message in logs.output)
+            any("Error initializing plugin bad_plugin" in message and "boom" in message for message in logs.output)
         )
 
     def test_route_message_normalizes_hyphenated_plugin_name(self):

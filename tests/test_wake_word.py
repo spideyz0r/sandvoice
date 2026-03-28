@@ -607,7 +607,7 @@ class TestWakeWordModeProcessing(unittest.TestCase):
         mode._state_processing()
 
         self.mock_ai.transcribe_and_translate.assert_called_once_with(audio_file_path="/tmp/recording.wav")
-        self.mock_ai.define_route.assert_called_once_with("What's the weather?")
+        self.mock_ai.define_route.assert_called_once_with("What's the weather?", extra_routes=None)
         route_message.assert_called_once()
         self.mock_ai.generate_response.assert_not_called()
         # TTS no longer pre-generated in _state_processing
