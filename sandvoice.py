@@ -217,17 +217,22 @@ class SandVoice:
                 "Plugin folder %s has plugin.yaml but no plugin.py; skipping", folder_path
             )
             return
+        full_module_name = f"plugins.{module_name}.plugin"
         try:
-            module = importlib.import_module(f"plugins.{module_name}.plugin")
-        except ImportError:
-            spec = importlib.util.spec_from_file_location(
-                f"plugins.{module_name}.plugin", plugin_py
-            )
+            module = importlib.import_module(full_module_name)
+        except ModuleNotFoundError as e:
+            missing = getattr(e, "name", None) or ""
+            if not full_module_name.startswith(missing):
+                # ImportError from inside the plugin, not a missing package — do not retry
+                logger.warning("Error loading plugin folder %s: %s", folder_name, e)
+                if logger.isEnabledFor(logging.DEBUG):
+                    logger.debug("Plugin load traceback for %s", folder_name, exc_info=True)
+                return
+            spec = importlib.util.spec_from_file_location(full_module_name, plugin_py)
             if spec is None or spec.loader is None:
                 logger.warning("Error loading plugin folder %s: could not create module spec", folder_name)
                 return
             try:
-                full_module_name = f"plugins.{module_name}.plugin"
                 module = importlib.util.module_from_spec(spec)
                 sys.modules[full_module_name] = module
                 spec.loader.exec_module(module)
