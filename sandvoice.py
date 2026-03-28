@@ -177,6 +177,15 @@ class SandVoice:
             logger.debug("No valid plugin.yaml in %s; skipping folder", folder_path)
             return
 
+        module_name = normalize_plugin_name(manifest.name)
+        if module_name != normalize_plugin_name(folder_name):
+            logger.warning(
+                "Plugin folder '%s' manifest name '%s' does not match folder name; skipping",
+                folder_name,
+                manifest.name,
+            )
+            return
+
         missing = check_env_vars(manifest)
         if missing:
             noun = "vars" if len(missing) > 1 else "var"
@@ -197,8 +206,6 @@ class SandVoice:
                 "Plugin folder %s has plugin.yaml but no plugin.py; skipping", folder_path
             )
             return
-
-        module_name = normalize_plugin_name(manifest.name)
         try:
             module = importlib.import_module(f"plugins.{module_name}.plugin")
         except ImportError:

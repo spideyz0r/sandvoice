@@ -22,7 +22,7 @@ env_vars:
   - OPENWEATHERMAP_API_KEY
 
 config_defaults:
-  location: "Toronto, ON, CA"
+  location: "Toronto,ON,CA"
   unit: metric
 
 dependencies:

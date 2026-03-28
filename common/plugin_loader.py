@@ -2,7 +2,7 @@ import logging
 import os
 
 import yaml
-from jinja2 import Template
+from jinja2.sandbox import SandboxedEnvironment
 
 logger = logging.getLogger(__name__)
 
@@ -150,7 +150,7 @@ def build_extra_routes_text(manifests, location=""):
         if not manifest.route_description:
             continue
         try:
-            rendered = Template(manifest.route_description).render(location=location)
+            rendered = SandboxedEnvironment().from_string(manifest.route_description).render(location=location)
         except Exception as e:
             logger.warning(
                 "Failed to render route_description template for plugin '%s': %s",
@@ -158,5 +158,7 @@ def build_extra_routes_text(manifests, location=""):
                 e,
             )
             rendered = manifest.route_description
-        lines.append(f"\n            {manifest.name}: {rendered}")
+        indent = "            "
+        rendered_indented = rendered.rstrip("\n").replace("\n", f"\n{indent}")
+        lines.append(f"\n{indent}{manifest.name}: {rendered_indented}")
     return "".join(lines)

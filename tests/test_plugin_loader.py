@@ -252,6 +252,22 @@ class TestBuildExtraRoutesText(unittest.TestCase):
         # Each entry should be indented with 12 spaces to match routes.yaml
         self.assertIn("\n            news:", result)
 
+    def test_multiline_description_lines_are_indented(self):
+        m = PluginManifest(name="news", route_description="Line one.\nLine two.")
+        result = build_extra_routes_text([m])
+        self.assertIn("\n            Line two.", result)
+        self.assertNotIn("\nLine two.", result)
+
+    def test_jinja2_sandbox_blocks_code_execution(self):
+        """SandboxedEnvironment should prevent template code execution."""
+        m = PluginManifest(
+            name="evil",
+            route_description="{{ ''.__class__.__mro__[1].__subclasses__() }}",
+        )
+        # Should not raise; sandbox blocks attribute access on builtins
+        result = build_extra_routes_text([m])
+        self.assertIn("evil:", result)
+
 
 class TestLoadPluginFolder(unittest.TestCase):
     """Integration tests for SandVoice._load_plugin_folder using a real temp directory."""
@@ -350,6 +366,24 @@ class TestLoadPluginFolder(unittest.TestCase):
 
         self.assertEqual(sv.plugins, {})
         self.assertTrue(any("no plugin.py" in msg for msg in cm.output))
+
+    def test_folder_manifest_name_mismatch_skipped_with_warning(self):
+        from unittest.mock import MagicMock
+        sv = self._make_sv()
+
+        with tempfile.TemporaryDirectory() as plugin_folder:
+            # folder is named "myplugin" but manifest declares name "otherplugin"
+            _write_yaml(plugin_folder, "name: otherplugin\nroute_description: Desc.\n")
+
+            entry = MagicMock()
+            entry.name = "myplugin"
+            entry.path = plugin_folder
+
+            with self.assertLogs("sandvoice", level="WARNING") as cm:
+                sv._load_plugin_folder(entry)
+
+        self.assertEqual(sv.plugins, {})
+        self.assertTrue(any("does not match" in msg for msg in cm.output))
 
 
 if __name__ == "__main__":
