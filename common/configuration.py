@@ -427,6 +427,7 @@ class Config:
                     changed = True
         if changed:
             self._apply_plugin_config_properties()
+            self.validate_config()
 
     def _apply_plugin_config_properties(self):
         """Re-apply the subset of config properties that plugins may supply defaults for."""

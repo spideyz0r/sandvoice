@@ -470,11 +470,12 @@ class AI:
                 route_role_text = route_role_text.rstrip() + extra_routes
 
             completion = self.openai_client.chat.completions.create(
-            model = model,
-            messages = [
-                {"role": "system", "content": route_role_text},
-                {"role": "user", "content": user_input}
-            ])
+                model=model,
+                messages=[
+                    {"role": "system", "content": route_role_text},
+                    {"role": "user", "content": user_input},
+                ]
+            )
             route = json.loads(completion.choices[0].message.content)
             return _normalize_route_response(route)
         except FileNotFoundError as e:

@@ -1,3 +1,4 @@
+import shutil
 import unittest
 import tempfile
 import os
@@ -786,6 +787,9 @@ class TestMergePluginDefaults(unittest.TestCase):
     def tearDown(self):
         if self.original_home is not None:
             os.environ['HOME'] = self.original_home
+        else:
+            os.environ.pop('HOME', None)
+        shutil.rmtree(self.temp_dir, ignore_errors=True)
 
     def write_config(self, data):
         with open(self.config_file, "w") as f:

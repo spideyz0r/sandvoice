@@ -123,11 +123,12 @@ class SandVoice:
         logger.debug("Loading plugins from %s", self.config.plugin_path)
         self._plugin_manifests = []
         with os.scandir(self.config.plugin_path) as it:
-            for entry in it:
-                if entry.is_dir():
-                    self._load_plugin_folder(entry)
-                elif entry.name.endswith(".py"):
-                    self._load_plugin_file(entry)
+            entries = sorted(it, key=lambda e: e.name)
+        for entry in entries:
+            if entry.is_dir():
+                self._load_plugin_folder(entry)
+            elif entry.name.endswith(".py"):
+                self._load_plugin_file(entry)
         self.config.merge_plugin_defaults(self._plugin_manifests)
 
     def _load_plugin_file(self, entry):
