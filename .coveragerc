@@ -1,0 +1,7 @@
+[run]
+omit =
+    env/*
+    /tmp/*
+
+[report]
+ignore_errors = True
