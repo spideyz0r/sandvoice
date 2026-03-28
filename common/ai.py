@@ -479,7 +479,7 @@ class AI:
             )
             route = json.loads(completion.choices[0].message.content)
             result = _normalize_route_response(route)
-            logger.info("Route chosen: %s", result["route"])
+            logger.info("Route chosen: %s", result)
             return result
         except FileNotFoundError as e:
             error_msg = handle_file_error(e, operation="read", filename="routes.yaml")
