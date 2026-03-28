@@ -183,6 +183,10 @@ plan/
 **Document**: [backlog/22-plugin-manifest-system.md](./backlog/22-plugin-manifest-system.md)
 **Description**: Self-contained plugin folders with plugin.yaml manifests that self-register routes, config defaults, and env var requirements — eliminating manual edits to routes.yaml when adding or removing plugins.
 
+### Priority 37: Context-Aware Routing
+**Document**: [backlog/37-context-aware-routing.md](./backlog/37-context-aware-routing.md)
+**Description**: Pass the last N conversation turns to `define_route` so the routing LLM can correctly resolve follow-up utterances. Fixes misrouting of clarifications (e.g. "I mean the FIFA World Cup" after a realtime_websearch query routing to `news`).
+
 ### Future Enhancements
 **Document**: [backlog/FUTURE.md](./backlog/FUTURE.md)
 **Description**: Long-term feature ideas including API Cost Management, Conversation History Management, Code Deduplication, Timers & Reminders, Music Control, Smart Home Integration, Calendar Integration, Todo List Management, Multi-User Support, and Conversation Memory.
