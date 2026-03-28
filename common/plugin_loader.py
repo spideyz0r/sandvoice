@@ -97,6 +97,11 @@ def load_manifest(folder_path):
                 "plugin.yaml for '%s' has non-list '%s'; skipping", name, list_field
             )
             return None
+        if value and not all(isinstance(item, str) for item in value):
+            logger.warning(
+                "plugin.yaml for '%s' has non-string entries in '%s'; skipping", name, list_field
+            )
+            return None
 
     config_defaults = data.get("config_defaults")
     if config_defaults is not None and not isinstance(config_defaults, dict):

@@ -166,6 +166,22 @@ dependencies:
         self.assertIsNone(result)
         self.assertTrue(any("config_defaults" in msg for msg in cm.output))
 
+    def test_non_string_env_var_entry_returns_none(self):
+        with tempfile.TemporaryDirectory() as d:
+            _write_yaml(d, "name: x\nroute_description: desc\nenv_vars:\n  - 123\n")
+            with self.assertLogs("common.plugin_loader", level="WARNING") as cm:
+                result = load_manifest(d)
+        self.assertIsNone(result)
+        self.assertTrue(any("env_vars" in msg for msg in cm.output))
+
+    def test_non_string_dependency_entry_returns_none(self):
+        with tempfile.TemporaryDirectory() as d:
+            _write_yaml(d, "name: x\nroute_description: desc\ndependencies:\n  - 42\n")
+            with self.assertLogs("common.plugin_loader", level="WARNING") as cm:
+                result = load_manifest(d)
+        self.assertIsNone(result)
+        self.assertTrue(any("dependencies" in msg for msg in cm.output))
+
 
 class TestCheckEnvVars(unittest.TestCase):
     def test_all_set_returns_empty(self):
