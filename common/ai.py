@@ -469,6 +469,7 @@ class AI:
             if extra_routes:
                 route_role_text = route_role_text.rstrip() + extra_routes
 
+            logger.info("Routing: %r", user_input)
             completion = self.openai_client.chat.completions.create(
                 model=model,
                 messages=[
@@ -477,7 +478,9 @@ class AI:
                 ]
             )
             route = json.loads(completion.choices[0].message.content)
-            return _normalize_route_response(route)
+            result = _normalize_route_response(route)
+            logger.info("Route chosen: %s", result["route"])
+            return result
         except FileNotFoundError as e:
             error_msg = handle_file_error(e, operation="read", filename="routes.yaml")
             logger.error("Routes file error: %s", e)
