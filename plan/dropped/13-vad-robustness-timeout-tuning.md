@@ -50,3 +50,6 @@ None - builds on existing VAD infrastructure
 
 ## Relationship
 - Prerequisite for: Plan 14, Plan 15
+
+---
+**Status**: Dropped — VadRecorder extraction (Plan 35) supersedes the internal complexity this plan was meant to address. Current VAD behavior is acceptable; re-open if timeout enforcement proves to be a real issue in production.
