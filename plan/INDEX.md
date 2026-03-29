@@ -167,9 +167,9 @@ plan/
 **Document**: [backlog/14-energy-based-speech-detection.md](./backlog/14-energy-based-speech-detection.md)
 **Description**: Add ambient noise calibration and energy thresholding to reduce false positives from constant background audio.
 
-### Priority 17: Voice Lead Sentence
-**Document**: [backlog/17-voice-lead-sentence-early-ack.md](./backlog/17-voice-lead-sentence-early-ack.md)
-**Description**: Speak a one-sentence acknowledgement when processing takes long, then speak the final answer when ready. Lead audio files pre-generated at startup and cached in ~/.sandvoice/voice_lead/.
+### Priority 17: Voice Filler
+**Document**: [backlog/17-voice-filler.md](./backlog/17-voice-filler.md)
+**Description**: Play a short pre-generated audio phrase ("One sec.", "Got it, checking now.") on plugin routes when processing exceeds a delay threshold. Files generated at boot via WarmPhase and cached in ~/.sandvoice/voice_filler/; zero API cost on the hot path. Boot fails if generation fails.
 
 ### Priority 18: TTS Micro-Pauses and Pacing
 **Document**: [backlog/18-tts-micro-pauses-and-pacing.md](./backlog/18-tts-micro-pauses-and-pacing.md)
