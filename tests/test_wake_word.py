@@ -567,7 +567,7 @@ class TestWakeWordModeProcessing(unittest.TestCase):
         mock_barge_in.is_triggered = False
         mock_barge_in.event = Mock()
         mock_barge_in.event.is_set.return_value = False
-        mock_barge_in.run_with_polling.side_effect = lambda op, name: op()
+        mock_barge_in.run_with_polling.side_effect = lambda op, name, **kw: op()
         mode.barge_in = mock_barge_in
         return mode
 
@@ -736,7 +736,7 @@ class TestWakeWordModeResponding(unittest.TestCase):
         mock_barge_in.is_triggered = False
         mock_barge_in.event = Mock()
         mock_barge_in.event.is_set.return_value = False
-        mock_barge_in.run_with_polling.side_effect = lambda op, name: op()
+        mock_barge_in.run_with_polling.side_effect = lambda op, name, **kw: op()
         mode.barge_in = mock_barge_in
         mode.responder = Mock()
         return mode
@@ -1394,7 +1394,7 @@ class TestRequestTimingSummary(unittest.TestCase):
         mode.barge_in = Mock()
         mode.barge_in.is_triggered = False
         mode.barge_in.start = Mock()
-        mode.barge_in.run_with_polling = Mock(side_effect=lambda op, name: op())
+        mode.barge_in.run_with_polling = Mock(side_effect=lambda op, name, **kw: op())
         mode.recorded_audio_path = "/tmp/fake.wav"
         mode.plugins = {"weather": Mock()}
 
@@ -1479,7 +1479,7 @@ class TestTerminalUIIntegration(unittest.TestCase):
         mode.vad_recorder.record.return_value = "/tmp/fake.wav"
         mode._play_confirmation_beep = Mock()
         mode.barge_in = Mock()
-        mode.barge_in.run_with_polling = Mock(side_effect=lambda op, name: op())
+        mode.barge_in.run_with_polling = Mock(side_effect=lambda op, name, **kw: op())
         mode.barge_in.is_triggered = False
 
         mode._state_listening()
@@ -1492,7 +1492,7 @@ class TestTerminalUIIntegration(unittest.TestCase):
         mode.barge_in = Mock()
         mode.barge_in.is_triggered = False
         mode.barge_in.start = Mock()
-        mode.barge_in.run_with_polling = Mock(side_effect=lambda op, name: op())
+        mode.barge_in.run_with_polling = Mock(side_effect=lambda op, name, **kw: op())
         mode.recorded_audio_path = "/tmp/fake.wav"
         mode.plugins = {"weather": Mock()}
         mode.ai.transcribe_and_translate.return_value = "What time is it?"
@@ -1509,7 +1509,7 @@ class TestTerminalUIIntegration(unittest.TestCase):
         mode.barge_in = Mock()
         mode.barge_in.is_triggered = False
         mode.barge_in.start = Mock()
-        mode.barge_in.run_with_polling = Mock(side_effect=lambda op, name: op())
+        mode.barge_in.run_with_polling = Mock(side_effect=lambda op, name, **kw: op())
         mode.recorded_audio_path = "/tmp/fake.wav"
         mode.plugins = {"weather": Mock()}
         mode.ai.transcribe_and_translate.return_value = "hello"
@@ -1543,7 +1543,7 @@ class TestTerminalUIIntegration(unittest.TestCase):
         mode.barge_in = Mock()
         mode.barge_in.is_triggered = False
         mode.barge_in.start = Mock()
-        mode.barge_in.run_with_polling = Mock(side_effect=lambda op, name: op())
+        mode.barge_in.run_with_polling = Mock(side_effect=lambda op, name, **kw: op())
         mode.recorded_audio_path = "/tmp/fake.wav"
         mode.plugins = {"weather": Mock()}
         mode.ai.transcribe_and_translate.return_value = "What is the weather?"

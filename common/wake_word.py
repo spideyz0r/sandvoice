@@ -39,7 +39,7 @@ class WakeWordMode:
     Returns to IDLE after each cycle.
     """
 
-    def __init__(self, config, ai_instance, audio_instance, route_message, plugins=None, audio_lock=None, cache=None, ui=None, extra_routes=None):
+    def __init__(self, config, ai_instance, audio_instance, route_message, plugins=None, audio_lock=None, cache=None, ui=None, extra_routes=None, voice_filler=None):
         """Initialize wake word mode.
 
         Args:
@@ -59,6 +59,9 @@ class WakeWordMode:
                 are additionally gated by config.visual_state_indicator.
             extra_routes: Optional pre-rendered route description string assembled from plugin
                 manifests. Appended to the core routing prompt in define_route calls.
+            voice_filler: Optional VoiceFillerCache instance. When provided, a random
+                pre-generated phrase is played after voice_filler_delay_ms if a plugin
+                route has not yet responded.
         """
         if route_message is None:
             raise ValueError("route_message is required for wake-word mode")
@@ -70,6 +73,7 @@ class WakeWordMode:
         self._audio_lock = audio_lock
         self.cache = cache
         self.ui = ui
+        self.voice_filler = voice_filler
         self._extra_routes = extra_routes or ""
         self.state = State.IDLE
         self.running = False
@@ -443,17 +447,23 @@ class WakeWordMode:
         self.streaming_response_text = None
         self.streaming_user_input = None
 
-    def _poll_op(self, operation, name):
+    def _poll_op(self, operation, name, lead_delay_s=None, lead_fn=None):
         """Run *operation* with barge-in polling.
 
         Delegates to ``self.barge_in.run_with_polling``.  If barge-in
         interrupts, calls _handle_immediate_barge_in and returns the
         _BARGE_IN sentinel so callers can early-return without further logic.
         Otherwise returns the operation result directly.
+
+        Args:
+            operation:    Zero-argument callable to run.
+            name:         Human-readable label for log messages.
+            lead_delay_s: Forwarded to run_with_polling — seconds before lead_fn fires.
+            lead_fn:      Forwarded to run_with_polling — called once when delay elapses.
         """
         if self.barge_in is None:
             raise RuntimeError("Barge-in detector is not initialized; ensure _initialize() has been called")
-        result = self.barge_in.run_with_polling(operation, name)
+        result = self.barge_in.run_with_polling(operation, name, lead_delay_s=lead_delay_s, lead_fn=lead_fn)
         if result is _BARGE_IN:
             self._handle_immediate_barge_in()
             return _BARGE_IN
@@ -556,9 +566,24 @@ class WakeWordMode:
                 return
 
             _t0 = time.monotonic()
+            lead_delay_s = None
+            lead_fn = None
+            if self.voice_filler is not None:
+                filler_path = self.voice_filler.pick_random_path()
+                if filler_path:
+                    _path = filler_path  # capture for closure
+                    def _play_filler(_p=_path):
+                        try:
+                            self.audio.play_audio_file(_p)
+                        except Exception as e:
+                            logger.debug("Voice filler playback failed: %s", e)
+                    lead_fn = _play_filler
+                    lead_delay_s = self.config.voice_filler_delay_ms / 1000.0
             response_text = self._poll_op(
                 lambda: self.route_message(user_input, route),
                 "plugin response",
+                lead_delay_s=lead_delay_s,
+                lead_fn=lead_fn,
             )
             self._req_plugin_s = time.monotonic() - _t0
             # Snapshot cache hit type immediately so scheduler-thread cache lookups

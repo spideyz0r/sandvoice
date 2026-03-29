@@ -696,12 +696,21 @@ if __name__ == "__main__":
             sys.exit(1)
 
         from common.terminal_ui import TerminalUI
+        from common.voice_filler import VoiceFillerCache
+        from common.warm_phase import WarmPhase, WarmTask
         audio = Audio(sandvoice.config)
         ui = (
             TerminalUI(wake_phrase=sandvoice.config.wake_phrase)
             if sandvoice.config.visual_state_indicator
             else None
         )
+
+        voice_filler = None
+        if sandvoice.config.voice_filler_phrases:
+            voice_filler = VoiceFillerCache(sandvoice.config, sandvoice.ai)
+            warm = WarmPhase([WarmTask("voice-filler", voice_filler.warm, required=True)])
+            warm.run()
+
         wake_word_mode = WakeWordMode(
             sandvoice.config,
             sandvoice.ai,
@@ -714,6 +723,7 @@ if __name__ == "__main__":
             extra_routes=build_extra_routes_text(
                 sandvoice._plugin_manifests, location=sandvoice.config.location
             ),
+            voice_filler=voice_filler,
         )
         wake_word_mode.run()
     # Default mode (ESC key) or CLI mode
