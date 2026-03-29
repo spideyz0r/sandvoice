@@ -56,83 +56,6 @@ porcupine_access_key: "YOUR_KEY_HERE"   # free key at https://console.picovoice.
 
 The wake phrase defaults to `hey sandvoice`. Change it with `wake_phrase` in config (must be a built-in Porcupine keyword, or provide a custom `.ppn` model via `porcupine_keyword_paths`).
 
-## Plugins
-
-Each plugin handles a specific type of request. When you speak, SandVoice routes your input to the right plugin based on what you said.
-
-### Plugin structure
-
-Plugins live under `plugins/` as either a standalone `.py` file or a folder containing `plugin.py` and `plugin.yaml`:
-
-```
-plugins/
-  echo.py                  # simple single-file plugin
-  weather/
-    plugin.py              # plugin logic
-    plugin.yaml            # route description and metadata
-```
-
-`plugin.yaml` tells SandVoice how to route requests to that plugin:
-
-```yaml
-name: weather
-version: 1.0.0
-
-route_description: >
-  The user is asking about the weather. Include location and unit keys.
-
-route_extra_keys:
-  - location
-  - unit
-
-env_vars:
-  - OPENWEATHERMAP_API_KEY
-
-config_defaults:
-  location: "Toronto,ON,CA"
-  unit: metric
-
-dependencies:
-  - requests
-```
-
-Single-file plugins (no YAML) are loaded automatically and use the `routes.yaml` routing table.
-
-### Plugin API
-
-Every plugin must implement a `process` function (or a class with a `process` method):
-
-```python
-def process(user_input, route, s):
-    # s.ai      — AI instance (transcription, routing, TTS, responses)
-    # s.config  — Config instance
-    # s.plugins — dict of all loaded plugins
-    # s.cache   — VoiceCache instance (or None if disabled)
-    return "response string"  # always str, never None, never raises
-```
-
-### Built-in plugins
-
-| Plugin | What it does | Extra env var needed |
-|---|---|---|
-| `weather` | Current conditions and forecast | `OPENWEATHERMAP_API_KEY` |
-| `hacker_news` | Top stories from Hacker News | — |
-| `news` | Headlines from an RSS feed | — |
-| `realtime_websearch` | Live web search via Responses API | — |
-| `technical` | Technical/code questions | — |
-| `greeting` | Greetings and small talk | — |
-| `echo` | Echoes back what you said (example/test) | — |
-
-### Adding a plugin
-
-Create a folder under `plugins/` with a `plugin.yaml` and a `plugin.py`:
-
-1. Write `plugin.yaml` with `name`, `route_description`, and any `env_vars` or `config_defaults`
-2. Implement `process(user_input, route, s)` in `plugin.py` — return a string
-3. List any PyPI dependencies under `dependencies` in the YAML
-
-No changes to `routes.yaml` or any other file needed.
-
 ## API keys
 
 | Key | Required | Used by |
@@ -243,6 +166,83 @@ cache_enabled: disabled
 cache_weather_ttl_s: 10800       # 3 hours
 cache_weather_max_stale_s: 21600 # 6 hours
 ```
+
+## Plugins
+
+Each plugin handles a specific type of request. When you speak, SandVoice routes your input to the right plugin based on what you said.
+
+### Plugin structure
+
+Plugins live under `plugins/` as either a standalone `.py` file or a folder containing `plugin.py` and `plugin.yaml`:
+
+```
+plugins/
+  echo.py                  # simple single-file plugin
+  weather/
+    plugin.py              # plugin logic
+    plugin.yaml            # route description and metadata
+```
+
+`plugin.yaml` tells SandVoice how to route requests to that plugin:
+
+```yaml
+name: weather
+version: 1.0.0
+
+route_description: >
+  The user is asking about the weather. Include location and unit keys.
+
+route_extra_keys:
+  - location
+  - unit
+
+env_vars:
+  - OPENWEATHERMAP_API_KEY
+
+config_defaults:
+  location: "Toronto,ON,CA"
+  unit: metric
+
+dependencies:
+  - requests
+```
+
+Single-file plugins (no YAML) are loaded automatically and use the `routes.yaml` routing table.
+
+### Plugin API
+
+Every plugin must implement a `process` function (or a class with a `process` method):
+
+```python
+def process(user_input, route, s):
+    # s.ai      — AI instance (transcription, routing, TTS, responses)
+    # s.config  — Config instance
+    # s.plugins — dict of all loaded plugins
+    # s.cache   — VoiceCache instance (or None if disabled)
+    return "response string"  # always str, never None, never raises
+```
+
+### Built-in plugins
+
+| Plugin | What it does | Extra env var needed |
+|---|---|---|
+| `weather` | Current conditions and forecast | `OPENWEATHERMAP_API_KEY` |
+| `hacker_news` | Top stories from Hacker News | — |
+| `news` | Headlines from an RSS feed | — |
+| `realtime_websearch` | Live web search via Responses API | — |
+| `technical` | Technical/code questions | — |
+| `greeting` | Greetings and small talk | — |
+| `echo` | Echoes back what you said (example/test) | — |
+
+### Adding a plugin
+
+Create a folder under `plugins/` with a `plugin.yaml` and a `plugin.py`:
+
+1. Write `plugin.yaml` with `name`, `route_description`, and any `env_vars` or `config_defaults`
+2. Implement `process(user_input, route, s)` in `plugin.py` — return a string
+3. List any PyPI dependencies under `dependencies` in the YAML
+
+No changes to `routes.yaml` or any other file needed.
 
 ## Scheduled tasks
 
