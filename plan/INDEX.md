@@ -179,6 +179,10 @@ plan/
 **Document**: [backlog/37-context-aware-routing.md](./backlog/37-context-aware-routing.md)
 **Description**: Pass the last N conversation turns to `define_route` so the routing LLM can correctly resolve follow-up utterances. Fixes misrouting of clarifications (e.g. "I mean the FIFA World Cup" after a realtime_websearch query routing to `news`).
 
+### Priority 38: README Modernization
+**Document**: [backlog/38-readme-modernization.md](./backlog/38-readme-modernization.md)
+**Description**: Rewrite the README with current plugin system (folder/manifest), reorganized config reference, and a tone that doesn't read like it was written by an AI. Depends on Plan 17 landing first.
+
 ### Future Enhancements
 **Document**: [backlog/FUTURE.md](./backlog/FUTURE.md)
 **Description**: Long-term feature ideas including API Cost Management, Conversation History Management, Code Deduplication, Timers & Reminders, Music Control, Smart Home Integration, Calendar Integration, Todo List Management, Multi-User Support, and Conversation Memory.
