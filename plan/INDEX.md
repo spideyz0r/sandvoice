@@ -115,6 +115,14 @@ plan/
 **Document**: [completed/11-plugin-route-name-normalization.md](./completed/11-plugin-route-name-normalization.md)
 **Description**: Standardized plugin modules to underscore form (`hacker_news.py`). Added `normalize_plugin_name()`, `resolve_plugin_route_name()`, and hyphen aliases so route names like `hacker-news` dispatch correctly. Both forms registered in the plugin dict; invalid filenames logged with a rename hint.
 
+### Priority 10: Speech-to-Text Task and Language
+**Document**: [completed/10-speech-to-text-task-and-language.md](./completed/10-speech-to-text-task-and-language.md)
+**Description**: Make Whisper behavior configurable (transcribe vs translate) and allow explicit language hints for better accuracy. `speech_to_text_task`, `speech_to_text_language`, `speech_to_text_translate_provider`, and `speech_to_text_translate_model` config keys implemented and validated.
+
+### Priority 22: Plugin Manifest System
+**Document**: [completed/22-plugin-manifest-system.md](./completed/22-plugin-manifest-system.md)
+**Description**: Self-contained plugin folders with plugin.yaml manifests that self-register routes, config defaults, and env var requirements — eliminating manual edits to routes.yaml when adding or removing plugins.
+
 ### Priority 23: Request Timing Summary Log
 **Document**: [completed/23-request-timing-summary-log.md](./completed/23-request-timing-summary-log.md)
 **Description**: Emit a single INFO line per request summarising transcription, routing, plugin, and TTS timing plus cache status. Enables clean benchmarking without enabling `log_level: debug`. Per-request `_req_cache_hit_type` snapshot isolates summary from concurrent scheduler-thread cache reads. Requires Plan 28.
@@ -144,8 +152,8 @@ plan/
 
 ### Priority 20: Background Cache for Frequent Voice Queries
 **Document**: [in-progress/20-background-cache-frequent-voice-queries.md](./in-progress/20-background-cache-frequent-voice-queries.md)
-**Status**: Weather plugin fully integrated (caches full response text, legacy JSON migration, background refresh). More plugins TBD.
-**Description**: Opt-in background refresh of weather/crypto/common info to enable instant spoken answers with freshness hints.
+**Status**: Weather plugin fully integrated. Scope narrowed: hacker_news and news plugins remaining; realtime/realtime_websearch excluded (real-time by design).
+**Description**: Opt-in background refresh of weather/news info to enable instant spoken answers with freshness hints.
 
 ---
 
@@ -155,33 +163,17 @@ plan/
 **Document**: [backlog/05-raspberry-pi-compatibility.md](./backlog/05-raspberry-pi-compatibility.md)
 **Description**: Full compatibility testing and documentation for Raspberry Pi 3B deployment. Setup process, dependencies, and performance validation.
 
-### Priority 10: Speech-to-Text Task and Language
-**Document**: [backlog/10-speech-to-text-task-and-language.md](./backlog/10-speech-to-text-task-and-language.md)
-**Description**: Make Whisper behavior configurable (transcribe vs translate) and allow explicit language hints for better accuracy.
-
-### Priority 13: VAD Robustness - Timeout and Tuning
-**Document**: [backlog/13-vad-robustness-timeout-tuning.md](./backlog/13-vad-robustness-timeout-tuning.md)
-**Description**: Make VAD more robust in noisy environments via timeout enforcement, better feedback, and tuning/presets.
-
 ### Priority 14: Energy-Based Speech Detection
 **Document**: [backlog/14-energy-based-speech-detection.md](./backlog/14-energy-based-speech-detection.md)
 **Description**: Add ambient noise calibration and energy thresholding to reduce false positives from constant background audio.
 
-### Priority 15: Speech Classification (ML)
-**Document**: [backlog/15-speech-classification-ml.md](./backlog/15-speech-classification-ml.md)
-**Description**: Explore lightweight ML-based speech classification (e.g., Silero VAD) to distinguish user speech from background dialogue.
-
 ### Priority 17: Voice Lead Sentence
 **Document**: [backlog/17-voice-lead-sentence-early-ack.md](./backlog/17-voice-lead-sentence-early-ack.md)
-**Description**: Speak a one-sentence acknowledgement when processing takes long, then speak the final answer when ready.
+**Description**: Speak a one-sentence acknowledgement when processing takes long, then speak the final answer when ready. Lead audio files pre-generated at startup and cached in ~/.sandvoice/voice_lead/.
 
 ### Priority 18: TTS Micro-Pauses and Pacing
 **Document**: [backlog/18-tts-micro-pauses-and-pacing.md](./backlog/18-tts-micro-pauses-and-pacing.md)
 **Description**: Add configurable pauses between TTS chunks to make speech feel less rushed.
-
-### Priority 22: Plugin Manifest System
-**Document**: [backlog/22-plugin-manifest-system.md](./backlog/22-plugin-manifest-system.md)
-**Description**: Self-contained plugin folders with plugin.yaml manifests that self-register routes, config defaults, and env var requirements — eliminating manual edits to routes.yaml when adding or removing plugins.
 
 ### Priority 37: Context-Aware Routing
 **Document**: [backlog/37-context-aware-routing.md](./backlog/37-context-aware-routing.md)
@@ -193,12 +185,24 @@ plan/
 
 ---
 
+## Dropped 🗑️
+
+### Priority 13: VAD Robustness - Timeout and Tuning
+**Document**: [dropped/13-vad-robustness-timeout-tuning.md](./dropped/13-vad-robustness-timeout-tuning.md)
+**Reason**: VadRecorder extraction (Plan 35) supersedes the internal complexity this addressed. Current VAD behavior is acceptable.
+
+### Priority 15: Speech Classification (ML)
+**Reason**: Silero VAD and similar models are not viable on Pi 3B in real-time. Dropped without a plan document.
+
+---
+
 ## Status Legend
 
 - ✅ **Completed** - Implemented, tested, and merged to main
 - 🚧 **In Progress** - Currently being implemented
 - 📋 **Backlog** - Documented, ready for implementation
 - 🔮 **Future** - Long-term ideas, not yet planned
+- 🗑️ **Dropped** - Consciously decided against; see `dropped/` for rationale
 
 ---
 
