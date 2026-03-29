@@ -574,11 +574,17 @@ class WakeWordMode:
                     _path = filler_path  # capture for closure
                     def _play_filler(_p=_path):
                         try:
-                            self.audio.play_audio_file(_p)
+                            with (self._audio_lock or contextlib.nullcontext()):
+                                self.audio.play_audio_file(_p)
+                            logger.debug("Voice filler played: %s", os.path.basename(_p))
                         except Exception as e:
                             logger.debug("Voice filler playback failed: %s", e)
                     lead_fn = _play_filler
                     lead_delay_s = self.config.voice_filler_delay_ms / 1000.0
+                    logger.debug(
+                        "Voice filler armed: delay=%.1fs path=%s",
+                        lead_delay_s, os.path.basename(filler_path),
+                    )
             response_text = self._poll_op(
                 lambda: self.route_message(user_input, route),
                 "plugin response",

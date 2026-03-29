@@ -173,10 +173,15 @@ class BargeInDetector:
                     and not lead_fired
                     and time.monotonic() - t_start >= lead_delay_s):
                 lead_fired = True
-                lead_fn()
+                def _run_lead(fn=lead_fn):
+                    try:
+                        fn()
+                    except Exception as e:
+                        logger.debug("Lead function raised during %s: %s", name, e)
+                threading.Thread(target=_run_lead, daemon=True).start()
             time.sleep(0.05)
             poll_count += 1
-            if logger.isEnabledFor(logging.DEBUG) and poll_count % 40 == 0:
+            if logger.isEnabledFor(logging.DEBUG) and poll_count % 40 == 0 and not lead_fired:
                 try:
                     import pygame
                     if pygame.mixer.get_init() and pygame.mixer.music.get_busy():

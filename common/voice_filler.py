@@ -81,6 +81,10 @@ class VoiceFillerCache:
             logger.debug("voice_filler_phrases is empty — skipping filler warm")
             return
 
+        with self._lock:
+            self._ready_files.clear()
+
+        logger.debug("Voice filler warm started: %d phrase(s), dir=%s", len(phrases), self._filler_dir)
         os.makedirs(self._filler_dir, exist_ok=True)
         self._ensure_table()
 
@@ -110,7 +114,7 @@ class VoiceFillerCache:
                 for future in concurrent.futures.as_completed(futures):
                     future.result()  # re-raises on failure
 
-        logger.debug("Voice filler ready: %d phrase(s)", len(self._ready_files))
+        logger.info("Voice filler ready: %d phrase(s)", len(self._ready_files))
 
     def pick_random_path(self):
         """Return a random pre-generated file path, or None if none available."""
@@ -165,7 +169,7 @@ class VoiceFillerCache:
             raise
 
     def _ensure_table(self):
-        with sqlite3.connect(self._config.scheduler_db_path) as conn:
+        with sqlite3.connect(self._config.scheduler_db_path, timeout=10) as conn:
             conn.execute("""
                 CREATE TABLE IF NOT EXISTS voice_filler_cache (
                     filename     TEXT PRIMARY KEY,
@@ -177,7 +181,7 @@ class VoiceFillerCache:
 
     def _get_db_hash(self, filename):
         try:
-            with sqlite3.connect(self._config.scheduler_db_path) as conn:
+            with sqlite3.connect(self._config.scheduler_db_path, timeout=10) as conn:
                 row = conn.execute(
                     "SELECT content_hash FROM voice_filler_cache WHERE filename = ?",
                     (filename,),
@@ -188,7 +192,7 @@ class VoiceFillerCache:
 
     def _upsert_db(self, filename, content_hash):
         now = datetime.now(timezone.utc).isoformat()
-        with sqlite3.connect(self._config.scheduler_db_path) as conn:
+        with sqlite3.connect(self._config.scheduler_db_path, timeout=10) as conn:
             conn.execute(
                 """
                 INSERT INTO voice_filler_cache (filename, content_hash, created_at)

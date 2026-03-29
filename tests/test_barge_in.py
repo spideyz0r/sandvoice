@@ -300,6 +300,69 @@ class TestBargeInDetectorRunWithPolling(unittest.TestCase):
         self.assertIsNot(sentinel, 0)
         self.assertIs(sentinel, _BARGE_IN)  # identity is stable
 
+    def test_lead_fn_fires_after_delay_when_operation_slow(self):
+        """lead_fn is called once the delay elapses while operation is still running."""
+        d = self._make_detector()
+        lead_called = threading.Event()
+
+        def lead():
+            lead_called.set()
+
+        def slow_op():
+            time.sleep(0.5)
+            return "done"
+
+        result = d.run_with_polling(slow_op, "test", lead_delay_s=0.05, lead_fn=lead)
+        self.assertEqual(result, "done")
+        self.assertTrue(lead_called.wait(timeout=1.0), "lead_fn should have been called")
+
+    def test_lead_fn_not_fired_when_operation_completes_quickly(self):
+        """lead_fn is NOT called when the operation finishes before the delay."""
+        d = self._make_detector()
+        lead_called = threading.Event()
+
+        def lead():
+            lead_called.set()
+
+        result = d.run_with_polling(lambda: "quick", "test", lead_delay_s=10.0, lead_fn=lead)
+        self.assertEqual(result, "quick")
+        self.assertFalse(lead_called.is_set(), "lead_fn should not fire for a fast operation")
+
+    def test_lead_fn_fires_only_once(self):
+        """lead_fn is called exactly once, even across many polling cycles."""
+        d = self._make_detector()
+        call_count = [0]
+        lock = threading.Lock()
+
+        def lead():
+            with lock:
+                call_count[0] += 1
+
+        def slow_op():
+            time.sleep(0.4)
+            return "done"
+
+        d.run_with_polling(slow_op, "test", lead_delay_s=0.05, lead_fn=lead)
+        # Give the lead thread a moment to finish
+        time.sleep(0.1)
+        with lock:
+            self.assertEqual(call_count[0], 1)
+
+    def test_lead_fn_exception_does_not_abort_polling(self):
+        """An exception raised by lead_fn does not propagate out of run_with_polling."""
+        d = self._make_detector()
+
+        def bad_lead():
+            raise RuntimeError("lead exploded")
+
+        def slow_op():
+            time.sleep(0.2)
+            return "result"
+
+        # Should not raise, and should return the operation result
+        result = d.run_with_polling(slow_op, "test", lead_delay_s=0.05, lead_fn=bad_lead)
+        self.assertEqual(result, "result")
+
 
 class TestBargeInDetectorDetectionLoop(unittest.TestCase):
     def setUp(self):
