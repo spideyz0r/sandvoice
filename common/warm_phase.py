@@ -28,6 +28,11 @@ class WarmPhase:
     Required tasks cause a ``RuntimeError`` on failure, aborting startup.
     Optional tasks log a warning and allow startup to continue.
 
+    Note: ``run()`` blocks until *all* tasks complete before raising, even if a
+    required task fails early.  It does not cancel in-flight threads on failure
+    (Python threads cannot be cancelled).  If a required task fails and another
+    task is slow, startup will be delayed by the slowest task.
+
     Designed for extensibility: future tasks (cache prefill, connectivity
     checks, ML model loading) slot in alongside existing ones without any
     changes to the boot call site.
@@ -37,7 +42,7 @@ class WarmPhase:
         warm = WarmPhase([
             WarmTask("voice-filler", filler_cache.warm, required=True),
         ])
-        warm.run()   # blocks; raises RuntimeError on required failure
+        warm.run()   # blocks until all tasks finish; raises RuntimeError on required failure
     """
 
     def __init__(self, tasks):

@@ -8,15 +8,9 @@ import sqlite3
 import threading
 from datetime import datetime, timezone
 
-logger = logging.getLogger(__name__)
+from common.db import _SQLITE_BUSY_TIMEOUT_S
 
-_DEFAULT_PHRASES = [
-    "One sec.",
-    "Got it, checking now.",
-    "Okay, give me a moment.",
-    "Let me check that.",
-    "Sure, one moment.",
-]
+logger = logging.getLogger(__name__)
 
 
 def _slugify(phrase):
@@ -169,7 +163,7 @@ class VoiceFillerCache:
             raise
 
     def _ensure_table(self):
-        with sqlite3.connect(self._config.scheduler_db_path, timeout=10) as conn:
+        with sqlite3.connect(self._config.scheduler_db_path, timeout=_SQLITE_BUSY_TIMEOUT_S) as conn:
             conn.execute("""
                 CREATE TABLE IF NOT EXISTS voice_filler_cache (
                     filename     TEXT PRIMARY KEY,
@@ -181,7 +175,7 @@ class VoiceFillerCache:
 
     def _get_db_hash(self, filename):
         try:
-            with sqlite3.connect(self._config.scheduler_db_path, timeout=10) as conn:
+            with sqlite3.connect(self._config.scheduler_db_path, timeout=_SQLITE_BUSY_TIMEOUT_S) as conn:
                 row = conn.execute(
                     "SELECT content_hash FROM voice_filler_cache WHERE filename = ?",
                     (filename,),
@@ -192,7 +186,7 @@ class VoiceFillerCache:
 
     def _upsert_db(self, filename, content_hash):
         now = datetime.now(timezone.utc).isoformat()
-        with sqlite3.connect(self._config.scheduler_db_path, timeout=10) as conn:
+        with sqlite3.connect(self._config.scheduler_db_path, timeout=_SQLITE_BUSY_TIMEOUT_S) as conn:
             conn.execute(
                 """
                 INSERT INTO voice_filler_cache (filename, content_hash, created_at)

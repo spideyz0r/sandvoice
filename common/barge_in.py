@@ -131,12 +131,13 @@ class BargeInDetector:
         Args:
             operation:     Zero-argument callable to run.
             name:          Human-readable name used in log messages.
-            lead_delay_s:  Seconds to wait before calling ``lead_fn``.  Only
+            lead_delay_s:  Seconds to wait before starting ``lead_fn``.  Only
                            used when ``lead_fn`` is also provided.
-            lead_fn:       Zero-argument callable invoked once after
-                           ``lead_delay_s`` elapses and the operation is still
-                           running (e.g. play a voice filler phrase).  Called
-                           synchronously from the polling loop; keep it short.
+            lead_fn:       Zero-argument callable invoked once, in a separate
+                           daemon thread, after ``lead_delay_s`` elapses and
+                           the operation is still running (e.g. play a voice
+                           filler phrase).  Not called from the polling loop;
+                           ensure it is thread-safe.
 
         Returns:
             Operation result, or ``_BARGE_IN`` sentinel if interrupted.

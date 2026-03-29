@@ -709,7 +709,12 @@ if __name__ == "__main__":
         if sandvoice.config.voice_filler_phrases:
             voice_filler = VoiceFillerCache(sandvoice.config, sandvoice.ai)
             warm = WarmPhase([WarmTask("voice-filler", voice_filler.warm, required=True)])
-            warm.run()
+            try:
+                warm.run()
+            except RuntimeError as e:
+                print("Error: Voice filler warm phase failed. Details:")
+                print(f"  {e}")
+                sys.exit(1)
 
         wake_word_mode = WakeWordMode(
             sandvoice.config,

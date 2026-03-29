@@ -3,7 +3,7 @@ import os
 import sqlite3
 import tempfile
 import unittest
-from unittest.mock import MagicMock, Mock, patch
+from unittest.mock import Mock
 
 from common.voice_filler import VoiceFillerCache, _slugify, _content_hash
 
@@ -74,11 +74,6 @@ class TestVoiceFillerCacheBase(unittest.TestCase):
 
     def _make_cache(self):
         return VoiceFillerCache(self.config, self.ai)
-
-    def _write_dummy_mp3(self, path):
-        """Write a minimal placeholder file."""
-        with open(path, "wb") as f:
-            f.write(b"dummy")
 
 
 class TestVoiceFillerWarm(TestVoiceFillerCacheBase):
