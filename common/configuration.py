@@ -289,9 +289,10 @@ class Config:
         self.voice_ack_earcon_duration = _parse_exact_float(self.get("voice_ack_earcon_duration"))
 
         # Voice Filler
-        try:
-            self.voice_filler_delay_ms = max(0, int(self.get("voice_filler_delay_ms")))
-        except (TypeError, ValueError):
+        _raw_delay = _parse_exact_int(self.get("voice_filler_delay_ms"))
+        if isinstance(_raw_delay, int) and not isinstance(_raw_delay, bool):
+            self.voice_filler_delay_ms = max(0, _raw_delay)
+        else:
             self.voice_filler_delay_ms = self.defaults["voice_filler_delay_ms"]
         raw_phrases = self.get("voice_filler_phrases")
         if isinstance(raw_phrases, list):

@@ -178,6 +178,9 @@ class BargeInDetector:
                     if not op_thread.is_alive():
                         logger.debug("Lead function skipped — operation completed before lead could run")
                         return
+                    if self.is_triggered:
+                        logger.debug("Lead function skipped — barge-in triggered before lead could run")
+                        return
                     try:
                         fn()
                     except Exception as e:

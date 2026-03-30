@@ -855,6 +855,11 @@ class TestVoiceFillerConfig(_TempHomeBase):
         config = Config()
         self.assertEqual(config.voice_filler_delay_ms, 800)
 
+    def test_delay_bool_falls_back_to_default(self):
+        self.write_config({"voice_filler_delay_ms": True})
+        config = Config()
+        self.assertEqual(config.voice_filler_delay_ms, 800)
+
     def test_delay_zero_is_valid(self):
         self.write_config({"voice_filler_delay_ms": 0})
         config = Config()
