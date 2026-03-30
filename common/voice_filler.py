@@ -192,7 +192,8 @@ class VoiceFillerCache:
                     (filename,),
                 ).fetchone()
             return row[0] if row else None
-        except Exception:
+        except Exception as e:
+            logger.debug("Failed to read content_hash for '%s' from DB: %s", filename, e)
             return None
 
     def _upsert_db(self, filename, content_hash):

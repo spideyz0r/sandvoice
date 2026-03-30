@@ -54,7 +54,7 @@ class WarmPhase:
             return
 
         failures = {}
-        with concurrent.futures.ThreadPoolExecutor(max_workers=len(self.tasks)) as executor:
+        with concurrent.futures.ThreadPoolExecutor(max_workers=min(len(self.tasks), 8)) as executor:
             future_to_task = {executor.submit(task.fn): task for task in self.tasks}
             for future in concurrent.futures.as_completed(future_to_task):
                 task = future_to_task[future]

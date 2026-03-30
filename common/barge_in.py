@@ -174,7 +174,10 @@ class BargeInDetector:
                     and not lead_fired
                     and time.monotonic() - t_start >= lead_delay_s):
                 lead_fired = True
-                def _run_lead(fn=lead_fn):
+                def _run_lead(fn=lead_fn, op_thread=thread):
+                    if not op_thread.is_alive():
+                        logger.debug("Lead function skipped — operation completed before lead could run")
+                        return
                     try:
                         fn()
                     except Exception as e:

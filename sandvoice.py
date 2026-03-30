@@ -706,7 +706,7 @@ if __name__ == "__main__":
         )
 
         voice_filler = None
-        if sandvoice.config.voice_filler_phrases:
+        if sandvoice.config.voice_filler_phrases and sandvoice.config.bot_voice:
             voice_filler = VoiceFillerCache(sandvoice.config, sandvoice.ai)
             warm = WarmPhase([WarmTask("voice-filler", voice_filler.warm, required=True)])
             try:
