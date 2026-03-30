@@ -892,10 +892,15 @@ class TestVoiceFillerConfig(_TempHomeBase):
         self.assertGreater(len(config.voice_filler_phrases), 0)
 
     def test_phrases_filters_empty_strings(self):
-        self.write_config({"voice_filler_phrases": ["Valid phrase.", "", None, "Another."]})
+        self.write_config({"voice_filler_phrases": ["Valid phrase.", "", None, "   ", "Another."]})
         config = Config()
-        # Empty strings and None entries (falsy) are filtered; valid phrases kept
+        # Empty strings, None, and whitespace-only entries are filtered; valid phrases kept
         self.assertEqual(config.voice_filler_phrases, ["Valid phrase.", "Another."])
+
+    def test_phrases_strips_surrounding_whitespace(self):
+        self.write_config({"voice_filler_phrases": ["  One sec.  ", "Got it."]})
+        config = Config()
+        self.assertEqual(config.voice_filler_phrases, ["One sec.", "Got it."])
 
 
 if __name__ == '__main__':

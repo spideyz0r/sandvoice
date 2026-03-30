@@ -296,7 +296,7 @@ class Config:
             self.voice_filler_delay_ms = self.defaults["voice_filler_delay_ms"]
         raw_phrases = self.get("voice_filler_phrases")
         if isinstance(raw_phrases, list):
-            self.voice_filler_phrases = [str(p) for p in raw_phrases if p]
+            self.voice_filler_phrases = [s for p in raw_phrases if p for s in [str(p).strip()] if s]
         elif raw_phrases is None:
             self.voice_filler_phrases = list(self.defaults["voice_filler_phrases"])
         else:
