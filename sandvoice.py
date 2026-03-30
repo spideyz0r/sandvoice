@@ -705,17 +705,9 @@ if __name__ == "__main__":
             else None
         )
 
-        voice_filler = None
-        if sandvoice.config.voice_filler_phrases and sandvoice.config.bot_voice:
-            voice_filler = VoiceFillerCache(sandvoice.config, sandvoice.ai)
-            warm = WarmPhase([WarmTask("voice-filler", voice_filler.warm, required=True)])
-            try:
-                warm.run()
-            except RuntimeError as e:
-                print("Error: Voice filler warm phase failed. Details:")
-                print(f"  {e}")
-                sys.exit(1)
-
+        # Instantiate WakeWordMode first so its __init__ validates config prerequisites
+        # (vad_enabled, stream_responses, stream_tts) before spending TTS API calls on
+        # the voice-filler warm phase.
         wake_word_mode = WakeWordMode(
             sandvoice.config,
             sandvoice.ai,
@@ -728,8 +720,19 @@ if __name__ == "__main__":
             extra_routes=build_extra_routes_text(
                 sandvoice._plugin_manifests, location=sandvoice.config.location
             ),
-            voice_filler=voice_filler,
         )
+
+        if sandvoice.config.voice_filler_phrases and sandvoice.config.bot_voice:
+            voice_filler = VoiceFillerCache(sandvoice.config, sandvoice.ai)
+            warm = WarmPhase([WarmTask("voice-filler", voice_filler.warm, required=True)])
+            try:
+                warm.run()
+            except RuntimeError as e:
+                print("Error: Voice filler warm phase failed. Details:")
+                print(f"  {e}")
+                sys.exit(1)
+            wake_word_mode.voice_filler = voice_filler
+
         wake_word_mode.run()
     # Default mode (ESC key) or CLI mode
     else:
