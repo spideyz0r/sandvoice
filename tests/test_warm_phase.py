@@ -86,6 +86,31 @@ class TestWarmPhaseRun(unittest.TestCase):
             ]).run()
         good.assert_called_once()
 
+    def test_multiple_failures_sorted_in_error_message(self):
+        """Failure names appear in sorted order regardless of completion order."""
+        def fail_z():
+            raise RuntimeError("err-z")
+
+        def fail_a():
+            raise RuntimeError("err-a")
+
+        with self.assertRaises(RuntimeError) as ctx:
+            WarmPhase([
+                WarmTask("task-z", fail_z),
+                WarmTask("task-a", fail_a),
+            ]).run()
+        msg = str(ctx.exception)
+        self.assertLess(msg.index("task-a"), msg.index("task-z"))
+
+    def test_duplicate_task_names_raise_on_init(self):
+        """WarmPhase.__init__ raises ValueError for duplicate task names."""
+        with self.assertRaises(ValueError) as ctx:
+            WarmPhase([
+                WarmTask("dup", lambda: None),
+                WarmTask("dup", lambda: None),
+            ])
+        self.assertIn("dup", str(ctx.exception))
+
 
 if __name__ == "__main__":
     unittest.main()

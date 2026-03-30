@@ -47,6 +47,10 @@ class WarmPhase:
 
     def __init__(self, tasks):
         self.tasks = list(tasks)
+        names = [t.name for t in self.tasks]
+        if len(names) != len(set(names)):
+            dupes = sorted({n for n in names if names.count(n) > 1})
+            raise ValueError(f"WarmTask names must be unique; duplicates: {dupes}")
 
     def run(self):
         """Run all tasks in parallel.  Raises RuntimeError if any required task fails."""
@@ -68,5 +72,5 @@ class WarmPhase:
                         logger.warning("Optional warm task '%s' failed: %s", task.name, e)
 
         if failures:
-            msg = "; ".join(f"{name}: {e}" for name, e in failures.items())
+            msg = "; ".join(f"{name}: {e}" for name, e in sorted(failures.items()))
             raise RuntimeError(f"Boot failed during warm phase: {msg}")
