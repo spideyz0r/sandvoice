@@ -78,6 +78,17 @@ class VoiceFillerCache:
         with self._lock:
             self._ready_files.clear()
 
+        # Detect slug collisions up front to prevent silent overwrites.
+        seen_filenames = {}
+        for phrase in phrases:
+            fn = _slugify(phrase) + ".mp3"
+            if fn in seen_filenames:
+                raise ValueError(
+                    f"voice_filler_phrases contains phrases that map to the same filename {fn!r}: "
+                    f"{seen_filenames[fn]!r} and {phrase!r}. Make phrases more distinct."
+                )
+            seen_filenames[fn] = phrase
+
         logger.debug("Voice filler warm started: %d phrase(s), dir=%s", len(phrases), self._filler_dir)
         os.makedirs(self._filler_dir, exist_ok=True)
         self._ensure_table()

@@ -1,4 +1,5 @@
 import contextlib
+import io
 import logging
 import os
 import struct
@@ -575,7 +576,8 @@ class WakeWordMode:
                     def _play_filler(_p=_path):
                         try:
                             with (self._audio_lock or contextlib.nullcontext()):
-                                self.audio.play_audio_file(_p)
+                                with contextlib.redirect_stdout(io.StringIO()):
+                                    self.audio.play_audio_file(_p)
                             logger.debug("Voice filler played: %s", os.path.basename(_p))
                         except Exception as e:
                             logger.debug("Voice filler playback failed: %s", e)
