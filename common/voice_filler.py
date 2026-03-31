@@ -174,6 +174,9 @@ class VoiceFillerCache:
             raise
 
     def _ensure_table(self):
+        dir_name = os.path.dirname(self._config.scheduler_db_path)
+        if dir_name:
+            os.makedirs(dir_name, exist_ok=True)
         with sqlite3.connect(self._config.scheduler_db_path, timeout=_SQLITE_BUSY_TIMEOUT_S) as conn:
             conn.execute("""
                 CREATE TABLE IF NOT EXISTS voice_filler_cache (

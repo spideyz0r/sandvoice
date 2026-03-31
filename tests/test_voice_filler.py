@@ -106,7 +106,7 @@ class TestVoiceFillerWarm(TestVoiceFillerCacheBase):
     def test_warm_raises_on_tts_failure(self):
         self.ai.text_to_speech.side_effect = RuntimeError("TTS failed")
         cache = self._make_cache()
-        with self.assertRaises(Exception):
+        with self.assertRaises(RuntimeError):
             cache.warm()
 
     def test_warm_uses_cache_hit(self):
