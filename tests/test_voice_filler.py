@@ -49,6 +49,16 @@ class TestContentHash(unittest.TestCase):
         h2 = _content_hash("One sec.", "alloy", "tts-1-hd")
         self.assertNotEqual(h1, h2)
 
+    def test_differs_on_language(self):
+        h1 = _content_hash("One sec.", "alloy", "tts-1", "")
+        h2 = _content_hash("One sec.", "alloy", "tts-1", "pt")
+        self.assertNotEqual(h1, h2)
+
+    def test_no_language_matches_empty_string(self):
+        h1 = _content_hash("One sec.", "alloy", "tts-1")
+        h2 = _content_hash("One sec.", "alloy", "tts-1", "")
+        self.assertEqual(h1, h2)
+
 
 class TestVoiceFillerCacheBase(unittest.TestCase):
     def setUp(self):
@@ -64,6 +74,9 @@ class TestVoiceFillerCacheBase(unittest.TestCase):
             "One sec.",
             "Got it, checking now.",
         ]
+        self.config.speech_to_text_task = "translate"
+        self.config.speech_to_text_language = ""
+        self.config.gpt_response_model = "gpt-3.5-turbo"
 
         self.ai = Mock()
 
@@ -225,6 +238,134 @@ class TestSQLiteTable(TestVoiceFillerCacheBase):
         filenames = [r[0] for r in rows]
         self.assertIn("one_sec.mp3", filenames)
         self.assertIn("got_it_checking_now.mp3", filenames)
+
+
+class TestVoiceFillerTranslation(TestVoiceFillerCacheBase):
+    """Tests for language-aware phrase translation during warm()."""
+
+    def _fake_tts(self, phrase):
+        tmp = tempfile.NamedTemporaryFile(
+            suffix=".mp3", delete=False, dir=self._tmpdir
+        )
+        tmp.write(b"audio")
+        tmp.close()
+        return [tmp.name]
+
+    def _make_completion(self, text):
+        """Build a minimal mock that looks like an OpenAI chat completion."""
+        choice = Mock()
+        choice.message.content = text
+        completion = Mock()
+        completion.choices = [choice]
+        return completion
+
+    def test_no_translation_when_task_is_translate(self):
+        """Default task=translate should not call the AI for translation."""
+        self.config.speech_to_text_task = "translate"
+        self.config.speech_to_text_language = "pt"
+        self.ai.text_to_speech.side_effect = self._fake_tts
+
+        cache = self._make_cache()
+        cache.warm()
+
+        self.ai.openai_client.chat.completions.create.assert_not_called()
+
+    def test_no_translation_when_language_empty(self):
+        """task=transcribe but no language set — no translation call."""
+        self.config.speech_to_text_task = "transcribe"
+        self.config.speech_to_text_language = ""
+        self.ai.text_to_speech.side_effect = self._fake_tts
+
+        cache = self._make_cache()
+        cache.warm()
+
+        self.ai.openai_client.chat.completions.create.assert_not_called()
+
+    def test_translation_called_when_transcribe_and_language_set(self):
+        """task=transcribe + language triggers a single translation AI call."""
+        self.config.speech_to_text_task = "transcribe"
+        self.config.speech_to_text_language = "pt"
+        self.ai.text_to_speech.side_effect = self._fake_tts
+        self.ai.openai_client.chat.completions.create.return_value = self._make_completion(
+            "1. Um segundo.\n2. Entendido, verificando agora."
+        )
+
+        cache = self._make_cache()
+        cache.warm()
+
+        self.ai.openai_client.chat.completions.create.assert_called_once()
+        # TTS should be called with the translated phrases, not the originals
+        tts_calls = [call.args[0] for call in self.ai.text_to_speech.call_args_list]
+        self.assertIn("Um segundo.", tts_calls)
+        self.assertIn("Entendido, verificando agora.", tts_calls)
+
+    def test_filenames_use_original_english_slugs(self):
+        """Even with translation, filenames are based on the original English phrase."""
+        self.config.speech_to_text_task = "transcribe"
+        self.config.speech_to_text_language = "pt"
+        self.ai.text_to_speech.side_effect = self._fake_tts
+        self.ai.openai_client.chat.completions.create.return_value = self._make_completion(
+            "1. Um segundo.\n2. Entendido, verificando agora."
+        )
+
+        cache = self._make_cache()
+        cache.warm()
+
+        filler_dir = os.path.join(self._tmpdir, "voice_filler")
+        self.assertTrue(os.path.isfile(os.path.join(filler_dir, "one_sec.mp3")))
+        self.assertTrue(os.path.isfile(os.path.join(filler_dir, "got_it_checking_now.mp3")))
+
+    def test_falls_back_to_originals_on_translation_failure(self):
+        """If the AI call raises, warm() still succeeds using English phrases."""
+        self.config.speech_to_text_task = "transcribe"
+        self.config.speech_to_text_language = "pt"
+        self.ai.text_to_speech.side_effect = self._fake_tts
+        self.ai.openai_client.chat.completions.create.side_effect = RuntimeError("API error")
+
+        cache = self._make_cache()
+        cache.warm()  # must not raise
+
+        tts_calls = [call.args[0] for call in self.ai.text_to_speech.call_args_list]
+        self.assertIn("One sec.", tts_calls)
+        self.assertIn("Got it, checking now.", tts_calls)
+
+    def test_falls_back_when_translation_count_mismatch(self):
+        """If the AI returns fewer phrases than expected, fall back to originals."""
+        self.config.speech_to_text_task = "transcribe"
+        self.config.speech_to_text_language = "pt"
+        self.ai.text_to_speech.side_effect = self._fake_tts
+        # Only 1 translation returned for 2 phrases
+        self.ai.openai_client.chat.completions.create.return_value = self._make_completion(
+            "1. Um segundo."
+        )
+
+        cache = self._make_cache()
+        cache.warm()
+
+        tts_calls = [call.args[0] for call in self.ai.text_to_speech.call_args_list]
+        self.assertIn("One sec.", tts_calls)
+        self.assertIn("Got it, checking now.", tts_calls)
+
+    def test_language_change_triggers_regeneration(self):
+        """Changing speech_to_text_language invalidates the cache and regenerates files."""
+        self.config.speech_to_text_task = "transcribe"
+        self.config.speech_to_text_language = ""
+        self.ai.text_to_speech.side_effect = self._fake_tts
+
+        # First warm — no language, English files
+        cache = self._make_cache()
+        cache.warm()
+        calls_first = self.ai.text_to_speech.call_count
+
+        # Now switch to Portuguese — hash changes, must regenerate
+        self.config.speech_to_text_language = "pt"
+        self.ai.openai_client.chat.completions.create.return_value = self._make_completion(
+            "1. Um segundo.\n2. Entendido, verificando agora."
+        )
+        cache2 = self._make_cache()
+        cache2.warm()
+
+        self.assertGreater(self.ai.text_to_speech.call_count, calls_first)
 
 
 if __name__ == "__main__":
