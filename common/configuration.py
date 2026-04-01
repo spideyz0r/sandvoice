@@ -120,10 +120,10 @@ class Config:
             "voice_filler_delay_ms": 800,
             "voice_filler_phrases": [
                 "One sec.",
-                "Got it, checking now.",
-                "Okay, give me a moment.",
-                "Let me check that.",
-                "Sure, one moment.",
+                "Got it.",
+                "Sure.",
+                "Alright.",
+                "Mm-hmm.",
             ],
 
             # Background Cache (Plan 20)
