@@ -115,7 +115,7 @@ class BargeInDetector:
         """The threading.Event that is set when barge-in is detected."""
         return self._event
 
-    def run_with_polling(self, operation, name):
+    def run_with_polling(self, operation, name, lead_delay_s=None, lead_fn=None):
         """Run *operation* in a background thread, polling for barge-in every 50 ms.
 
         If barge-in is detected before or during the operation, returns
@@ -129,8 +129,15 @@ class BargeInDetector:
         transaction rollback.
 
         Args:
-            operation: Zero-argument callable to run.
-            name: Human-readable name used in log messages.
+            operation:     Zero-argument callable to run.
+            name:          Human-readable name used in log messages.
+            lead_delay_s:  Seconds to wait before starting ``lead_fn``.  Only
+                           used when ``lead_fn`` is also provided.
+            lead_fn:       Zero-argument callable invoked once, in a separate
+                           daemon thread, after ``lead_delay_s`` elapses and
+                           the operation is still running (e.g. play a voice
+                           filler phrase).  Not called from the polling loop;
+                           ensure it is thread-safe.
 
         Returns:
             Operation result, or ``_BARGE_IN`` sentinel if interrupted.
@@ -156,14 +163,32 @@ class BargeInDetector:
         thread.start()
 
         # Poll every 50 ms for completion or barge-in.
+        t_start = time.monotonic()
+        lead_fired = False
         poll_count = 0
         while thread.is_alive():
             if self.is_triggered:
                 logger.debug("Barge-in during %s - responding immediately!", name)
                 return _BARGE_IN
+            if (lead_fn is not None and lead_delay_s is not None
+                    and not lead_fired
+                    and time.monotonic() - t_start >= lead_delay_s):
+                lead_fired = True
+                def _run_lead(fn=lead_fn, op_thread=thread):
+                    if not op_thread.is_alive():
+                        logger.debug("Lead function skipped — operation completed before lead could run")
+                        return
+                    if self.is_triggered:
+                        logger.debug("Lead function skipped — barge-in triggered before lead could run")
+                        return
+                    try:
+                        fn()
+                    except Exception as e:
+                        logger.debug("Lead function raised during %s: %s", name, e)
+                threading.Thread(target=_run_lead, daemon=True).start()
             time.sleep(0.05)
             poll_count += 1
-            if logger.isEnabledFor(logging.DEBUG) and poll_count % 40 == 0:
+            if logger.isEnabledFor(logging.DEBUG) and poll_count % 40 == 0 and not lead_fired:
                 try:
                     import pygame
                     if pygame.mixer.get_init() and pygame.mixer.music.get_busy():

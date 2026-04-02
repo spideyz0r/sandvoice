@@ -833,5 +833,75 @@ class TestMergePluginDefaults(unittest.TestCase):
         self.assertEqual(config.get("my_plugin_key"), "plugin_value")
 
 
+class TestVoiceFillerConfig(_TempHomeBase):
+    """Tests for voice_filler_delay_ms and voice_filler_phrases config parsing."""
+
+    def test_delay_default(self):
+        config = Config()
+        self.assertEqual(config.voice_filler_delay_ms, 800)
+
+    def test_delay_valid_custom(self):
+        self.write_config({"voice_filler_delay_ms": 500})
+        config = Config()
+        self.assertEqual(config.voice_filler_delay_ms, 500)
+
+    def test_delay_negative_clamped_to_zero(self):
+        self.write_config({"voice_filler_delay_ms": -100})
+        config = Config()
+        self.assertEqual(config.voice_filler_delay_ms, 0)
+
+    def test_delay_non_int_falls_back_to_default(self):
+        self.write_config({"voice_filler_delay_ms": "fast"})
+        config = Config()
+        self.assertEqual(config.voice_filler_delay_ms, 800)
+
+    def test_delay_bool_falls_back_to_default(self):
+        self.write_config({"voice_filler_delay_ms": True})
+        config = Config()
+        self.assertEqual(config.voice_filler_delay_ms, 800)
+
+    def test_delay_zero_is_valid(self):
+        self.write_config({"voice_filler_delay_ms": 0})
+        config = Config()
+        self.assertEqual(config.voice_filler_delay_ms, 0)
+
+    def test_phrases_default_is_nonempty_list(self):
+        config = Config()
+        self.assertIsInstance(config.voice_filler_phrases, list)
+        self.assertGreater(len(config.voice_filler_phrases), 0)
+
+    def test_phrases_empty_list_disables_feature(self):
+        self.write_config({"voice_filler_phrases": []})
+        config = Config()
+        self.assertEqual(config.voice_filler_phrases, [])
+
+    def test_phrases_custom_list(self):
+        self.write_config({"voice_filler_phrases": ["Hold on.", "One sec."]})
+        config = Config()
+        self.assertEqual(config.voice_filler_phrases, ["Hold on.", "One sec."])
+
+    def test_phrases_none_falls_back_to_defaults(self):
+        self.write_config({"voice_filler_phrases": None})
+        config = Config()
+        self.assertGreater(len(config.voice_filler_phrases), 0)
+
+    def test_phrases_non_list_falls_back_to_defaults(self):
+        self.write_config({"voice_filler_phrases": "One sec."})
+        config = Config()
+        self.assertIsInstance(config.voice_filler_phrases, list)
+        self.assertGreater(len(config.voice_filler_phrases), 0)
+
+    def test_phrases_filters_empty_strings(self):
+        self.write_config({"voice_filler_phrases": ["Valid phrase.", "", None, "   ", "Another."]})
+        config = Config()
+        # Empty strings, None, and whitespace-only entries are filtered; valid phrases kept
+        self.assertEqual(config.voice_filler_phrases, ["Valid phrase.", "Another."])
+
+    def test_phrases_strips_surrounding_whitespace(self):
+        self.write_config({"voice_filler_phrases": ["  One sec.  ", "Got it."]})
+        config = Config()
+        self.assertEqual(config.voice_filler_phrases, ["One sec.", "Got it."])
+
+
 if __name__ == '__main__':
     unittest.main()

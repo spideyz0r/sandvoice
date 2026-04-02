@@ -567,7 +567,7 @@ class TestWakeWordModeProcessing(unittest.TestCase):
         mock_barge_in.is_triggered = False
         mock_barge_in.event = Mock()
         mock_barge_in.event.is_set.return_value = False
-        mock_barge_in.run_with_polling.side_effect = lambda op, name: op()
+        mock_barge_in.run_with_polling.side_effect = lambda op, name, **kw: op()
         mode.barge_in = mock_barge_in
         return mode
 
@@ -707,6 +707,68 @@ class TestWakeWordModeProcessing(unittest.TestCase):
         # Response generation should not be called
         self.mock_ai.generate_response.assert_not_called()
 
+    @patch('common.wake_word.os.path.exists')
+    def test_state_processing_arms_voice_filler_when_plugin_route(self, mock_exists):
+        """Voice filler lead_fn/lead_delay_s are passed to run_with_polling for plugin routes."""
+        mock_exists.return_value = True
+
+        self.mock_ai.transcribe_and_translate.return_value = "What's the weather?"
+        self.mock_ai.define_route.return_value = {"route": "weather", "reason": "weather"}
+
+        mock_voice_filler = Mock()
+        mock_voice_filler.pick_random_path.return_value = "/cache/one_sec.mp3"
+
+        self.mock_config.voice_filler_delay_ms = 800
+
+        route_message = Mock(return_value="It's sunny!")
+        plugins = {"weather": Mock()}
+
+        mode = self._make_mode(
+            route_message=route_message,
+            plugins=plugins,
+            voice_filler=mock_voice_filler,
+        )
+        # Capture run_with_polling kwargs
+        captured_kwargs = {}
+
+        def capture_kwargs(op, name, **kw):
+            captured_kwargs.update(kw)
+            return op()
+
+        mode.barge_in.run_with_polling.side_effect = capture_kwargs
+        mode.recorded_audio_path = "/tmp/recording.wav"
+        mode.state = State.PROCESSING
+
+        mode._state_processing()
+
+        self.assertIsNotNone(captured_kwargs.get("lead_fn"), "lead_fn should be set for plugin routes")
+        self.assertAlmostEqual(captured_kwargs.get("lead_delay_s"), 0.8, places=3)
+        self.assertTrue(callable(captured_kwargs["lead_fn"]))
+
+    @patch('common.wake_word.os.path.exists')
+    def test_state_processing_no_voice_filler_when_no_plugin_route(self, mock_exists):
+        """lead_fn and lead_delay_s are None when voice_filler is not set."""
+        mock_exists.return_value = True
+
+        self.mock_ai.transcribe_and_translate.return_value = "Tell me a joke"
+        self.mock_ai.define_route.return_value = {"route": "default-route", "reason": "general"}
+
+        mode = self._make_mode(plugins={})
+        captured_kwargs = {}
+
+        def capture_kwargs(op, name, **kw):
+            captured_kwargs.update(kw)
+            return op()
+
+        mode.barge_in.run_with_polling.side_effect = capture_kwargs
+        mode.recorded_audio_path = "/tmp/recording.wav"
+        mode.state = State.PROCESSING
+
+        mode._state_processing()
+
+        self.assertIsNone(captured_kwargs.get("lead_fn"))
+        self.assertIsNone(captured_kwargs.get("lead_delay_s"))
+
 
 class TestWakeWordModeResponding(unittest.TestCase):
     def setUp(self):
@@ -736,7 +798,7 @@ class TestWakeWordModeResponding(unittest.TestCase):
         mock_barge_in.is_triggered = False
         mock_barge_in.event = Mock()
         mock_barge_in.event.is_set.return_value = False
-        mock_barge_in.run_with_polling.side_effect = lambda op, name: op()
+        mock_barge_in.run_with_polling.side_effect = lambda op, name, **kw: op()
         mode.barge_in = mock_barge_in
         mode.responder = Mock()
         return mode
@@ -1394,7 +1456,7 @@ class TestRequestTimingSummary(unittest.TestCase):
         mode.barge_in = Mock()
         mode.barge_in.is_triggered = False
         mode.barge_in.start = Mock()
-        mode.barge_in.run_with_polling = Mock(side_effect=lambda op, name: op())
+        mode.barge_in.run_with_polling = Mock(side_effect=lambda op, name, **kw: op())
         mode.recorded_audio_path = "/tmp/fake.wav"
         mode.plugins = {"weather": Mock()}
 
@@ -1479,7 +1541,7 @@ class TestTerminalUIIntegration(unittest.TestCase):
         mode.vad_recorder.record.return_value = "/tmp/fake.wav"
         mode._play_confirmation_beep = Mock()
         mode.barge_in = Mock()
-        mode.barge_in.run_with_polling = Mock(side_effect=lambda op, name: op())
+        mode.barge_in.run_with_polling = Mock(side_effect=lambda op, name, **kw: op())
         mode.barge_in.is_triggered = False
 
         mode._state_listening()
@@ -1492,7 +1554,7 @@ class TestTerminalUIIntegration(unittest.TestCase):
         mode.barge_in = Mock()
         mode.barge_in.is_triggered = False
         mode.barge_in.start = Mock()
-        mode.barge_in.run_with_polling = Mock(side_effect=lambda op, name: op())
+        mode.barge_in.run_with_polling = Mock(side_effect=lambda op, name, **kw: op())
         mode.recorded_audio_path = "/tmp/fake.wav"
         mode.plugins = {"weather": Mock()}
         mode.ai.transcribe_and_translate.return_value = "What time is it?"
@@ -1509,7 +1571,7 @@ class TestTerminalUIIntegration(unittest.TestCase):
         mode.barge_in = Mock()
         mode.barge_in.is_triggered = False
         mode.barge_in.start = Mock()
-        mode.barge_in.run_with_polling = Mock(side_effect=lambda op, name: op())
+        mode.barge_in.run_with_polling = Mock(side_effect=lambda op, name, **kw: op())
         mode.recorded_audio_path = "/tmp/fake.wav"
         mode.plugins = {"weather": Mock()}
         mode.ai.transcribe_and_translate.return_value = "hello"
@@ -1543,7 +1605,7 @@ class TestTerminalUIIntegration(unittest.TestCase):
         mode.barge_in = Mock()
         mode.barge_in.is_triggered = False
         mode.barge_in.start = Mock()
-        mode.barge_in.run_with_polling = Mock(side_effect=lambda op, name: op())
+        mode.barge_in.run_with_polling = Mock(side_effect=lambda op, name, **kw: op())
         mode.recorded_audio_path = "/tmp/fake.wav"
         mode.plugins = {"weather": Mock()}
         mode.ai.transcribe_and_translate.return_value = "What is the weather?"

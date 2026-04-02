@@ -116,6 +116,15 @@ class Config:
             "voice_ack_earcon": "disabled",
             "voice_ack_earcon_freq": 600,
             "voice_ack_earcon_duration": 0.06,
+            # Voice Filler (Plan 17) — pre-generated phrases played during plugin processing
+            "voice_filler_delay_ms": 800,
+            "voice_filler_phrases": [
+                "One sec.",
+                "Got it.",
+                "Sure.",
+                "Alright.",
+                "Mm-hmm.",
+            ],
 
             # Background Cache (Plan 20)
             "cache_enabled": "disabled",
@@ -278,6 +287,20 @@ class Config:
             self.voice_ack_earcon = str(voice_ack_earcon or "disabled").lower() == "enabled"
         self.voice_ack_earcon_freq = _parse_exact_int(self.get("voice_ack_earcon_freq"))
         self.voice_ack_earcon_duration = _parse_exact_float(self.get("voice_ack_earcon_duration"))
+
+        # Voice Filler
+        _raw_delay = _parse_exact_int(self.get("voice_filler_delay_ms"))
+        if isinstance(_raw_delay, int) and not isinstance(_raw_delay, bool):
+            self.voice_filler_delay_ms = max(0, _raw_delay)
+        else:
+            self.voice_filler_delay_ms = self.defaults["voice_filler_delay_ms"]
+        raw_phrases = self.get("voice_filler_phrases")
+        if isinstance(raw_phrases, list):
+            self.voice_filler_phrases = [s for p in raw_phrases if p is not None for s in [str(p).strip()] if s]
+        elif raw_phrases is None:
+            self.voice_filler_phrases = list(self.defaults["voice_filler_phrases"])
+        else:
+            self.voice_filler_phrases = list(self.defaults["voice_filler_phrases"])
 
         # Auto-detect channels if not explicitly configured
         if self.channels is None:
