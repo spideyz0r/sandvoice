@@ -5,6 +5,7 @@ import sys
 import threading
 
 _GREEN = "\033[32m"
+_YELLOW = "\033[33m"
 _DIM = "\033[2m"
 _DIM_CYAN = "\033[2;36m"
 _RESET = "\033[0m"
@@ -39,6 +40,7 @@ class TerminalUI:
         self._spinner_stop = threading.Event()
         self._spinner_thread: threading.Thread | None = None
         self._spinner_label = ""
+        self._spinner_color = _GREEN
 
     # ── Internal helpers ─────────────────────────────────────────────────────
 
@@ -96,8 +98,20 @@ class TerminalUI:
         Args:
             label: Phase name shown next to the spinner (e.g. ``"transcribing"``).
         """
+        self._start_spinner_impl(label, _GREEN)
+
+    def start_warm_spinner(self, label: str) -> None:
+        """Start an animated ●●● spinner in yellow for the warm-up phase.
+
+        Args:
+            label: Phase name shown next to the spinner (e.g. ``"warming up"``).
+        """
+        self._start_spinner_impl(label, _YELLOW)
+
+    def _start_spinner_impl(self, label: str, color: str) -> None:
         self._stop_spinner_thread()
         self._spinner_label = label
+        self._spinner_color = color
         self._spinner_stop.clear()
         if self._use_ansi:
             self._spinner_thread = threading.Thread(
@@ -181,6 +195,6 @@ class TerminalUI:
         while not self._spinner_stop.wait(0.2):
             frame = _SPINNER_FRAMES[i % len(_SPINNER_FRAMES)]
             i += 1
-            right_ansi = f"{self._spinner_label} {_GREEN}{frame}{_RESET}"
+            right_ansi = f"{self._spinner_label} {self._spinner_color}{frame}{_RESET}"
             with self._lock:
                 self._write_status(self._status_line(right_ansi))

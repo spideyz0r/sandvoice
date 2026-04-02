@@ -3,7 +3,7 @@ import threading
 import unittest
 from unittest.mock import patch
 
-from common.terminal_ui import TerminalUI, _ANSI_RE, _SPINNER_FRAMES
+from common.terminal_ui import TerminalUI, _ANSI_RE, _SPINNER_FRAMES, _GREEN, _YELLOW
 
 
 def _make_ui(ansi: bool = False) -> TerminalUI:
@@ -125,6 +125,43 @@ class TestSpinner(unittest.TestCase):
             # Old thread should have been stopped and replaced
             self.assertIsNot(ui._spinner_thread, first_thread)
             ui.close()  # stop thread inside patch so it doesn't outlive the mock
+
+    def test_start_spinner_uses_green(self):
+        ui = _make_ui(ansi=True)
+        with patch("sys.stdout"):
+            ui.start_spinner("transcribing")
+            self.assertEqual(ui._spinner_color, _GREEN)
+            ui.close()
+
+    def test_start_warm_spinner_plain_output(self):
+        ui = _make_ui(ansi=False)
+        with patch("builtins.print") as mock_print:
+            ui.start_warm_spinner("warming up")
+        mock_print.assert_called_once_with("[warming up...]")
+
+    def test_start_warm_spinner_uses_yellow(self):
+        ui = _make_ui(ansi=True)
+        with patch("sys.stdout"):
+            ui.start_warm_spinner("warming up")
+            self.assertEqual(ui._spinner_color, _YELLOW)
+            ui.close()
+
+    def test_start_warm_spinner_ansi_starts_thread(self):
+        ui = _make_ui(ansi=True)
+        with patch("sys.stdout"):
+            ui.start_warm_spinner("warming up")
+            self.assertIsNotNone(ui._spinner_thread)
+            self.assertTrue(ui._spinner_thread.is_alive())
+            ui.close()
+
+    def test_warm_spinner_then_stop_spinner(self):
+        ui = _make_ui(ansi=False)
+        with patch("builtins.print") as mock_print:
+            ui.start_warm_spinner("warming up")
+            ui.stop_spinner("ready", 2.34)
+        calls = [c.args[0] for c in mock_print.call_args_list]
+        self.assertIn("[warming up...]", calls)
+        self.assertIn("[ready 2.34s]", calls)
 
 
 # ── print_exchange ────────────────────────────────────────────────────────────
