@@ -732,7 +732,7 @@ if __name__ == "__main__":
                 warm.run()
             except RuntimeError as e:
                 if ui:
-                    ui.set_state("error")
+                    ui.close()
                 print("Error: Voice filler warm phase failed. Details:")
                 print(f"  {e}")
                 sys.exit(1)

@@ -192,9 +192,11 @@ class TerminalUI:
 
     def _spin_loop(self) -> None:
         i = 0
-        while not self._spinner_stop.wait(0.2):
+        while True:
             frame = _SPINNER_FRAMES[i % len(_SPINNER_FRAMES)]
             i += 1
             right_ansi = f"{self._spinner_label} {self._spinner_color}{frame}{_RESET}"
             with self._lock:
                 self._write_status(self._status_line(right_ansi))
+            if self._spinner_stop.wait(0.2):
+                break

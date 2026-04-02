@@ -300,7 +300,7 @@ class TestSpinnerFrames(unittest.TestCase):
         def fake_wait(timeout=None):
             call_count["n"] += 1
             if call_count["n"] >= 3:
-                return True  # signal stop on 3rd call so 2 frames are written first
+                return True  # signal stop on 3rd call; 3 frames written (frame before each wait)
             return False
 
         with patch("sys.stdout") as mock_stdout:
@@ -309,8 +309,8 @@ class TestSpinnerFrames(unittest.TestCase):
             with patch.object(ui._spinner_stop, "wait", side_effect=fake_wait):
                 ui._spin_loop()  # runs synchronously, no real time passes
 
-        # Should have written 2 frames (iterations 1 and 2 before stop on iteration 3)
-        self.assertGreaterEqual(len(written), 2)
+        # Each iteration writes a frame before waiting; 3 calls → 3 frames written
+        self.assertGreaterEqual(len(written), 3)
 
 
 if __name__ == "__main__":
