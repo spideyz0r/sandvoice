@@ -98,43 +98,58 @@ class VoiceFillerCache:
             seen_filenames[fn] = phrase
 
         language = self._language
-        if language:
-            logger.info(
-                "Translating %d voice filler phrase(s) to '%s'", len(phrases), language
-            )
-            tts_phrases = self._translate_phrases(phrases, language)
-        else:
-            tts_phrases = list(phrases)
 
         logger.debug("Voice filler warm started: %d phrase(s), dir=%s", len(phrases), self._filler_dir)
         os.makedirs(self._filler_dir, exist_ok=True)
         self._ensure_table()
 
-        to_generate = []
-        for phrase, tts_phrase in zip(phrases, tts_phrases):
+        # Check cache first — collect hits and misses before any API calls.
+        hits = []   # (phrase, path) — already valid, no work needed
+        misses = []  # (phrase, filename, path, expected) — need generation
+        for phrase in phrases:
             filename = _slugify(phrase) + ".mp3"
             path = os.path.join(self._filler_dir, filename)
             expected = _content_hash(phrase, self._voice, self._tts_model, language)
             if self._cache_valid(filename, path, expected):
                 logger.debug("Voice filler cache hit: %s", filename)
-                with self._lock:
-                    self._ready_files.append((phrase, path))
+                hits.append((phrase, path))
             else:
-                to_generate.append((phrase, tts_phrase, filename, path, expected))
+                misses.append((phrase, filename, path, expected))
 
-        if to_generate:
+        with self._lock:
+            self._ready_files.extend(hits)
+
+        if not misses:
+            logger.info("Voice filler ready: %d phrase(s)", len(self._ready_files))
+            return
+
+        # Only translate phrases that actually need regeneration.
+        miss_phrases = [phrase for phrase, *_ in misses]
+        if language:
             logger.info(
-                "Generating %d voice filler file(s) — only happens when phrases, voice config, or language changes",
-                len(to_generate),
+                "Translating %d voice filler phrase(s) to '%s'", len(miss_phrases), language
             )
-            max_workers = min(len(to_generate), 4)
-            with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as ex:
-                futures = {
-                    ex.submit(self._generate_one, phrase, tts_phrase, filename, path, expected): phrase
-                    for phrase, tts_phrase, filename, path, expected in to_generate
-                }
-                for future in concurrent.futures.as_completed(futures):
-                    future.result()  # re-raises on failure
+            tts_phrases = self._translate_phrases(miss_phrases, language)
+        else:
+            tts_phrases = list(miss_phrases)
+
+        to_generate = [
+            (phrase, tts_phrase, filename, path, expected)
+            for (phrase, filename, path, expected), tts_phrase in zip(misses, tts_phrases)
+        ]
+
+        logger.info(
+            "Generating %d voice filler file(s) — only happens when phrases, voice config, or language changes",
+            len(to_generate),
+        )
+        max_workers = min(len(to_generate), 4)
+        with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as ex:
+            futures = {
+                ex.submit(self._generate_one, phrase, tts_phrase, filename, path, expected): phrase
+                for phrase, tts_phrase, filename, path, expected in to_generate
+            }
+            for future in concurrent.futures.as_completed(futures):
+                future.result()  # re-raises on failure
 
         logger.info("Voice filler ready: %d phrase(s)", len(self._ready_files))
 
