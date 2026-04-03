@@ -209,6 +209,10 @@ class TerminalUI:
                 if stop_event.is_set():
                     break
                 status_line = self._status_line(right_ansi)
-            self._write_status(status_line)
+            # Best-effort check at the last moment before the write: if the stop
+            # event was set in the window between releasing the lock and here,
+            # skip the write to avoid overwriting the final status line.
+            if not stop_event.is_set():
+                self._write_status(status_line)
             if stop_event.wait(0.2):
                 break
