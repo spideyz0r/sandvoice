@@ -295,6 +295,7 @@ class TestSpinnerFrames(unittest.TestCase):
         ui._spinner_label = "test"
         written = []
 
+        stop_event = threading.Event()
         call_count = {"n": 0}
 
         def fake_wait(timeout=None):
@@ -306,8 +307,9 @@ class TestSpinnerFrames(unittest.TestCase):
         with patch("sys.stdout") as mock_stdout:
             mock_stdout.write.side_effect = written.append
             mock_stdout.flush = lambda: None
-            with patch.object(ui._spinner_stop, "wait", side_effect=fake_wait):
-                ui._spin_loop()  # runs synchronously, no real time passes
+            with patch.object(stop_event, "wait", side_effect=fake_wait):
+                with patch.object(stop_event, "is_set", return_value=False):
+                    ui._spin_loop(stop_event)  # runs synchronously, no real time passes
 
         # Each iteration writes a frame before waiting; 3 calls → 3 frames written
         self.assertGreaterEqual(len(written), 3)

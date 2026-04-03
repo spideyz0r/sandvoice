@@ -112,10 +112,14 @@ class TerminalUI:
         self._stop_spinner_thread()
         self._spinner_label = label
         self._spinner_color = color
-        self._spinner_stop.clear()
+        # Replace with a fresh Event so the old thread (if the join timed out and
+        # it is still alive) keeps its own reference to the previous, already-set
+        # event and exits on its own — rather than being "unstuck" by a clear().
+        stop_event = threading.Event()
+        self._spinner_stop = stop_event
         if self._use_ansi:
             self._spinner_thread = threading.Thread(
-                target=self._spin_loop, daemon=True, name="terminal-ui-spinner"
+                target=self._spin_loop, args=(stop_event,), daemon=True, name="terminal-ui-spinner"
             )
             self._spinner_thread.start()
         else:
@@ -190,15 +194,15 @@ class TerminalUI:
         if t is None or not t.is_alive():
             self._spinner_thread = None
 
-    def _spin_loop(self) -> None:
+    def _spin_loop(self, stop_event: threading.Event) -> None:
         i = 0
         while True:
-            if self._spinner_stop.is_set():
+            if stop_event.is_set():
                 break
             frame = _SPINNER_FRAMES[i % len(_SPINNER_FRAMES)]
             i += 1
             right_ansi = f"{self._spinner_label} {self._spinner_color}{frame}{_RESET}"
             with self._lock:
                 self._write_status(self._status_line(right_ansi))
-            if self._spinner_stop.wait(0.2):
+            if stop_event.wait(0.2):
                 break
