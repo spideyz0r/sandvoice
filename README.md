@@ -68,7 +68,7 @@ The wake phrase defaults to `hey sandvoice`. Change it with `wake_phrase` in con
 
 Config lives at `~/.sandvoice/config.yaml`. All keys have defaults — you only need to set what you want to override.
 
-**Note:** use absolute paths for file/directory settings. YAML `~` is not expanded.
+**Note:** `tmp_files_path` does not expand `~` — use an absolute path. Other path settings (`scheduler_db_path`, `tasks_file_path`, `error_log_path`) do expand `~`.
 
 ### Full config reference
 
@@ -82,7 +82,7 @@ tmp_files_path: /home/user/.sandvoice/tmp/
 
 # Identity and locale
 botname: SandVoice
-timezone: America/New_York   # IANA timezone name
+timezone: EST                # timezone name (e.g. EST, America/New_York)
 location: Toronto, ON, CA    # used by weather and routing
 unit: metric                 # metric or imperial
 language: English
@@ -94,14 +94,14 @@ enable_error_logging: disabled
 error_log_path: /home/user/.sandvoice/error.log
 
 # Models
-gpt_summary_model: gpt-4.1-nano
-gpt_route_model: gpt-4.1-nano
-gpt_response_model: gpt-4.1
+gpt_summary_model: gpt-3.5-turbo
+gpt_route_model: gpt-3.5-turbo
+gpt_response_model: gpt-3.5-turbo
 speech_to_text_model: whisper-1
 speech_to_text_task: translate      # translate (→English) or transcribe
 speech_to_text_language: ""         # ISO-639-1 hint, e.g. "pt"; empty = auto
 speech_to_text_translate_provider: whisper   # whisper or gpt
-speech_to_text_translate_model: gpt-4.1-mini
+speech_to_text_translate_model: gpt-5-mini
 text_to_speech_model: tts-1
 bot_voice_model: nova
 
@@ -127,6 +127,7 @@ rss_news: https://feeds.bbci.co.uk/news/rss.xml
 rss_news_max_items: 5
 
 # Wake word (--wake-word mode)
+wake_word_enabled: enabled   # global toggle; --wake-word flag is still required to start the mode
 wake_phrase: hey sandvoice
 wake_word_sensitivity: 0.5   # 0.0-1.0; higher = more sensitive
 porcupine_access_key: ""
@@ -227,12 +228,13 @@ def process(user_input, route, s):
 | Plugin | What it does | Extra env var needed |
 |---|---|---|
 | `weather` | Current conditions and forecast | `OPENWEATHERMAP_API_KEY` |
-| `hacker_news` | Top stories from Hacker News | — |
+| `hacker-news` | Top stories from Hacker News | — |
 | `news` | Headlines from an RSS feed | — |
 | `realtime_websearch` | Live web search via Responses API | — |
 | `technical` | Technical/code questions | — |
 | `greeting` | Greetings and small talk | — |
 | `echo` | Echoes back what you said (example/test) | — |
+| `realtime` | Web search (scraping-based, **legacy**) | — |
 
 ### Adding a plugin
 
@@ -241,6 +243,10 @@ Create a folder under `plugins/` with a `plugin.yaml` and a `plugin.py`:
 1. Write `plugin.yaml` with `name`, `route_description`, and any `env_vars` or `config_defaults`
 2. Implement `process(user_input, route, s)` in `plugin.py` — return a string
 3. List any PyPI dependencies under `dependencies` in the YAML
+
+**Constraints:**
+- The folder name must match the `name` in `plugin.yaml` after normalizing hyphens to underscores (e.g. `name: my-plugin` → folder `my_plugin`). The resulting name must be a valid Python identifier — plugins that fail this check are skipped silently.
+- `dependencies` is informational only. SandVoice does not install packages automatically; run `pip install` for any listed dependency before starting.
 
 No changes to `routes.yaml` or any other file needed.
 
