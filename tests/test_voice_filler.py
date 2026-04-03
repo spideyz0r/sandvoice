@@ -346,6 +346,27 @@ class TestVoiceFillerTranslation(TestVoiceFillerCacheBase):
         self.assertIn("One sec.", tts_calls)
         self.assertIn("Got it, checking now.", tts_calls)
 
+    def test_no_translation_on_cache_hit(self):
+        """Second warm with all files already cached must not call translation API."""
+        self.config.speech_to_text_task = "transcribe"
+        self.config.speech_to_text_language = "pt"
+        self.ai.text_to_speech.side_effect = self._fake_tts
+        self.ai.openai_client.chat.completions.create.return_value = self._make_completion(
+            "1. Um segundo.\n2. Entendido, verificando agora."
+        )
+
+        cache = self._make_cache()
+        cache.warm()  # first warm — translates and generates files
+        translate_calls_first = self.ai.openai_client.chat.completions.create.call_count
+
+        # Second warm — all files cached; translation should not be called
+        cache2 = self._make_cache()
+        cache2.warm()
+        self.assertEqual(
+            self.ai.openai_client.chat.completions.create.call_count,
+            translate_calls_first,
+        )
+
     def test_language_change_triggers_regeneration(self):
         """Changing speech_to_text_language invalidates the cache and regenerates files."""
         self.config.speech_to_text_task = "transcribe"

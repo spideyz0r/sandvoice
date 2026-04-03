@@ -187,12 +187,10 @@ class TerminalUI:
     def _stop_spinner_thread(self) -> None:
         self._spinner_stop.set()
         t = self._spinner_thread
+        self._spinner_thread = None  # drop reference before join so a new spinner can always start
         if t is not None and t.is_alive() and threading.current_thread() is not t:
-            t.join(timeout=0.5)  # spin loop exits within 0.2s; bound in case stdout blocks
-        # Only drop the reference once the thread has actually exited; if the join
-        # timed out (e.g. stdout blocked), keep the reference so the next call can retry.
-        if t is None or not t.is_alive():
-            self._spinner_thread = None
+            t.join(timeout=0.5)  # spin loop exits within 0.2s; if stdout blocks the daemon
+            # thread holds a per-thread stop_event that is already set and will exit on its own
 
     def _spin_loop(self, stop_event: threading.Event) -> None:
         i = 0
@@ -203,6 +201,10 @@ class TerminalUI:
             i += 1
             right_ansi = f"{self._spinner_label} {self._spinner_color}{frame}{_RESET}"
             with self._lock:
+                # Re-check inside the lock so a stop that races with this write
+                # is caught before _write_status can overwrite a final status line.
+                if stop_event.is_set():
+                    break
                 self._write_status(self._status_line(right_ansi))
             if stop_event.wait(0.2):
                 break
