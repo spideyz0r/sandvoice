@@ -68,7 +68,7 @@ The wake phrase defaults to `hey sandvoice`. Change it with `wake_phrase` in con
 
 Config lives at `~/.sandvoice/config.yaml`. All keys have defaults — you only need to set what you want to override.
 
-**Note:** `tmp_files_path` does not expand `~` — use an absolute path. Other path settings (`scheduler_db_path`, `tasks_file_path`, `error_log_path`) do expand `~`.
+**Note:** `tmp_files_path` and `error_log_path` do not expand `~` — use absolute paths. `scheduler_db_path` and `tasks_file_path` do expand `~`.
 
 ### Full config reference
 
@@ -121,10 +121,10 @@ api_timeout: 10
 api_retry_attempts: 3
 
 # Plugin settings
-summary_words: 100
-search_sources: 4
+summary_words: "100"
+search_sources: "4"
 rss_news: https://feeds.bbci.co.uk/news/rss.xml
-rss_news_max_items: 5
+rss_news_max_items: "5"
 
 # Wake word (--wake-word mode)
 wake_word_enabled: enabled   # global toggle; --wake-word flag is still required to start the mode
@@ -220,7 +220,7 @@ def process(user_input, route, s):
     # s.config  — Config instance
     # s.plugins — dict of all loaded plugins
     # s.cache   — VoiceCache instance (or None if disabled)
-    return "response string"  # always str, never None, never raises
+    return "response string"  # should return a string; exceptions abort the current run
 ```
 
 ### Built-in plugins
@@ -245,7 +245,7 @@ Create a folder under `plugins/` with a `plugin.yaml` and a `plugin.py`:
 3. List any PyPI dependencies under `dependencies` in the YAML
 
 **Constraints:**
-- The folder name must match the `name` in `plugin.yaml` after normalizing hyphens to underscores (e.g. `name: my-plugin` → folder `my_plugin`). The resulting name must be a valid Python identifier — plugins that fail this check are skipped silently.
+- The folder name must match the `name` in `plugin.yaml` after normalizing hyphens to underscores (e.g. `name: my-plugin` → folder `my_plugin`). Both sides are normalized before comparison, so `my-plugin` and `my_plugin` are treated as equivalent. Plugins that fail this check are skipped with a warning.
 - `dependencies` is informational only. SandVoice does not install packages automatically; run `pip install` for any listed dependency before starting.
 
 No changes to `routes.yaml` or any other file needed.
