@@ -202,9 +202,13 @@ class TerminalUI:
             right_ansi = f"{self._spinner_label} {self._spinner_color}{frame}{_RESET}"
             with self._lock:
                 # Re-check inside the lock so a stop that races with this write
-                # is caught before _write_status can overwrite a final status line.
+                # is caught before computing output that could overwrite a final
+                # status line.  Release the lock before the actual write so that
+                # a blocked stdout cannot prevent callers from acquiring the lock
+                # after a join timeout.
                 if stop_event.is_set():
                     break
-                self._write_status(self._status_line(right_ansi))
+                status_line = self._status_line(right_ansi)
+            self._write_status(status_line)
             if stop_event.wait(0.2):
                 break
