@@ -8,9 +8,9 @@ SandVoice is a Python voice assistant that turns microphone input into an AI con
 
 | Mode | How to start | Best for |
 |---|---|---|
-| Default | `./sandvoice` | Voice conversation that records until ESC is pressed |
-| CLI | `./sandvoice --cli` | Text input, voice or text output |
-| Wake word | `./sandvoice --wake-word` | Hands-free, always listening |
+| Default | `./sandvoice.py` | Voice conversation that records until ESC is pressed |
+| CLI | `./sandvoice.py --cli` | Text input, voice or text output |
+| Wake word | `./sandvoice.py --wake-word` | Hands-free, always listening |
 
 ## Getting started
 
@@ -31,7 +31,7 @@ export OPENAI_API_KEY=sk-...
 Run:
 
 ```bash
-./sandvoice
+./sandvoice.py
 ```
 
 SandVoice reads its config from `~/.sandvoice/config.yaml`. On first run it will work with defaults, but you'll want to review the config section below.
@@ -41,7 +41,7 @@ SandVoice reads its config from `~/.sandvoice/config.yaml`. On first run it will
 Wake word mode keeps SandVoice listening in the background. Say the wake phrase, speak your request, and hear the response — no key press needed.
 
 ```bash
-./sandvoice --wake-word
+./sandvoice.py --wake-word
 ```
 
 Required config in `~/.sandvoice/config.yaml`:
