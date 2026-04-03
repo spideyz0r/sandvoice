@@ -5,6 +5,7 @@ import sys
 import threading
 
 _GREEN = "\033[32m"
+_YELLOW = "\033[33m"
 _DIM = "\033[2m"
 _DIM_CYAN = "\033[2;36m"
 _RESET = "\033[0m"
@@ -39,6 +40,7 @@ class TerminalUI:
         self._spinner_stop = threading.Event()
         self._spinner_thread: threading.Thread | None = None
         self._spinner_label = ""
+        self._spinner_color = _GREEN
 
     # ── Internal helpers ─────────────────────────────────────────────────────
 
@@ -96,12 +98,28 @@ class TerminalUI:
         Args:
             label: Phase name shown next to the spinner (e.g. ``"transcribing"``).
         """
+        self._start_spinner_impl(label, _GREEN)
+
+    def start_warm_spinner(self, label: str) -> None:
+        """Start an animated ●●● spinner in yellow for the warm-up phase.
+
+        Args:
+            label: Phase name shown next to the spinner (e.g. ``"warming up"``).
+        """
+        self._start_spinner_impl(label, _YELLOW)
+
+    def _start_spinner_impl(self, label: str, color: str) -> None:
         self._stop_spinner_thread()
         self._spinner_label = label
-        self._spinner_stop.clear()
+        self._spinner_color = color
+        # Replace with a fresh Event so the old thread (if the join timed out and
+        # it is still alive) keeps its own reference to the previous, already-set
+        # event and exits on its own — rather than being "unstuck" by a clear().
+        stop_event = threading.Event()
+        self._spinner_stop = stop_event
         if self._use_ansi:
             self._spinner_thread = threading.Thread(
-                target=self._spin_loop, daemon=True, name="terminal-ui-spinner"
+                target=self._spin_loop, args=(stop_event,), daemon=True, name="terminal-ui-spinner"
             )
             self._spinner_thread.start()
         else:
@@ -169,18 +187,32 @@ class TerminalUI:
     def _stop_spinner_thread(self) -> None:
         self._spinner_stop.set()
         t = self._spinner_thread
+        self._spinner_thread = None  # drop reference before join so a new spinner can always start
         if t is not None and t.is_alive() and threading.current_thread() is not t:
-            t.join(timeout=0.5)  # spin loop exits within 0.2s; bound in case stdout blocks
-        # Only drop the reference once the thread has actually exited; if the join
-        # timed out (e.g. stdout blocked), keep the reference so the next call can retry.
-        if t is None or not t.is_alive():
-            self._spinner_thread = None
+            t.join(timeout=0.5)  # spin loop exits within 0.2s; if stdout blocks the daemon
+            # thread holds a per-thread stop_event that is already set and will exit on its own
 
-    def _spin_loop(self) -> None:
+    def _spin_loop(self, stop_event: threading.Event) -> None:
         i = 0
-        while not self._spinner_stop.wait(0.2):
+        while True:
+            if stop_event.is_set():
+                break
             frame = _SPINNER_FRAMES[i % len(_SPINNER_FRAMES)]
             i += 1
-            right_ansi = f"{self._spinner_label} {_GREEN}{frame}{_RESET}"
+            right_ansi = f"{self._spinner_label} {self._spinner_color}{frame}{_RESET}"
             with self._lock:
-                self._write_status(self._status_line(right_ansi))
+                # Re-check inside the lock so a stop that races with this write
+                # is caught before computing output that could overwrite a final
+                # status line.  Release the lock before the actual write so that
+                # a blocked stdout cannot prevent callers from acquiring the lock
+                # after a join timeout.
+                if stop_event.is_set():
+                    break
+                status_line = self._status_line(right_ansi)
+            # Best-effort check at the last moment before the write: if the stop
+            # event was set in the window between releasing the lock and here,
+            # skip the write to avoid overwriting the final status line.
+            if not stop_event.is_set():
+                self._write_status(status_line)
+            if stop_event.wait(0.2):
+                break

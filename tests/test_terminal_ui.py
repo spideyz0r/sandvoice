@@ -3,7 +3,7 @@ import threading
 import unittest
 from unittest.mock import patch
 
-from common.terminal_ui import TerminalUI, _ANSI_RE, _SPINNER_FRAMES
+from common.terminal_ui import TerminalUI, _ANSI_RE, _SPINNER_FRAMES, _GREEN, _YELLOW
 
 
 def _make_ui(ansi: bool = False) -> TerminalUI:
@@ -125,6 +125,43 @@ class TestSpinner(unittest.TestCase):
             # Old thread should have been stopped and replaced
             self.assertIsNot(ui._spinner_thread, first_thread)
             ui.close()  # stop thread inside patch so it doesn't outlive the mock
+
+    def test_start_spinner_uses_green(self):
+        ui = _make_ui(ansi=True)
+        with patch("sys.stdout"):
+            ui.start_spinner("transcribing")
+            self.assertEqual(ui._spinner_color, _GREEN)
+            ui.close()
+
+    def test_start_warm_spinner_plain_output(self):
+        ui = _make_ui(ansi=False)
+        with patch("builtins.print") as mock_print:
+            ui.start_warm_spinner("warming up")
+        mock_print.assert_called_once_with("[warming up...]")
+
+    def test_start_warm_spinner_uses_yellow(self):
+        ui = _make_ui(ansi=True)
+        with patch("sys.stdout"):
+            ui.start_warm_spinner("warming up")
+            self.assertEqual(ui._spinner_color, _YELLOW)
+            ui.close()
+
+    def test_start_warm_spinner_ansi_starts_thread(self):
+        ui = _make_ui(ansi=True)
+        with patch("sys.stdout"):
+            ui.start_warm_spinner("warming up")
+            self.assertIsNotNone(ui._spinner_thread)
+            self.assertTrue(ui._spinner_thread.is_alive())
+            ui.close()
+
+    def test_warm_spinner_then_stop_spinner(self):
+        ui = _make_ui(ansi=False)
+        with patch("builtins.print") as mock_print:
+            ui.start_warm_spinner("warming up")
+            ui.stop_spinner("ready", 2.34)
+        calls = [c.args[0] for c in mock_print.call_args_list]
+        self.assertIn("[warming up...]", calls)
+        self.assertIn("[ready 2.34s]", calls)
 
 
 # ── print_exchange ────────────────────────────────────────────────────────────
@@ -258,22 +295,24 @@ class TestSpinnerFrames(unittest.TestCase):
         ui._spinner_label = "test"
         written = []
 
+        stop_event = threading.Event()
         call_count = {"n": 0}
 
         def fake_wait(timeout=None):
             call_count["n"] += 1
             if call_count["n"] >= 3:
-                return True  # signal stop on 3rd call so 2 frames are written first
+                return True  # signal stop on 3rd call; 3 frames written (frame before each wait)
             return False
 
         with patch("sys.stdout") as mock_stdout:
             mock_stdout.write.side_effect = written.append
             mock_stdout.flush = lambda: None
-            with patch.object(ui._spinner_stop, "wait", side_effect=fake_wait):
-                ui._spin_loop()  # runs synchronously, no real time passes
+            with patch.object(stop_event, "wait", side_effect=fake_wait):
+                with patch.object(stop_event, "is_set", return_value=False):
+                    ui._spin_loop(stop_event)  # runs synchronously, no real time passes
 
-        # Should have written 2 frames (iterations 1 and 2 before stop on iteration 3)
-        self.assertGreaterEqual(len(written), 2)
+        # Each iteration writes a frame before waiting; 3 calls → 3 frames written
+        self.assertGreaterEqual(len(written), 3)
 
 
 if __name__ == "__main__":
