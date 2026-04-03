@@ -78,7 +78,7 @@ channels: 2                # 1 or 2; null = auto-detect
 bitrate: 128               # MP3 bitrate (32-320)
 rate: 44100                # sample rate in Hz
 chunk: 1024                # frames per buffer
-tmp_files_path: /home/user/.sandvoice/tmp/
+tmp_files_path: /home/user/.sandvoice/tmp/   # must end with /
 
 # Identity and locale
 botname: SandVoice
