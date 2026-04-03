@@ -63,9 +63,9 @@ class Config:
             "push_to_talk": "disabled",
             "rss_news": "https://feeds.bbci.co.uk/news/rss.xml",
             "rss_news_max_items": "5",
-            "gpt_summary_model" : "gpt-3.5-turbo",
-            "gpt_route_model" : "gpt-3.5-turbo",
-            "gpt_response_model" : "gpt-3.5-turbo",
+            "gpt_summary_model" : "gpt-5-mini",
+            "gpt_route_model" : "gpt-4.1-nano",
+            "gpt_response_model" : "gpt-5-mini",
             "speech_to_text_model" : "whisper-1",
             # Speech-to-text behavior
             # - translate: translate speech to English (Whisper translations endpoint)
