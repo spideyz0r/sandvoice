@@ -8,7 +8,7 @@ SandVoice is a Python voice assistant that turns microphone input into an AI con
 
 | Mode | How to start | Best for |
 |---|---|---|
-| Default | `./sandvoice` | Push-to-talk voice conversation via ESC key |
+| Default | `./sandvoice` | Voice conversation that records until ESC is pressed |
 | CLI | `./sandvoice --cli` | Text input, voice or text output |
 | Wake word | `./sandvoice --wake-word` | Hands-free, always listening |
 
@@ -212,7 +212,7 @@ Single-file plugins (no YAML) are loaded automatically and use the `routes.yaml`
 
 ### Plugin API
 
-Every plugin must implement a `process` function (or a class with a `process` method):
+Every plugin must implement a top-level `process` function, or a class named `Plugin` with a `process` method:
 
 ```python
 def process(user_input, route, s):
@@ -326,7 +326,7 @@ In `~/.sandvoice/tasks.yaml`:
 
 ## Background cache
 
-The cache stores plugin responses in SQLite so repeated queries are answered instantly.
+The cache stores plugin responses in SQLite so repeated queries are answered instantly. The built-in TTL config keys and current cache integration apply to the weather plugin; other plugins can use `s.cache` directly.
 
 ### Enabling
 
