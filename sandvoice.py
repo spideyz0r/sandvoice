@@ -696,12 +696,18 @@ if __name__ == "__main__":
             sys.exit(1)
 
         from common.terminal_ui import TerminalUI
+        from common.voice_filler import VoiceFillerCache
+        from common.warm_phase import WarmPhase, WarmTask
         audio = Audio(sandvoice.config)
         ui = (
             TerminalUI(wake_phrase=sandvoice.config.wake_phrase)
             if sandvoice.config.visual_state_indicator
             else None
         )
+
+        # Instantiate WakeWordMode first so its __init__ validates config prerequisites
+        # (vad_enabled, stream_responses, stream_tts) before spending TTS API calls on
+        # the voice-filler warm phase.
         wake_word_mode = WakeWordMode(
             sandvoice.config,
             sandvoice.ai,
@@ -715,6 +721,25 @@ if __name__ == "__main__":
                 sandvoice._plugin_manifests, location=sandvoice.config.location
             ),
         )
+
+        if sandvoice.config.voice_filler_phrases and sandvoice.config.bot_voice:
+            voice_filler = VoiceFillerCache(sandvoice.config, sandvoice.ai)
+            warm = WarmPhase([WarmTask("voice-filler", voice_filler.warm, required=True)])
+            if ui:
+                ui.start_warm_spinner("warming up")
+            t_warm = time.monotonic()
+            try:
+                warm.run()
+            except RuntimeError as e:
+                if ui:
+                    ui.close()
+                print("Error: Voice filler warm phase failed. Details:")
+                print(f"  {e}")
+                sys.exit(1)
+            if ui:
+                ui.stop_spinner("ready", time.monotonic() - t_warm)
+            wake_word_mode.voice_filler = voice_filler
+
         wake_word_mode.run()
     # Default mode (ESC key) or CLI mode
     else:
