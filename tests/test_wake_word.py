@@ -1400,16 +1400,24 @@ class TestRequestTimingSummary(unittest.TestCase):
         summary = mock_logger.info.call_args[0][0]
         self.assertNotIn("filler", summary)
 
-    def test_filler_write_guarded_by_seq_token(self):
-        """Filler does not update _req_filler_s if _req_seq changed (new request started)."""
+    def test_record_filler_s_blocked_when_seq_changed(self):
+        """_record_filler_s does not write when seq token no longer matches."""
         mode = self._make_mode()
-        mode._req_seq = 1
+        mode._req_seq = 2          # advanced to a new request
         mode._req_filler_s = None
-        # Simulate filler closure captured seq=1 but request advanced to seq=2 before filler finished
-        mode._req_seq = 2
-        if mode._req_seq == 1:  # guard: should NOT fire
-            mode._req_filler_s = 9.99
+        t_plugin = time.monotonic() - 1.0
+        mode._record_filler_s(1, t_plugin)   # closure captured seq=1
         self.assertIsNone(mode._req_filler_s)
+
+    def test_record_filler_s_writes_when_seq_matches(self):
+        """_record_filler_s records elapsed time when seq token matches."""
+        mode = self._make_mode()
+        mode._req_seq = 3
+        mode._req_filler_s = None
+        t_plugin = time.monotonic() - 1.5
+        mode._record_filler_s(3, t_plugin)
+        self.assertIsNotNone(mode._req_filler_s)
+        self.assertGreater(mode._req_filler_s, 1.0)
 
     def test_emit_summary_omits_plugin_field_for_default_route(self):
         mode = self._make_mode()

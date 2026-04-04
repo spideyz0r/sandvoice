@@ -583,8 +583,7 @@ class WakeWordMode:
                             with (self._audio_lock or contextlib.nullcontext()):
                                 with contextlib.redirect_stdout(io.StringIO()):
                                     self.audio.play_audio_file(_p)
-                            if self._req_seq == _seq:
-                                self._req_filler_s = time.monotonic() - _t_plugin
+                            self._record_filler_s(_seq, _t_plugin)
                             logger.debug("Voice filler played: %s", os.path.basename(_p))
                         except Exception as e:
                             logger.debug("Voice filler playback failed: %s", e)
@@ -719,6 +718,15 @@ class WakeWordMode:
 
         # Reset streaming metadata
         self._reset_streaming_state()
+
+    def _record_filler_s(self, seq, t_plugin):
+        """Record filler elapsed time if the request sequence token still matches.
+
+        Called from the filler daemon thread; the seq guard prevents a late-completing
+        filler from writing into the next request's timing state.
+        """
+        if self._req_seq == seq:
+            self._req_filler_s = time.monotonic() - t_plugin
 
     def _emit_request_summary(self):
         """Emit a single INFO line summarising timing and routing for the completed request."""
