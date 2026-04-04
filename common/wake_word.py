@@ -91,6 +91,7 @@ class WakeWordMode:
         self.responder = None  # StreamingResponder instance (created in _initialize)
 
         # Per-request timing (reset each cycle)
+        self._filler_lock = threading.Lock()  # guards _req_seq and _req_filler_s across threads
         self._req_seq = 0          # incremented at each new request start; used to guard late filler writes
         self._req_t_start = None
         self._req_transcribe_s = None
@@ -338,7 +339,9 @@ class WakeWordMode:
 
                 if keyword_index >= 0:
                     logger.info("Wake word detected: '%s'", self.config.wake_phrase)
-                    self._req_seq += 1
+                    with self._filler_lock:
+                        self._req_seq += 1
+                        self._req_filler_s = None
                     self._req_t_start = time.monotonic()
 
                     self._play_confirmation_beep()
@@ -406,7 +409,9 @@ class WakeWordMode:
         self._play_confirmation_beep()
 
         # Record start time for the new request that follows barge-in
-        self._req_seq += 1
+        with self._filler_lock:
+            self._req_seq += 1
+            self._req_filler_s = None
         self._req_t_start = time.monotonic()
 
         # Go directly to LISTENING
@@ -684,7 +689,9 @@ class WakeWordMode:
             self._play_confirmation_beep()
 
             # Record start time for the new request that follows barge-in
-            self._req_seq += 1
+            with self._filler_lock:
+                self._req_seq += 1
+                self._req_filler_s = None
             self._req_t_start = time.monotonic()
 
             self.state = State.LISTENING
@@ -725,8 +732,9 @@ class WakeWordMode:
         Called from the filler daemon thread; the seq guard prevents a late-completing
         filler from writing into the next request's timing state.
         """
-        if self._req_seq == seq:
-            self._req_filler_s = time.monotonic() - t_plugin
+        with self._filler_lock:
+            if self._req_seq == seq:
+                self._req_filler_s = time.monotonic() - t_plugin
 
     def _emit_request_summary(self):
         """Emit a single INFO line summarising timing and routing for the completed request."""

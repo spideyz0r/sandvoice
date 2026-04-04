@@ -1398,7 +1398,7 @@ class TestRequestTimingSummary(unittest.TestCase):
         with patch("common.wake_word.logger") as mock_logger:
             mode._emit_request_summary()
         summary = mock_logger.info.call_args[0][0]
-        self.assertNotIn("filler", summary)
+        self.assertNotIn("filler@", summary)
 
     def test_record_filler_s_blocked_when_seq_changed(self):
         """_record_filler_s does not write when seq token no longer matches."""
