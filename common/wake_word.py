@@ -91,6 +91,7 @@ class WakeWordMode:
         self.responder = None  # StreamingResponder instance (created in _initialize)
 
         # Per-request timing (reset each cycle)
+        self._req_seq = 0          # incremented at each new request start; used to guard late filler writes
         self._req_t_start = None
         self._req_transcribe_s = None
         self._req_route_s = None
@@ -337,6 +338,7 @@ class WakeWordMode:
 
                 if keyword_index >= 0:
                     logger.info("Wake word detected: '%s'", self.config.wake_phrase)
+                    self._req_seq += 1
                     self._req_t_start = time.monotonic()
 
                     self._play_confirmation_beep()
@@ -404,6 +406,7 @@ class WakeWordMode:
         self._play_confirmation_beep()
 
         # Record start time for the new request that follows barge-in
+        self._req_seq += 1
         self._req_t_start = time.monotonic()
 
         # Go directly to LISTENING
@@ -575,12 +578,13 @@ class WakeWordMode:
                 filler_path = self.voice_filler.pick_random_path()
                 if filler_path:
                     _path = filler_path  # capture for closure
-                    def _play_filler(_p=_path, _t_plugin=_t0):
+                    def _play_filler(_p=_path, _t_plugin=_t0, _seq=self._req_seq):
                         try:
                             with (self._audio_lock or contextlib.nullcontext()):
                                 with contextlib.redirect_stdout(io.StringIO()):
                                     self.audio.play_audio_file(_p)
-                            self._req_filler_s = time.monotonic() - _t_plugin
+                            if self._req_seq == _seq:
+                                self._req_filler_s = time.monotonic() - _t_plugin
                             logger.debug("Voice filler played: %s", os.path.basename(_p))
                         except Exception as e:
                             logger.debug("Voice filler playback failed: %s", e)
@@ -681,6 +685,7 @@ class WakeWordMode:
             self._play_confirmation_beep()
 
             # Record start time for the new request that follows barge-in
+            self._req_seq += 1
             self._req_t_start = time.monotonic()
 
             self.state = State.LISTENING
