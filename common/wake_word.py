@@ -97,6 +97,7 @@ class WakeWordMode:
         self._req_route_name = None
         self._req_plugin_s = None
         self._req_cache_hit_type = None
+        self._req_filler_s = None
         self._req_respond_s = None
 
         logger.debug("Initializing wake word mode")
@@ -507,6 +508,7 @@ class WakeWordMode:
         self._req_route_name = None
         self._req_plugin_s = None
         self._req_cache_hit_type = None
+        self._req_filler_s = None
         self._req_respond_s = None
 
         try:
@@ -573,11 +575,12 @@ class WakeWordMode:
                 filler_path = self.voice_filler.pick_random_path()
                 if filler_path:
                     _path = filler_path  # capture for closure
-                    def _play_filler(_p=_path):
+                    def _play_filler(_p=_path, _t_plugin=_t0):
                         try:
                             with (self._audio_lock or contextlib.nullcontext()):
                                 with contextlib.redirect_stdout(io.StringIO()):
                                     self.audio.play_audio_file(_p)
+                            self._req_filler_s = time.monotonic() - _t_plugin
                             logger.debug("Voice filler played: %s", os.path.basename(_p))
                         except Exception as e:
                             logger.debug("Voice filler playback failed: %s", e)
@@ -733,7 +736,8 @@ class WakeWordMode:
             cache_status = "none"
             if self._req_cache_hit_type is not None:
                 cache_status = self._req_cache_hit_type
-            parts.append(f"plugin={self._req_plugin_s:.2f}s(cache:{cache_status})")
+            filler_tag = f",filler@{self._req_filler_s:.2f}s" if self._req_filler_s is not None else ""
+            parts.append(f"plugin={self._req_plugin_s:.2f}s(cache:{cache_status}{filler_tag})")
 
         if self._req_respond_s is not None:
             parts.append(f"respond={self._req_respond_s:.2f}s")

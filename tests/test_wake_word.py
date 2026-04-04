@@ -1380,6 +1380,26 @@ class TestRequestTimingSummary(unittest.TestCase):
         self.assertIn("total=", summary)
         self.assertIn("s", summary)
 
+    def test_emit_summary_includes_filler_tag_when_filler_fired(self):
+        mode = self._make_mode()
+        mode._req_t_start = time.monotonic() - 5.0
+        mode._req_plugin_s = 3.50
+        mode._req_filler_s = 0.80
+        with patch("common.wake_word.logger") as mock_logger:
+            mode._emit_request_summary()
+        summary = mock_logger.info.call_args[0][0]
+        self.assertIn("filler@0.80s", summary)
+
+    def test_emit_summary_omits_filler_tag_when_filler_not_fired(self):
+        mode = self._make_mode()
+        mode._req_t_start = time.monotonic() - 5.0
+        mode._req_plugin_s = 0.05
+        mode._req_filler_s = None
+        with patch("common.wake_word.logger") as mock_logger:
+            mode._emit_request_summary()
+        summary = mock_logger.info.call_args[0][0]
+        self.assertNotIn("filler", summary)
+
     def test_emit_summary_omits_plugin_field_for_default_route(self):
         mode = self._make_mode()
         mode._req_t_start = time.monotonic() - 5.0
