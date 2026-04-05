@@ -516,7 +516,8 @@ class WakeWordMode:
         self._req_route_name = None
         self._req_plugin_s = None
         self._req_cache_hit_type = None
-        self._req_filler_s = None
+        with self._filler_lock:
+            self._req_filler_s = None
         self._req_respond_s = None
 
         try:
