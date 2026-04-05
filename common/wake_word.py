@@ -757,7 +757,9 @@ class WakeWordMode:
             cache_status = "none"
             if self._req_cache_hit_type is not None:
                 cache_status = self._req_cache_hit_type
-            filler_tag = f",filler@{self._req_filler_s:.2f}s" if self._req_filler_s is not None else ""
+            with self._filler_lock:
+                filler_s = self._req_filler_s
+            filler_tag = f",filler@{filler_s:.2f}s" if filler_s is not None else ""
             parts.append(f"plugin={self._req_plugin_s:.2f}s(cache:{cache_status}{filler_tag})")
 
         if self._req_respond_s is not None:
