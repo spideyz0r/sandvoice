@@ -40,9 +40,13 @@ INFO: [request] transcribe=2.41s route=1.83s(gpt-4.1-nano→weather) plugin=0.05
 |---|---|
 | `transcribe=Xs` | Wall-clock time for STT call |
 | `route=Xs(model→plugin)` | Routing LLM time + model name + selected route |
-| `plugin=Xs(cache:STATUS)` | Plugin execution time + cache status (`hit-fresh`, `hit-stale`, `miss`, `none`) |
-| `tts=Xs` | TTS generation time (wall-clock to first byte received) |
-| `total=Xs` | Wake word detected → audio playback start |
+| `plugin=Xs(cache:STATUS[,filler@Xs])` | Plugin execution time + cache status + optional filler tag (PR #113) |
+| `respond=Xs` | TTS/response time |
+| `total=Xs` | Wake word detected → response complete |
+
+Cache status values: `hit-fresh`, `hit-stale`, `miss`, `none`.
+
+The optional `filler@Xs` tag (added in PR #113) records how many seconds after plugin start the voice filler phrase finished playing. Only present when a filler actually fired. Uses `_filler_lock` (threading.Lock) to guard cross-thread reads/writes between the filler daemon thread and the main request thread.
 
 ---
 

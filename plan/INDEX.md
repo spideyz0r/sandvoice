@@ -125,7 +125,11 @@ plan/
 
 ### Priority 23: Request Timing Summary Log
 **Document**: [completed/23-request-timing-summary-log.md](./completed/23-request-timing-summary-log.md)
-**Description**: Emit a single INFO line per request summarising transcription, routing, plugin, and TTS timing plus cache status. Enables clean benchmarking without enabling `log_level: debug`. Per-request `_req_cache_hit_type` snapshot isolates summary from concurrent scheduler-thread cache reads. Requires Plan 28.
+**Description**: Emit a single INFO line per request summarising transcription, routing, plugin, and TTS timing plus cache status. Enables clean benchmarking without enabling `log_level: debug`. Per-request `_req_cache_hit_type` snapshot isolates summary from concurrent scheduler-thread cache reads. Requires Plan 28. Extended in PR #113 to include optional `filler@Xs` tag showing when the voice filler phrase finished relative to plugin start.
+
+### Priority 38: README Modernization
+**Document**: [completed/38-readme-modernization.md](./completed/38-readme-modernization.md)
+**Description**: Updated README to reflect the plugin manifest system, correct model defaults (`gpt-5-mini`, `gpt-4.1-nano`), `tmp_files_path` trailing-slash requirement, `~` expansion notes for config paths, quoted string config values, and consistent `./sandvoice.py` invocation throughout.
 
 ### Priority 25: Terminal UI
 **Document**: [completed/25-terminal-ui.md](./completed/25-terminal-ui.md)
