@@ -17,7 +17,7 @@
 
 ## What remains
 
-1. **Cache `hacker_news` and `news` plugins** — same pattern as weather
+1. **Cache `hacker-news` and `news` plugins** — same pattern as weather
 2. **`cache_auto_refresh` system** — startup warmup + auto-registered interval tasks, driven by a single config list
 
 ---
@@ -25,7 +25,7 @@
 ## Scope
 
 **In scope:**
-- `hacker_news` and `news` cache integration
+- `hacker-news` and `news` cache integration
 - `cache_auto_refresh` config key (startup warmup + periodic silent refresh)
 - README documentation
 
@@ -36,7 +36,9 @@
 
 ---
 
-## Cache integration: hacker_news and news
+## Cache integration: hacker-news and news
+
+The `plugin` field in `cache_auto_refresh` entries accepts the manifest/route name (e.g. `hacker-news`, `news`). Internally, SandVoice normalizes hyphens to underscores when looking up the Python module (`hacker_news`), consistent with how plugin dispatch already works.
 
 Same three-step pattern as weather: try cache → fall through to live fetch + LLM → cache response text.
 
@@ -89,14 +91,16 @@ All background refreshes are **silent by design** — `refresh_only=True` causes
 
 ### Auto-registered task naming and deduplication
 
-Tasks are named `cache_refresh:<plugin>` (e.g. `cache_refresh:hacker-news`). The scheduler's `sync_tasks` dedup logic (skip active/paused tasks by name) ensures that restarting SandVoice doesn't duplicate tasks.
+Tasks are named `cache_refresh:<cache_key>`, where `<cache_key>` is the same key the plugin uses to store its entry (e.g. `cache_refresh:hacker-news:top`, `cache_refresh:news:https://feeds.bbci.co.uk/...`). Using the cache key as the discriminator means two `news` entries with different RSS URLs get distinct task names and both register correctly. The scheduler's `sync_tasks` dedup logic (skip active/paused tasks by name) ensures that restarting SandVoice doesn't duplicate tasks.
+
+The cache key for each entry is derived at warmup time by calling a per-plugin `_cache_key()` helper (same function the plugin uses internally), so task names and cache keys are always in sync.
 
 ### Config validation
 
 - `cache_auto_refresh` requires `cache_enabled: enabled` — warn and skip if cache is disabled
 - `interval_s` must be a positive integer
 - `plugin` must match a loaded plugin name (warn and skip unknown plugins)
-- `ttl_s` defaults to `interval_s` if omitted; `max_stale_s` defaults to `interval_s * 1.5` if omitted
+- `ttl_s` defaults to `interval_s` if omitted; `max_stale_s` defaults to `int(interval_s * 1.5)` if omitted (integer, rounded down)
 
 ---
 
@@ -108,8 +112,8 @@ Tasks are named `cache_refresh:<plugin>` (e.g. `cache_refresh:hacker-news`). The
 | `plugins/news/plugin.py` | Add cache read/write + `refresh_only` support |
 | `common/configuration.py` | Parse `cache_auto_refresh` list; validation |
 | `sandvoice.py` | `_warmup_cache()`: read `cache_auto_refresh`, fire background threads, auto-register scheduler tasks |
-| `tests/test_hacker_news.py` | Cache hit/miss/refresh_only coverage |
-| `tests/test_news.py` | Cache hit/miss/refresh_only coverage |
+| `tests/test_hacker_news_plugin.py` | Cache hit/miss/refresh_only coverage |
+| `tests/test_news_plugin.py` | Cache hit/miss/refresh_only coverage (new file) |
 | `tests/test_sandvoice.py` | Warmup and auto-task registration |
 | `README.md` | Document `cache_auto_refresh` in Background Cache section |
 
@@ -137,17 +141,17 @@ cache_auto_refresh:
 On startup SandVoice fetches each plugin immediately (no audio played).
 A background task then refreshes it every `interval_s` seconds — also silent.
 `ttl_s` and `max_stale_s` control freshness; both default to `interval_s` and
-`interval_s * 1.5` respectively if omitted.
+`int(interval_s * 1.5)` respectively if omitted.
 ```
 
 ---
 
 ## Acceptance criteria
 
-- [ ] `hacker_news` plugin serves from cache on hit, falls through on miss, returns `None` on `refresh_only`
+- [ ] `hacker-news` plugin serves from cache on hit, falls through on miss, returns `None` on `refresh_only`
 - [ ] `news` plugin same as above
 - [ ] On startup with `cache_auto_refresh` configured, each listed plugin is invoked silently in a background thread
-- [ ] A scheduler task named `cache_refresh:<plugin>` is auto-registered for each entry
+- [ ] A scheduler task named `cache_refresh:<cache_key>` is auto-registered for each entry; two entries for the same plugin with different queries produce distinct task names
 - [ ] No audio plays during any background refresh
 - [ ] Cache miss on first run triggers live fetch; subsequent requests within TTL are instant
 - [ ] `cache_auto_refresh` with `cache_enabled: disabled` logs a warning and skips
