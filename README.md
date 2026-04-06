@@ -166,6 +166,7 @@ tasks_file_path: /home/user/.sandvoice/tasks.yaml
 cache_enabled: disabled
 cache_weather_ttl_s: 10800       # 3 hours
 cache_weather_max_stale_s: 21600 # 6 hours
+# cache_auto_refresh: []          # list of plugins to warm on startup and refresh periodically
 ```
 
 ## Plugins
@@ -326,7 +327,7 @@ In `~/.sandvoice/tasks.yaml`:
 
 ## Background cache
 
-The cache stores plugin responses in SQLite so repeated queries are answered instantly. The built-in TTL config keys and current cache integration apply to the weather plugin; other plugins can use `s.cache` directly.
+The cache stores plugin responses in SQLite so repeated queries are answered instantly. The `weather`, `hacker-news`, and `news` plugins all support caching; other plugins can use `s.cache` directly.
 
 ### Enabling
 
@@ -340,25 +341,35 @@ cache_weather_max_stale_s: 21600  # serve stale for up to 6 hours
 
 | Age | Result |
 |---|---|
-| ≤ `cache_weather_ttl_s` | Returned immediately, no API call |
-| TTL < age ≤ max_stale | Returned from cache (possibly background-refreshed) |
-| > `cache_weather_max_stale_s` | Live API call, cache updated |
+| ≤ TTL | Returned immediately, no API call |
+| TTL < age ≤ max_stale | Returned from cache (stale) |
+| > max_stale | Live API call, cache updated |
 
-### Silent background refresh
+### Auto-refresh
 
-Pair with the scheduler to pre-populate the cache before you ask:
+Add `cache_auto_refresh` to warm a plugin's cache on startup and refresh it silently in the background:
 
 ```yaml
-# tasks.yaml
-- name: weather-cache-refresh
-  schedule_type: interval
-  schedule_value: "10800"
-  action_type: plugin
-  action_payload:
-    plugin: weather
-    query: weather
-    refresh_only: true
+cache_enabled: enabled
+
+cache_auto_refresh:
+  - plugin: hacker-news
+    query: "hacker news"
+    interval_s: 28800       # refresh every 8 hours
+  - plugin: news
+    query: "latest news"
+    rss_url: "https://feeds.bbci.co.uk/news/rss.xml"  # optional; overrides rss_news config
+    interval_s: 7200        # refresh every 2 hours
+  - plugin: weather
+    query: "weather"
+    interval_s: 10800       # refresh every 3 hours
 ```
+
+On startup SandVoice fetches each listed plugin immediately in a background thread (no audio played). When the scheduler is also enabled, a background task named `cache_refresh:<cache_key>` is auto-registered to repeat the refresh every `interval_s` seconds — also silent.
+
+`ttl_s` and `max_stale_s` control freshness per entry; both default to `interval_s` and `int(interval_s * 1.5)` respectively if omitted. For the `news` plugin, `rss_url` overrides the `rss_news` config value and is used as the cache key discriminator — two entries with different `rss_url` values are cached independently.
+
+> **Note**: `cache_auto_refresh` requires `cache_enabled: enabled`. If the scheduler is disabled, the startup warmup still runs but no periodic tasks are registered.
 
 ## Platform notes
 

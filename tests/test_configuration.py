@@ -903,5 +903,135 @@ class TestVoiceFillerConfig(_TempHomeBase):
         self.assertEqual(config.voice_filler_phrases, ["One sec.", "Got it."])
 
 
+class TestCacheAutoRefreshConfig(_TempHomeBase):
+    """cache_auto_refresh parsing and validation."""
+
+    def test_defaults_to_empty_list(self):
+        self.write_config({})
+        config = Config()
+        self.assertEqual(config.cache_auto_refresh, [])
+
+    def test_valid_minimal_entry(self):
+        self.write_config({
+            "cache_auto_refresh": [
+                {"plugin": "hacker-news", "interval_s": 28800},
+            ]
+        })
+        config = Config()
+        self.assertEqual(len(config.cache_auto_refresh), 1)
+        entry = config.cache_auto_refresh[0]
+        self.assertEqual(entry["plugin"], "hacker-news")
+        self.assertEqual(entry["interval_s"], 28800)
+        self.assertEqual(entry["ttl_s"], 28800)          # defaults to interval_s
+        self.assertEqual(entry["max_stale_s"], 43200)    # int(28800 * 1.5)
+        self.assertEqual(entry["query"], "hacker-news")  # defaults to plugin
+
+    def test_explicit_ttl_and_max_stale(self):
+        self.write_config({
+            "cache_auto_refresh": [
+                {"plugin": "news", "interval_s": 7200, "ttl_s": 3600, "max_stale_s": 10800},
+            ]
+        })
+        config = Config()
+        entry = config.cache_auto_refresh[0]
+        self.assertEqual(entry["ttl_s"], 3600)
+        self.assertEqual(entry["max_stale_s"], 10800)
+
+    def test_optional_rss_url_forwarded(self):
+        url = "https://example.com/rss"
+        self.write_config({
+            "cache_auto_refresh": [
+                {"plugin": "news", "interval_s": 7200, "rss_url": url},
+            ]
+        })
+        config = Config()
+        self.assertEqual(config.cache_auto_refresh[0]["rss_url"], url)
+
+    def test_query_defaults_to_plugin_name(self):
+        self.write_config({
+            "cache_auto_refresh": [
+                {"plugin": "weather", "interval_s": 10800},
+            ]
+        })
+        config = Config()
+        self.assertEqual(config.cache_auto_refresh[0]["query"], "weather")
+
+    def test_explicit_query_preserved(self):
+        self.write_config({
+            "cache_auto_refresh": [
+                {"plugin": "weather", "interval_s": 10800, "query": "current weather"},
+            ]
+        })
+        config = Config()
+        self.assertEqual(config.cache_auto_refresh[0]["query"], "current weather")
+
+    def test_missing_plugin_field_skips_entry(self):
+        self.write_config({
+            "cache_auto_refresh": [
+                {"interval_s": 3600},
+            ]
+        })
+        config = Config()
+        self.assertEqual(config.cache_auto_refresh, [])
+
+    def test_missing_interval_s_skips_entry(self):
+        self.write_config({
+            "cache_auto_refresh": [
+                {"plugin": "news"},
+            ]
+        })
+        config = Config()
+        self.assertEqual(config.cache_auto_refresh, [])
+
+    def test_non_positive_interval_s_skips_entry(self):
+        self.write_config({
+            "cache_auto_refresh": [
+                {"plugin": "news", "interval_s": 0},
+            ]
+        })
+        config = Config()
+        self.assertEqual(config.cache_auto_refresh, [])
+
+    def test_invalid_entry_type_skips(self):
+        self.write_config({"cache_auto_refresh": ["not-a-dict"]})
+        config = Config()
+        self.assertEqual(config.cache_auto_refresh, [])
+
+    def test_non_list_value_ignored(self):
+        self.write_config({"cache_auto_refresh": "not-a-list"})
+        config = Config()
+        self.assertEqual(config.cache_auto_refresh, [])
+
+    def test_multiple_entries(self):
+        self.write_config({
+            "cache_auto_refresh": [
+                {"plugin": "hacker-news", "interval_s": 28800},
+                {"plugin": "news", "interval_s": 7200},
+            ]
+        })
+        config = Config()
+        self.assertEqual(len(config.cache_auto_refresh), 2)
+        self.assertEqual(config.cache_auto_refresh[0]["plugin"], "hacker-news")
+        self.assertEqual(config.cache_auto_refresh[1]["plugin"], "news")
+
+    def test_invalid_ttl_falls_back_to_interval(self):
+        self.write_config({
+            "cache_auto_refresh": [
+                {"plugin": "news", "interval_s": 7200, "ttl_s": "bad"},
+            ]
+        })
+        config = Config()
+        self.assertEqual(config.cache_auto_refresh[0]["ttl_s"], 7200)
+
+    def test_max_stale_default_is_integer(self):
+        self.write_config({
+            "cache_auto_refresh": [
+                {"plugin": "news", "interval_s": 7200},
+            ]
+        })
+        config = Config()
+        self.assertIsInstance(config.cache_auto_refresh[0]["max_stale_s"], int)
+
+
 if __name__ == '__main__':
     unittest.main()
