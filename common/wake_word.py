@@ -99,7 +99,7 @@ class WakeWordMode:
         self._req_route_name = None
         self._req_plugin_s = None
         self._req_cache_hit_type = None
-        self._req_filler_s = None
+        self._req_filler_s = None  # seconds since plugin start when filler playback finished
         self._req_respond_s = None
 
         logger.debug("Initializing wake word mode")
@@ -584,7 +584,9 @@ class WakeWordMode:
                 filler_path = self.voice_filler.pick_random_path()
                 if filler_path:
                     _path = filler_path  # capture for closure
-                    def _play_filler(_p=_path, _t_plugin=_t0, _seq=self._req_seq):
+                    with self._filler_lock:
+                        _req_seq = self._req_seq
+                    def _play_filler(_p=_path, _t_plugin=_t0, _seq=_req_seq):
                         try:
                             with (self._audio_lock or contextlib.nullcontext()):
                                 with contextlib.redirect_stdout(io.StringIO()):
