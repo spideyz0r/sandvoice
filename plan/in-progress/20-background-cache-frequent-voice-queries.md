@@ -44,7 +44,7 @@ Same three-step pattern as weather: try cache → fall through to live fetch + L
 
 **Cache keys:**
 - `hacker-news:top` — fixed; always top 5 stories
-- `news:<rss_url>` — URL is the discriminator; handles multiple configured feeds cleanly
+- `news:<rss_url>` — URL is the discriminator. For single-feed setups the URL comes from `s.config.rss_news`. For multi-feed support, an optional `rss_url` field in the `cache_auto_refresh` entry overrides the config value and is passed through the route to the plugin. The news plugin must be updated to read `rss_url` from the route when present.
 
 **`refresh_only` support:** when `route.get('refresh_only')` is True, run the fetch + LLM, update cache, return `None`. No TTS. No audio.
 
@@ -67,6 +67,7 @@ cache_auto_refresh:
     max_stale_s: 43200
   - plugin: news
     query: "latest news"
+    rss_url: "https://feeds.bbci.co.uk/news/rss.xml"   # optional; overrides rss_news config
     interval_s: 7200         # refresh every 2 hours
     ttl_s: 7200
     max_stale_s: 14400
@@ -81,7 +82,7 @@ cache_auto_refresh:
 
 For each entry in `cache_auto_refresh`:
 1. Invoke the plugin immediately in a background thread with `refresh_only=True` and the entry's `ttl_s`/`max_stale_s` injected into the route
-2. Auto-register an interval scheduler task named `cache_refresh:<plugin>` with `schedule_value=interval_s`
+2. Derive the entry's cache key and auto-register an interval scheduler task named `cache_refresh:<cache_key>` with `schedule_value=interval_s`
 
 All background refreshes are **silent by design** — `refresh_only=True` causes the plugin to return `None`, and the scheduler's `_scheduler_invoke_plugin` skips TTS when `refresh_only` is set.
 
@@ -91,7 +92,7 @@ All background refreshes are **silent by design** — `refresh_only=True` causes
 
 ### Auto-registered task naming and deduplication
 
-Tasks are named `cache_refresh:<cache_key>`, where `<cache_key>` is the same key the plugin uses to store its entry (e.g. `cache_refresh:hacker-news:top`, `cache_refresh:news:https://feeds.bbci.co.uk/...`). Using the cache key as the discriminator means two `news` entries with different RSS URLs get distinct task names and both register correctly. The scheduler's `sync_tasks` dedup logic (skip active/paused tasks by name) ensures that restarting SandVoice doesn't duplicate tasks.
+Tasks are named `cache_refresh:<cache_key>`, where `<cache_key>` is the same key the plugin uses to store its entry (e.g. `cache_refresh:hacker-news:top`, `cache_refresh:news:https://feeds.bbci.co.uk/...`). Using the cache key as the discriminator means two `news` entries with different RSS URLs get distinct task names and both register correctly. The scheduler's `sync_tasks` skips adding any task whose name already exists in the DB (regardless of status), ensuring that restarting SandVoice doesn't duplicate tasks.
 
 The cache key for each entry is derived at warmup time by calling a per-plugin `_cache_key()` helper (same function the plugin uses internally), so task names and cache keys are always in sync.
 
