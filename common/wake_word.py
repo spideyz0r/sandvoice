@@ -91,12 +91,15 @@ class WakeWordMode:
         self.responder = None  # StreamingResponder instance (created in _initialize)
 
         # Per-request timing (reset each cycle)
+        self._filler_lock = threading.Lock()  # guards _req_seq and _req_filler_s across threads
+        self._req_seq = 0          # incremented at each new request start; used to guard late filler writes
         self._req_t_start = None
         self._req_transcribe_s = None
         self._req_route_s = None
         self._req_route_name = None
         self._req_plugin_s = None
         self._req_cache_hit_type = None
+        self._req_filler_s = None  # seconds since plugin start when filler playback finished
         self._req_respond_s = None
 
         logger.debug("Initializing wake word mode")
@@ -336,6 +339,9 @@ class WakeWordMode:
 
                 if keyword_index >= 0:
                     logger.info("Wake word detected: '%s'", self.config.wake_phrase)
+                    with self._filler_lock:
+                        self._req_seq += 1
+                        self._req_filler_s = None
                     self._req_t_start = time.monotonic()
 
                     self._play_confirmation_beep()
@@ -403,6 +409,9 @@ class WakeWordMode:
         self._play_confirmation_beep()
 
         # Record start time for the new request that follows barge-in
+        with self._filler_lock:
+            self._req_seq += 1
+            self._req_filler_s = None
         self._req_t_start = time.monotonic()
 
         # Go directly to LISTENING
@@ -507,6 +516,8 @@ class WakeWordMode:
         self._req_route_name = None
         self._req_plugin_s = None
         self._req_cache_hit_type = None
+        with self._filler_lock:
+            self._req_filler_s = None
         self._req_respond_s = None
 
         try:
@@ -573,11 +584,14 @@ class WakeWordMode:
                 filler_path = self.voice_filler.pick_random_path()
                 if filler_path:
                     _path = filler_path  # capture for closure
-                    def _play_filler(_p=_path):
+                    with self._filler_lock:
+                        _req_seq = self._req_seq
+                    def _play_filler(_p=_path, _t_plugin=_t0, _seq=_req_seq):
                         try:
                             with (self._audio_lock or contextlib.nullcontext()):
                                 with contextlib.redirect_stdout(io.StringIO()):
                                     self.audio.play_audio_file(_p)
+                            self._record_filler_s(_seq, _t_plugin)
                             logger.debug("Voice filler played: %s", os.path.basename(_p))
                         except Exception as e:
                             logger.debug("Voice filler playback failed: %s", e)
@@ -678,6 +692,9 @@ class WakeWordMode:
             self._play_confirmation_beep()
 
             # Record start time for the new request that follows barge-in
+            with self._filler_lock:
+                self._req_seq += 1
+                self._req_filler_s = None
             self._req_t_start = time.monotonic()
 
             self.state = State.LISTENING
@@ -712,6 +729,16 @@ class WakeWordMode:
         # Reset streaming metadata
         self._reset_streaming_state()
 
+    def _record_filler_s(self, seq, t_plugin):
+        """Record filler elapsed time if the request sequence token still matches.
+
+        Called from the filler daemon thread; the seq guard prevents a late-completing
+        filler from writing into the next request's timing state.
+        """
+        with self._filler_lock:
+            if self._req_seq == seq:
+                self._req_filler_s = time.monotonic() - t_plugin
+
     def _emit_request_summary(self):
         """Emit a single INFO line summarising timing and routing for the completed request."""
         if self._req_t_start is None:
@@ -733,7 +760,10 @@ class WakeWordMode:
             cache_status = "none"
             if self._req_cache_hit_type is not None:
                 cache_status = self._req_cache_hit_type
-            parts.append(f"plugin={self._req_plugin_s:.2f}s(cache:{cache_status})")
+            with self._filler_lock:
+                filler_s = self._req_filler_s
+            filler_tag = f",filler@{filler_s:.2f}s" if filler_s is not None else ""
+            parts.append(f"plugin={self._req_plugin_s:.2f}s(cache:{cache_status}{filler_tag})")
 
         if self._req_respond_s is not None:
             parts.append(f"respond={self._req_respond_s:.2f}s")

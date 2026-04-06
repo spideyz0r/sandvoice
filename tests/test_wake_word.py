@@ -1380,6 +1380,45 @@ class TestRequestTimingSummary(unittest.TestCase):
         self.assertIn("total=", summary)
         self.assertIn("s", summary)
 
+    def test_emit_summary_includes_filler_tag_when_filler_fired(self):
+        mode = self._make_mode()
+        mode._req_t_start = time.monotonic() - 5.0
+        mode._req_plugin_s = 3.50
+        mode._req_filler_s = 0.80
+        with patch("common.wake_word.logger") as mock_logger:
+            mode._emit_request_summary()
+        summary = mock_logger.info.call_args[0][0]
+        self.assertIn("filler@0.80s", summary)
+
+    def test_emit_summary_omits_filler_tag_when_filler_not_fired(self):
+        mode = self._make_mode()
+        mode._req_t_start = time.monotonic() - 5.0
+        mode._req_plugin_s = 0.05
+        mode._req_filler_s = None
+        with patch("common.wake_word.logger") as mock_logger:
+            mode._emit_request_summary()
+        summary = mock_logger.info.call_args[0][0]
+        self.assertNotIn("filler@", summary)
+
+    def test_record_filler_s_blocked_when_seq_changed(self):
+        """_record_filler_s does not write when seq token no longer matches."""
+        mode = self._make_mode()
+        mode._req_seq = 2          # advanced to a new request
+        mode._req_filler_s = None
+        t_plugin = time.monotonic() - 1.0
+        mode._record_filler_s(1, t_plugin)   # closure captured seq=1
+        self.assertIsNone(mode._req_filler_s)
+
+    def test_record_filler_s_writes_when_seq_matches(self):
+        """_record_filler_s records elapsed time when seq token matches."""
+        mode = self._make_mode()
+        mode._req_seq = 3
+        mode._req_filler_s = None
+        t_plugin = time.monotonic() - 1.5
+        mode._record_filler_s(3, t_plugin)
+        self.assertIsNotNone(mode._req_filler_s)
+        self.assertGreater(mode._req_filler_s, 1.0)
+
     def test_emit_summary_omits_plugin_field_for_default_route(self):
         mode = self._make_mode()
         mode._req_t_start = time.monotonic() - 5.0
