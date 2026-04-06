@@ -154,7 +154,7 @@ A background task then refreshes it every `interval_s` seconds — also silent.
 - [ ] `hacker-news` plugin serves from cache on hit, falls through on miss, returns `None` on `refresh_only`
 - [ ] `news` plugin same as above
 - [ ] On startup with `cache_auto_refresh` configured, each listed plugin is invoked silently in a background thread
-- [ ] A scheduler task named `cache_refresh:<cache_key>` is auto-registered for each entry; two entries for the same plugin with different queries produce distinct task names
+- [ ] A scheduler task named `cache_refresh:<cache_key>` is auto-registered for each entry; two entries for the same plugin that resolve to different cache keys produce distinct task names
 - [ ] No audio plays during any background refresh
 - [ ] Cache miss on first run triggers live fetch; subsequent requests within TTL are instant
 - [ ] `cache_auto_refresh` with `cache_enabled: disabled` logs a warning and skips
