@@ -43,7 +43,7 @@ The `plugin` field in `cache_auto_refresh` entries accepts the manifest/route na
 Same three-step pattern as weather: try cache → fall through to live fetch + LLM → cache response text.
 
 **Cache keys:**
-- `hacker-news:top` — fixed; always top 5 stories
+- `hacker-news:best` — fixed; always best 5 stories (plugin fetches `beststories` endpoint)
 - `news:<rss_url>` — URL is the discriminator. For single-feed setups the URL comes from `s.config.rss_news`. For multi-feed support, an optional `rss_url` field in the `cache_auto_refresh` entry overrides the config value and is passed through the route to the plugin. The news plugin must be updated to read `rss_url` from the route when present.
 
 **`refresh_only` support:** when `route.get('refresh_only')` is True, run the fetch + LLM, update cache, return `None`. No TTS. No audio.
@@ -92,9 +92,9 @@ All background refreshes are **silent by design** — `refresh_only=True` causes
 
 ### Auto-registered task naming and scheduler interaction
 
-Tasks are named `cache_refresh:<cache_key>`, where `<cache_key>` is the same key the plugin uses to store its entry (e.g. `cache_refresh:hacker-news:top`, `cache_refresh:news:https://feeds.bbci.co.uk/...`). Using the cache key as the discriminator means two `news` entries with different RSS URLs get distinct task names and both register correctly.
+Tasks are named `cache_refresh:<cache_key>`, where `<cache_key>` is the same key the plugin uses to store its entry (e.g. `cache_refresh:hacker-news:best`, `cache_refresh:news:https://feeds.bbci.co.uk/...`). Using the cache key as the discriminator means two `news` entries with different RSS URLs get distinct task names and both register correctly.
 
-**Important:** `sync_tasks` deletes any DB task not present in `tasks.yaml` on every startup. Auto-registered cache refresh tasks are not in `tasks.yaml` and would therefore be removed by `sync_tasks`. To avoid this, `_warmup_cache()` must run **after** `sync_tasks` and re-registers all `cache_refresh:<cache_key>` tasks from `cache_auto_refresh` on every startup. This is "re-register from config on each restart" semantics, not "register once and persist forever" — consistent with how `tasks.yaml` tasks are treated. `_warmup_cache()` calls `scheduler.add_task()` directly (bypassing `sync_tasks`) so no tasks.yaml entry is required.
+**Important:** DB tasks not present in `tasks.yaml` are removed only when `sync_tasks` actually runs and `tasks.yaml` is present and validates successfully (invalid entries or a missing file cause the deletion step to be skipped). Auto-registered cache refresh tasks are not in `tasks.yaml`, so in the normal startup path where `sync_tasks` runs successfully they would be removed unless `_warmup_cache()` runs **after** `sync_tasks` and re-registers all `cache_refresh:<cache_key>` tasks from `cache_auto_refresh`. This is "re-register from config on each restart" semantics, not "register once and persist forever" — consistent with how `tasks.yaml` tasks are treated when sync runs. `_warmup_cache()` calls `scheduler.add_task()` directly (bypassing `sync_tasks`) so no `tasks.yaml` entry is required.
 
 The cache key for each entry is derived at warmup time by calling a per-plugin `_cache_key()` helper (same function the plugin uses internally), so task names and cache keys are always in sync.
 
