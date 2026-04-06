@@ -1,4 +1,4 @@
-# Voice UX: Background Cache for Frequent Queries
+# Background Cache for Frequent Voice Queries
 
 **Status**: 🚧 In Progress
 **Priority**: 20
@@ -6,175 +6,150 @@
 
 ---
 
-## Overview
+## What is already done
 
-For a few common voice queries (weather, a handful of tickers/crypto, time-sensitive greetings), the user cares most about instant feedback.
-
-This plan adds an opt-in cache for a small set of common answers so SandVoice can respond immediately with real content.
-
-Key behavior: respond from cache immediately when allowed, and "kick" a refresh in the background so the next request stays fast.
-
----
-
-## Problem Statement
-
-Current behavior:
-- Every request waits for network/API calls.
-
-Desired behavior:
-- For selected query types, respond instantly from a cached value when allowed.
-- Refresh happens in the background when a cache entry is missing or expired.
+- `common/cache.py` — `VoiceCache`: SQLite WAL, `CacheEntry(key, value, updated_at, ttl_s, max_stale_s)`, `is_fresh()`, `can_serve()`, `set_with_timestamp()` for test seeding, `last_hit_type` diagnostic
+- `plugins/weather/plugin.py` — fully integrated: cache key `weather:<JSON([loc,unit])>`, caches full LLM response text, `refresh_only=True` support, legacy entry detection
+- Scheduler `action_type: plugin` with `refresh_only: true` in `tasks.yaml` already works end-to-end
+- `sandvoice.py` exposes `self.cache` on the `SandVoice` instance; plugins access via `getattr(s, 'cache', None)`
 
 ---
 
-## Goals
+## What remains
 
-- Instant voice answers for frequently requested info
-- Avoid unsolicited spoken updates (only speak on user request)
-- Keep refresh predictable and configurable (cost control)
-- Make caching opt-in
+1. **Cache `hacker_news` and `news` plugins** — same pattern as weather
+2. **`cache_auto_refresh` system** — startup warmup + auto-registered interval tasks, driven by a single config list
 
 ---
 
-## Non-Goals
+## Scope
 
-- General caching of arbitrary user questions
-- Learning user behavior automatically without explicit config
-- Voice UX conventions like saying "as of X minutes" (we want it to sound current)
+**In scope:**
+- `hacker_news` and `news` cache integration
+- `cache_auto_refresh` config key (startup warmup + periodic silent refresh)
+- README documentation
 
----
-
-## Proposed Design
-
-### Where caching lives
-
-- Caching is a shared capability exposed to plugins (not duplicated per plugin).
-- The route system still selects a plugin; the plugin decides whether it can serve from cache.
-- Implementation detail: use a local SQLite database for persistence across restarts.
-  - Store small JSON/text payloads (not audio blobs).
-
-### Plugin contract (standard pattern)
-
-Each plugin that opts into caching follows the same steps:
-
-1) Derive a cache key from the request context
-2) Ask the shared cache for an entry
-3) Decide:
-   - serve cached immediately (fast path)
-   - or fetch live (slow path)
-4) If cached was served and entry is expired, kick a refresh in the background
-
-Caching should not be implemented ad-hoc in every plugin; plugins should use a shared cache API.
-
-### Cache items (initial scope)
-
-- Weather for configured `location`
-- Crypto prices (e.g., BTC, ETH)
-- A short "good morning/evening" greeting template (local, no API)
-
-Note: greeting templates do not require network calls; cache is optional.
-
-### Refresh strategy
-
-- On-demand refresh (always): when a cache entry is missing or expired, fetch live.
-- Kick refresh (important for perceived speed): if a cached value is served but is expired, schedule a refresh in background.
-- Optional periodic refresh (configurable): a background scheduler keeps certain keys warm.
-
-Each cache entry stores:
-- `value` (string or JSON)
-- `created_at` / `updated_at`
-- `ttl_s` (time-to-live; after this, refresh should happen)
-- `max_stale_s` (hard limit; after this, do not serve cached)
-
-### Response behavior (voice-first)
-
-- If cached entry exists and is within `max_stale_s`: return it immediately.
-- If it is expired (older than `ttl_s`): schedule a background refresh (do not block the answer).
-- If it is older than `max_stale_s`: do not serve cached; fetch live and update cache.
-
-We intentionally do not add "freshness wording" to spoken responses. Correctness comes from conservative TTL and max-stale defaults.
-
-### Safety / cost controls
-
-- Hard cap on number of cached items.
-- Configurable refresh interval.
-- Disabled by default.
-
-### Concurrency and latency notes
-
-We want voice answers to remain instant.
-
-- The read path must be fast (in-memory lookup and/or a quick SQLite read).
-- Background refresh should never speak.
-- To keep SQLite reliable, cache writes should be serialized (e.g., a cache worker that owns the write connection).
-  - This does not block voice playback because the user-facing response can be returned before the write completes.
+**Out of scope:**
+- `realtime` / `realtime_websearch` — real-time by design; caching defeats the purpose
+- Crypto prices — not implemented, not planned
+- Greeting cache — not needed
 
 ---
 
-## Configuration
+## Cache integration: hacker_news and news
+
+Same three-step pattern as weather: try cache → fall through to live fetch + LLM → cache response text.
+
+**Cache keys:**
+- `hacker-news:top` — fixed; always top 5 stories
+- `news:<rss_url>` — URL is the discriminator; handles multiple configured feeds cleanly
+
+**`refresh_only` support:** when `route.get('refresh_only')` is True, run the fetch + LLM, update cache, return `None`. No TTS. No audio.
+
+**TTL values:** plugins read `ttl_s` and `max_stale_s` from `route` (injected by the `cache_auto_refresh` system at invocation time). Fall back to plugin-defined defaults if not present.
+
+---
+
+## `cache_auto_refresh` design (Option B2)
+
+A single list in `~/.sandvoice/config.yaml` drives both startup warmup and periodic background refresh. No separate file. No manual `tasks.yaml` entries for cache.
 
 ```yaml
-background_cache: enabled
-background_cache_refresh_s: 300
+cache_enabled: enabled
 
-background_cache_weather: enabled
-background_cache_crypto:
-  - BTC
-  - ETH
-
-# Mandatory per-plugin staleness bounds (example defaults)
-cache_weather_ttl_s: 600
-cache_weather_max_stale_s: 1800
-
-cache_crypto_ttl_s: 120
-cache_crypto_max_stale_s: 600
+cache_auto_refresh:
+  - plugin: hacker-news
+    query: "hacker news"
+    interval_s: 28800        # refresh every 8 hours
+    ttl_s: 28800
+    max_stale_s: 43200
+  - plugin: news
+    query: "latest news"
+    interval_s: 7200         # refresh every 2 hours
+    ttl_s: 7200
+    max_stale_s: 14400
+  - plugin: weather
+    query: "weather"
+    interval_s: 10800        # refresh every 3 hours
+    ttl_s: 10800
+    max_stale_s: 21600
 ```
 
-Defaults:
-- `background_cache: disabled`
+### What happens on startup
+
+For each entry in `cache_auto_refresh`:
+1. Invoke the plugin immediately in a background thread with `refresh_only=True` and the entry's `ttl_s`/`max_stale_s` injected into the route
+2. Auto-register an interval scheduler task named `cache_refresh:<plugin>` with `schedule_value=interval_s`
+
+All background refreshes are **silent by design** — `refresh_only=True` causes the plugin to return `None`, and the scheduler's `_scheduler_invoke_plugin` skips TTS when `refresh_only` is set.
+
+### Interaction with existing weather config keys
+
+`cache_weather_ttl_s` and `cache_weather_max_stale_s` remain valid. If `weather` is in `cache_auto_refresh`, the entry's inline `ttl_s`/`max_stale_s` take precedence; the named config keys become the fallback for direct plugin calls that don't go through `cache_auto_refresh`.
+
+### Auto-registered task naming and deduplication
+
+Tasks are named `cache_refresh:<plugin>` (e.g. `cache_refresh:hacker-news`). The scheduler's `sync_tasks` dedup logic (skip active/paused tasks by name) ensures that restarting SandVoice doesn't duplicate tasks.
+
+### Config validation
+
+- `cache_auto_refresh` requires `cache_enabled: enabled` — warn and skip if cache is disabled
+- `interval_s` must be a positive integer
+- `plugin` must match a loaded plugin name (warn and skip unknown plugins)
+- `ttl_s` defaults to `interval_s` if omitted; `max_stale_s` defaults to `interval_s * 1.5` if omitted
 
 ---
 
-## Acceptance Criteria
+## Files to touch
 
-- [ ] When enabled, weather/crypto requests can be answered instantly from cache
-- [ ] Plugins define and enforce `ttl_s` and `max_stale_s` (do not serve very old data)
-- [ ] No background refresh results in unsolicited speech
-- [ ] Barge-in can interrupt playback as usual
-- [ ] Cache background thread stops cleanly on shutdown
-
----
-
-## Testing
-
-- Unit test: cache returns fresh value and includes timestamp/freshness metadata
-- Unit test: stale value triggers background refresh
-- Unit test: cache thread starts only when enabled
+| File | Change |
+|---|---|
+| `plugins/hacker_news/plugin.py` | Add cache read/write + `refresh_only` support |
+| `plugins/news/plugin.py` | Add cache read/write + `refresh_only` support |
+| `common/configuration.py` | Parse `cache_auto_refresh` list; validation |
+| `sandvoice.py` | `_warmup_cache()`: read `cache_auto_refresh`, fire background threads, auto-register scheduler tasks |
+| `tests/test_hacker_news.py` | Cache hit/miss/refresh_only coverage |
+| `tests/test_news.py` | Cache hit/miss/refresh_only coverage |
+| `tests/test_sandvoice.py` | Warmup and auto-task registration |
+| `README.md` | Document `cache_auto_refresh` in Background Cache section |
 
 ---
 
-## Implementation Sketch (No Code)
+## README additions (shape)
 
-### Data model
+Extend the existing Background Cache section:
 
-SQLite table (example):
-- `key` (primary key)
-- `value_json`
-- `updated_at`
-- `ttl_s`
-- `max_stale_s`
+```
+### Auto-refresh
 
-### Cache API (conceptual)
+Add `cache_auto_refresh` to config to warm a plugin's cache on startup and refresh
+it silently in the background:
 
-- `get(key) -> entry|None`
-- `set(key, value, ttl_s, max_stale_s)`
-- `should_refresh(entry) -> bool` (age > ttl)
-- `can_serve(entry) -> bool` (age <= max_stale)
-- `kick_refresh(key, refresh_fn)` (enqueues work; at-most-one in-flight per key)
+cache_enabled: enabled
+cache_auto_refresh:
+  - plugin: hacker-news
+    query: "hacker news"
+    interval_s: 28800
+  - plugin: news
+    query: "latest news"
+    interval_s: 7200
 
-### Plugin integration
+On startup SandVoice fetches each plugin immediately (no audio played).
+A background task then refreshes it every `interval_s` seconds — also silent.
+`ttl_s` and `max_stale_s` control freshness; both default to `interval_s` and
+`interval_s * 1.5` respectively if omitted.
+```
 
-- Plugins compute keys consistently:
-  - weather: include `location` and `unit`
-  - crypto: include symbol and quote currency
-- Plugins are responsible for choosing TTL/max-stale defaults appropriate to the domain.
+---
+
+## Acceptance criteria
+
+- [ ] `hacker_news` plugin serves from cache on hit, falls through on miss, returns `None` on `refresh_only`
+- [ ] `news` plugin same as above
+- [ ] On startup with `cache_auto_refresh` configured, each listed plugin is invoked silently in a background thread
+- [ ] A scheduler task named `cache_refresh:<plugin>` is auto-registered for each entry
+- [ ] No audio plays during any background refresh
+- [ ] Cache miss on first run triggers live fetch; subsequent requests within TTL are instant
+- [ ] `cache_auto_refresh` with `cache_enabled: disabled` logs a warning and skips
+- [ ] Unknown plugin name in `cache_auto_refresh` logs a warning and skips that entry
+- [ ] >80% test coverage on new code
