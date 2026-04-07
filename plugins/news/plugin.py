@@ -50,18 +50,8 @@ def process(user_input, route, s):
         refresh_only = route.get('refresh_only', False)
         cache = getattr(s, 'cache', None)
         key = _cache_key(rss_url)
-        try:
-            raw_ttl = route.get('ttl_s', _DEFAULT_TTL_S)
-            ttl_s = _DEFAULT_TTL_S if isinstance(raw_ttl, bool) else max(1, int(raw_ttl))
-        except (TypeError, ValueError):
-            ttl_s = _DEFAULT_TTL_S
-        try:
-            raw_max_stale = route.get('max_stale_s', _DEFAULT_MAX_STALE_S)
-            max_stale_s = _DEFAULT_MAX_STALE_S if isinstance(raw_max_stale, bool) else max(1, int(raw_max_stale))
-        except (TypeError, ValueError):
-            max_stale_s = _DEFAULT_MAX_STALE_S
-        if max_stale_s < ttl_s:
-            max_stale_s = ttl_s
+        ttl_s = route.get('ttl_s', _DEFAULT_TTL_S)
+        max_stale_s = route.get('max_stale_s', _DEFAULT_MAX_STALE_S)
 
         # Try serving from cache when not a background refresh
         if not refresh_only and cache is not None:
