@@ -333,11 +333,14 @@ The cache stores plugin responses in SQLite so repeated queries are answered ins
 
 ```yaml
 cache_enabled: enabled
-cache_weather_ttl_s: 10800      # weather default: fresh for 3 hours
-cache_weather_max_stale_s: 21600  # weather default: serve stale for up to 6 hours
 ```
 
-`cache_weather_ttl_s` and `cache_weather_max_stale_s` set the TTL for weather responses fetched during a regular voice/CLI query. For `cache_auto_refresh`-driven fetches, use `ttl_s`/`max_stale_s` per entry instead (see below).
+For weather queries made outside of `cache_auto_refresh`, set TTL via the dedicated config keys:
+
+```yaml
+cache_weather_ttl_s: 10800      # fresh for 3 hours (default)
+cache_weather_max_stale_s: 21600  # serve stale for up to 6 hours (default)
+```
 
 ### Freshness model
 
@@ -352,8 +355,6 @@ cache_weather_max_stale_s: 21600  # weather default: serve stale for up to 6 hou
 Add `cache_auto_refresh` to warm a plugin's cache on startup and refresh it silently in the background:
 
 ```yaml
-cache_enabled: enabled
-
 cache_auto_refresh:
   - plugin: hacker-news
     query: "hacker news"
