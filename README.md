@@ -367,7 +367,9 @@ cache_auto_refresh:
 
 On startup SandVoice fetches each listed plugin immediately in a background thread (no audio played). When the scheduler is also enabled, a background task named `cache_refresh:<cache_key>` is auto-registered to repeat the refresh every `interval_s` seconds — also silent.
 
-`ttl_s` and `max_stale_s` control the freshness of the entry written during the **startup warmup**; both default to `interval_s` and `int(interval_s * 1.5)` respectively if omitted. Periodic scheduler-driven refreshes use the plugin's built-in defaults for these values (the scheduler dispatch does not forward them).
+`ttl_s` and `max_stale_s` control the freshness of the entry written during the **startup warmup** for plugins that support route-provided freshness overrides; both default to `interval_s` and `int(interval_s * 1.5)` respectively if omitted. Periodic scheduler-driven refreshes use the plugin's built-in defaults for these values (the scheduler dispatch does not forward them).
+
+The `weather` plugin is an exception: it ignores `cache_auto_refresh[*].ttl_s` and `cache_auto_refresh[*].max_stale_s` and uses the global `cache_weather_ttl_s` and `cache_weather_max_stale_s` settings instead.
 
 For the `news` plugin, `rss_url` overrides the `rss_news` config value and is used as the cache key discriminator — two entries with different `rss_url` values are cached independently. Entries with `rss_url`, `location`, or `unit` overrides only run the startup warmup; no periodic scheduler task is registered for them (since the scheduler cannot forward these fields to the plugin).
 

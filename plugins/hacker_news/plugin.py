@@ -89,11 +89,13 @@ def process(user_input, route_data, s):
         cache = getattr(s, 'cache', None)
         key = _cache_key()
         try:
-            ttl_s = max(1, int(route_data.get('ttl_s', _DEFAULT_TTL_S)))
+            raw_ttl = route_data.get('ttl_s', _DEFAULT_TTL_S)
+            ttl_s = _DEFAULT_TTL_S if isinstance(raw_ttl, bool) else max(1, int(raw_ttl))
         except (TypeError, ValueError):
             ttl_s = _DEFAULT_TTL_S
         try:
-            max_stale_s = max(1, int(route_data.get('max_stale_s', _DEFAULT_MAX_STALE_S)))
+            raw_max_stale = route_data.get('max_stale_s', _DEFAULT_MAX_STALE_S)
+            max_stale_s = _DEFAULT_MAX_STALE_S if isinstance(raw_max_stale, bool) else max(1, int(raw_max_stale))
         except (TypeError, ValueError):
             max_stale_s = _DEFAULT_MAX_STALE_S
         if max_stale_s < ttl_s:
