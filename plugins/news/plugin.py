@@ -71,7 +71,7 @@ def process(user_input, route, s):
                 return None
             return "I couldn't fetch any news at the moment. Please try again later."
 
-        response = s.ai.generate_response(user_input, f"Use this information to answer questions about any news. Make pertinent comments if any too. This is the hot news at the moment: {str(latest_news)}. Don't read the URLs \n. Use your knowledge to give some context to each new if possible")
+        response = s.ai.generate_response(user_input, f"Use this information to answer questions about any news. Make pertinent comments if any too. This is the hot news at the moment: {str(latest_news)}. Don't read the URLs \n. Use your knowledge to give some context to each news item if possible")
         response_text = response.content
 
         if cache is not None:

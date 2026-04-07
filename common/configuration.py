@@ -519,6 +519,8 @@ class Config:
                 )
                 continue
             raw_interval = entry.get("interval_s")
+            if isinstance(raw_interval, bool) or not isinstance(raw_interval, (int, float, str)):
+                raw_interval = None  # force the ValueError path below
             try:
                 interval_s = int(raw_interval)
                 if interval_s <= 0:
@@ -532,6 +534,8 @@ class Config:
                 continue
             raw_ttl = entry.get("ttl_s")
             if raw_ttl is not None:
+                if isinstance(raw_ttl, bool):
+                    raw_ttl = None  # force fallback
                 try:
                     ttl_s = int(raw_ttl)
                     if ttl_s <= 0:
@@ -547,6 +551,8 @@ class Config:
                 ttl_s = interval_s
             raw_max_stale = entry.get("max_stale_s")
             if raw_max_stale is not None:
+                if isinstance(raw_max_stale, bool):
+                    raw_max_stale = None  # force fallback
                 try:
                     max_stale_s = int(raw_max_stale)
                     if max_stale_s <= 0:

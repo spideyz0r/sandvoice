@@ -444,6 +444,23 @@ class SandVoice:
             # Register a periodic scheduler task if the scheduler is running.
             # Tasks are re-registered every startup (config-driven, not tasks.yaml).
             if self.scheduler is not None:
+                # Skip periodic task registration for entries with per-entry overrides
+                # (rss_url, location, unit) that affect the cache key.  The scheduler
+                # dispatch only forwards (plugin_name, query, refresh_only) and cannot
+                # pass these overrides to the plugin route, so a periodic task would
+                # refresh a different cache key than the one warmed at startup.
+                _override_keys = ('rss_url', 'location', 'unit')
+                has_override = any(k in entry for k in _override_keys)
+                if has_override:
+                    logger.warning(
+                        "cache_auto_refresh: periodic refresh not registered for plugin %r — "
+                        "entry has per-entry overrides (%s) that cannot be forwarded through "
+                        "the scheduler. Startup warmup will still run.",
+                        plugin_name_raw,
+                        ', '.join(k for k in _override_keys if k in entry),
+                    )
+                    continue
+
                 cache_key = _derive_cache_key(plugin_name, entry, self.config)
                 if cache_key is None:
                     logger.warning(
@@ -453,11 +470,19 @@ class SandVoice:
                     )
                     continue
                 task_name = f"cache_refresh:{cache_key}"
-                # Avoid duplicates when tasks.yaml is absent (sync_tasks was skipped)
-                existing_names = {t.name for t in self.scheduler._db.get_all_tasks()}
-                if task_name in existing_names:
+                # Avoid duplicates when tasks.yaml is absent (sync_tasks was skipped).
+                # Only check active/paused tasks — completed historical entries must not
+                # block re-registration on future startups.
+                scheduler_db = getattr(self.scheduler, '_db', None)
+                existing_task = None
+                if scheduler_db is not None:
+                    get_by_name = getattr(scheduler_db, 'get_active_or_paused_task_by_name', None)
+                    if callable(get_by_name):
+                        existing_task = get_by_name(task_name)
+                if existing_task is not None:
                     logger.debug(
-                        "cache_auto_refresh: task %r already exists; skipping registration",
+                        "cache_auto_refresh: active/paused task %r already exists; "
+                        "skipping registration",
                         task_name,
                     )
                     continue
