@@ -333,9 +333,11 @@ The cache stores plugin responses in SQLite so repeated queries are answered ins
 
 ```yaml
 cache_enabled: enabled
-cache_weather_ttl_s: 10800      # fresh for 3 hours
-cache_weather_max_stale_s: 21600  # serve stale for up to 6 hours
+cache_weather_ttl_s: 10800      # weather default: fresh for 3 hours
+cache_weather_max_stale_s: 21600  # weather default: serve stale for up to 6 hours
 ```
+
+`cache_weather_ttl_s` and `cache_weather_max_stale_s` set the TTL for weather responses fetched during a regular voice/CLI query. For `cache_auto_refresh`-driven fetches, use `ttl_s`/`max_stale_s` per entry instead (see below).
 
 ### Freshness model
 
@@ -367,7 +369,7 @@ cache_auto_refresh:
 
 On startup SandVoice fetches each listed plugin immediately in a background thread (no audio played). When the scheduler is also enabled, a background task named `cache_refresh:<cache_key>` is auto-registered to repeat the refresh every `interval_s` seconds — also silent.
 
-`ttl_s` and `max_stale_s` control the freshness of the entry written during the **startup warmup**; both default to `interval_s` and `int(interval_s * 1.5)` respectively if omitted. Periodic scheduler-driven refreshes use the plugin's built-in defaults for these values (the scheduler dispatch does not forward them).
+`ttl_s` and `max_stale_s` are supported by all three caching plugins (`weather`, `hacker-news`, `news`) and control the freshness of the entry written during the startup warmup. Both default to `interval_s` and `int(interval_s * 1.5)` respectively if omitted. Periodic scheduler-driven refreshes use the plugin's built-in defaults (the scheduler dispatch does not forward them).
 
 For the `news` plugin, `rss_url` overrides the `rss_news` config value and is used as the cache key discriminator — two entries with different `rss_url` values are cached independently. Entries with `rss_url`, `location`, or `unit` overrides only run the startup warmup; no periodic scheduler task is registered for them (since the scheduler cannot forward these fields to the plugin).
 
