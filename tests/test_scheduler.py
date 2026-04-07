@@ -1341,5 +1341,115 @@ class TestResolveTz(unittest.TestCase):
         self.assertIsInstance(result, ZoneInfo)
 
 
+class TestWarmupCache(unittest.TestCase):
+    """Tests for SandVoice._warmup_cache()."""
+
+    def _make_stub(self, cache_auto_refresh=None, cache_enabled=True, scheduler=None):
+        from sandvoice import SandVoice
+        sv = object.__new__(SandVoice)
+        sv.config = MagicMock()
+        sv.config.cache_enabled = cache_enabled
+        sv.config.cache_auto_refresh = cache_auto_refresh or []
+        sv.cache = MagicMock() if cache_enabled else None
+        sv.scheduler = scheduler
+        sv.plugins = {}
+        sv._ai_audio_lock = threading.Lock()
+        sv._scheduler_ai = None
+        sv._scheduler_audio = None
+        return sv
+
+    def test_no_entries_returns_immediately(self):
+        sv = self._make_stub(cache_auto_refresh=[])
+        # Should complete without error or thread launch
+        sv._warmup_cache()
+
+    def test_cache_disabled_skips_warmup(self):
+        sv = self._make_stub(
+            cache_auto_refresh=[{"plugin": "news", "interval_s": 7200, "ttl_s": 7200, "max_stale_s": 10800, "query": "news"}],
+            cache_enabled=False,
+        )
+        sv._warmup_cache()  # must not raise
+
+    def test_unknown_plugin_skipped(self):
+        sv = self._make_stub(cache_auto_refresh=[
+            {"plugin": "nonexistent", "interval_s": 3600, "ttl_s": 3600, "max_stale_s": 5400, "query": "nonexistent"},
+        ])
+        sv._warmup_cache()  # must not raise; plugin not in sv.plugins
+
+    def test_plugin_without_cache_key_skipped(self):
+        """Plugin missing _cache_key() must be skipped — no warmup thread launched."""
+        from sandvoice import SandVoice
+        sv = self._make_stub()
+        # Add a plugin that exists but has no _cache_key
+        sv.plugins["echo"] = MagicMock()
+        sv.config.cache_auto_refresh = [
+            {"plugin": "echo", "interval_s": 3600, "ttl_s": 3600, "max_stale_s": 5400, "query": "echo"},
+        ]
+        with patch("sandvoice._derive_cache_key", return_value=None):
+            sv._warmup_cache()
+        sv.plugins["echo"].assert_not_called()
+
+    def test_warmup_thread_launched_for_valid_entry(self):
+        """A valid entry with a known plugin and _cache_key must launch a warmup thread."""
+        import sys
+        sv = self._make_stub()
+        plugin_fn = MagicMock(return_value=None)
+        sv.plugins["news"] = plugin_fn
+
+        launched = []
+
+        def fake_thread(target, name, daemon):
+            launched.append(name)
+            return MagicMock()
+
+        sv.config.cache_auto_refresh = [
+            {"plugin": "news", "interval_s": 7200, "ttl_s": 7200, "max_stale_s": 10800, "query": "news"},
+        ]
+        with patch("sandvoice._derive_cache_key", return_value="news:https://rss.example.com"), \
+             patch("sandvoice.threading.Thread", side_effect=fake_thread):
+            sv._warmup_cache()
+
+        self.assertEqual(len(launched), 1)
+        self.assertIn("cache-warmup-news-0", launched)
+
+    def test_thread_names_unique_for_same_plugin(self):
+        """Multiple entries for the same plugin must get unique thread names."""
+        sv = self._make_stub()
+        sv.plugins["news"] = MagicMock(return_value=None)
+        sv.config.cache_auto_refresh = [
+            {"plugin": "news", "interval_s": 7200, "ttl_s": 7200, "max_stale_s": 10800, "query": "news 1"},
+            {"plugin": "news", "interval_s": 3600, "ttl_s": 3600, "max_stale_s": 5400, "query": "news 2"},
+        ]
+
+        launched = []
+
+        def fake_thread(target, name, daemon):
+            launched.append(name)
+            return MagicMock()
+
+        with patch("sandvoice._derive_cache_key", return_value="news:key"), \
+             patch("sandvoice.threading.Thread", side_effect=fake_thread):
+            sv._warmup_cache()
+
+        self.assertEqual(launched, ["cache-warmup-news-0", "cache-warmup-news-1"])
+
+    def test_override_entry_skips_scheduler_task(self):
+        """Entries with rss_url/location/unit overrides must skip periodic task registration."""
+        sv = self._make_stub()
+        sv.plugins["news"] = MagicMock(return_value=None)
+        mock_scheduler = MagicMock()
+        sv.scheduler = mock_scheduler
+        sv.config.cache_auto_refresh = [
+            {"plugin": "news", "interval_s": 7200, "ttl_s": 7200, "max_stale_s": 10800,
+             "query": "news", "rss_url": "https://custom.feed/rss.xml"},
+        ]
+
+        with patch("sandvoice._derive_cache_key", return_value="news:https://custom.feed/rss.xml"), \
+             patch("sandvoice.threading.Thread", return_value=MagicMock()):
+            sv._warmup_cache()
+
+        mock_scheduler.add_task.assert_not_called()
+
+
 if __name__ == "__main__":
     unittest.main()
