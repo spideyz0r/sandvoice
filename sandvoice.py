@@ -392,10 +392,6 @@ class SandVoice:
             )
             return
 
-        # Use the scheduler AI to avoid polluting interactive conversation history.
-        # Fall back to a fresh dedicated AI instance when the scheduler is disabled.
-        warmup_ai = self._scheduler_ai if self._scheduler_ai is not None else AI(self.config)
-
         for entry in entries:
             plugin_name_raw = str(entry.get('plugin', '')).strip()
             plugin_name = normalize_plugin_name(plugin_name_raw)
@@ -421,13 +417,17 @@ class SandVoice:
                 if optional_key in entry:
                     route[optional_key] = entry[optional_key]
 
-            # Fire an immediate background warmup for this entry
-            def _run_warmup(q=query, r=dict(route), pname=plugin_name, ai=warmup_ai):
+            # Fire an immediate background warmup for this entry.
+            # Each thread gets its own AI instance to avoid conversation-history
+            # races: AI.generate_response() mutates self.conversation_history and
+            # sharing a single instance across concurrent threads is not thread-safe.
+            def _run_warmup(q=query, r=dict(route), pname=plugin_name):
                 try:
                     logger.debug("cache_auto_refresh warmup: invoking %r", pname)
+                    thread_ai = AI(self.config)
                     resolved = resolve_plugin_route_name(r['route'], self.plugins)
                     r['route'] = resolved
-                    ctx = _SchedulerContext(self, ai)
+                    ctx = _SchedulerContext(self, thread_ai)
                     self.plugins[resolved](q, r, ctx)
                 except Exception as e:
                     logger.warning(
