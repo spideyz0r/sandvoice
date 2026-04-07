@@ -512,7 +512,14 @@ class Config:
                 )
                 continue
             plugin = entry.get("plugin")
-            if not plugin or not isinstance(plugin, str):
+            if not isinstance(plugin, str):
+                logger.warning(
+                    "cache_auto_refresh entry %d: 'plugin' must be a non-empty string; skipping",
+                    i,
+                )
+                continue
+            plugin = plugin.strip()
+            if not plugin:
                 logger.warning(
                     "cache_auto_refresh entry %d: 'plugin' must be a non-empty string; skipping",
                     i,
@@ -566,8 +573,18 @@ class Config:
                     max_stale_s = int(interval_s * 1.5)
             else:
                 max_stale_s = int(interval_s * 1.5)
+            if max_stale_s < ttl_s:
+                logger.warning(
+                    "cache_auto_refresh entry %d (plugin=%r): 'max_stale_s' (%d) is less than "
+                    "'ttl_s' (%d); clamping max_stale_s to ttl_s.",
+                    i,
+                    plugin,
+                    max_stale_s,
+                    ttl_s,
+                )
+                max_stale_s = ttl_s
             normalised = {
-                "plugin": plugin.strip(),
+                "plugin": plugin,
                 "interval_s": interval_s,
                 "ttl_s": ttl_s,
                 "max_stale_s": max_stale_s,
@@ -575,7 +592,9 @@ class Config:
             }
             for optional_key in ("rss_url", "location", "unit"):
                 if optional_key in entry and entry[optional_key] is not None:
-                    normalised[optional_key] = str(entry[optional_key]).strip()
+                    optional_value = str(entry[optional_key]).strip()
+                    if optional_value:
+                        normalised[optional_key] = optional_value
             validated.append(normalised)
         return validated
 

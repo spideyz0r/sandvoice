@@ -108,8 +108,8 @@ class _SchedulerContext:
         self.ai = scheduler_ai
 
     def route_message(self, *args, **kwargs):
-        """Route messages via the scheduler AI to avoid polluting interactive history."""
-        return self._base._scheduler_route_message(*args, **kwargs)
+        """Route messages via this context's AI instance to avoid polluting interactive history."""
+        return self._base._route_message_with_ai(self.ai, *args, **kwargs)
 
     def __getattr__(self, name):
         return getattr(self._base, name)
@@ -535,18 +535,27 @@ class SandVoice:
                         logger.warning("Scheduler plugin: audio playback failed for '%s': %s", failed_file, error)
         return result
 
-    def _scheduler_route_message(self, user_input, route):
-        """Route a scheduler-triggered message using a dedicated AI instance to avoid
-        polluting the interactive conversation history."""
+    def _route_message_with_ai(self, ai, user_input, route):
+        """Route a message using the supplied AI instance.
+
+        Used by both ``_scheduler_route_message`` (shared scheduler AI) and warmup
+        threads (per-thread AI), so that nested routing calls always use the same AI
+        instance as the enclosing context rather than falling back to a shared one.
+        """
         normalized_route = dict(route)
         normalized_route["route"] = resolve_plugin_route_name(route.get("route"), self.plugins)
         logger.debug("Route: %s -> %s", route, normalized_route)
         logger.debug("Plugins: %s", self.plugins.keys())
         if normalized_route["route"] in self.plugins:
-            ctx = _SchedulerContext(self, self._scheduler_ai)
+            ctx = _SchedulerContext(self, ai)
             return self.plugins[normalized_route["route"]](user_input, normalized_route, ctx)
         else:
-            return self._scheduler_ai.generate_response(user_input).content
+            return ai.generate_response(user_input).content
+
+    def _scheduler_route_message(self, user_input, route):
+        """Route a scheduler-triggered message using a dedicated AI instance to avoid
+        polluting the interactive conversation history."""
+        return self._route_message_with_ai(self._scheduler_ai, user_input, route)
 
     def route_message(self, user_input, route):
         normalized_route = dict(route)

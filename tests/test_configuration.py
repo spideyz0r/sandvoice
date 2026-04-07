@@ -1023,6 +1023,42 @@ class TestCacheAutoRefreshConfig(_TempHomeBase):
         config = Config()
         self.assertEqual(config.cache_auto_refresh[0]["ttl_s"], 7200)
 
+    def test_whitespace_only_plugin_skips_entry(self):
+        self.write_config({
+            "cache_auto_refresh": [
+                {"plugin": "   ", "interval_s": 7200},
+            ]
+        })
+        config = Config()
+        self.assertEqual(config.cache_auto_refresh, [])
+
+    def test_empty_rss_url_not_included(self):
+        self.write_config({
+            "cache_auto_refresh": [
+                {"plugin": "news", "interval_s": 7200, "rss_url": ""},
+            ]
+        })
+        config = Config()
+        self.assertNotIn("rss_url", config.cache_auto_refresh[0])
+
+    def test_whitespace_rss_url_not_included(self):
+        self.write_config({
+            "cache_auto_refresh": [
+                {"plugin": "news", "interval_s": 7200, "rss_url": "   "},
+            ]
+        })
+        config = Config()
+        self.assertNotIn("rss_url", config.cache_auto_refresh[0])
+
+    def test_max_stale_clamped_to_ttl_when_smaller(self):
+        self.write_config({
+            "cache_auto_refresh": [
+                {"plugin": "news", "interval_s": 7200, "ttl_s": 5000, "max_stale_s": 3000},
+            ]
+        })
+        config = Config()
+        self.assertEqual(config.cache_auto_refresh[0]["max_stale_s"], 5000)
+
     def test_max_stale_default_is_integer(self):
         self.write_config({
             "cache_auto_refresh": [
