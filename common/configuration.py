@@ -525,52 +525,38 @@ class Config:
                     i,
                 )
                 continue
-            raw_interval = entry.get("interval_s")
-            if isinstance(raw_interval, bool) or not isinstance(raw_interval, (int, float, str)):
-                raw_interval = None  # force the ValueError path below
-            try:
-                interval_s = int(raw_interval)
-                if interval_s <= 0:
-                    raise ValueError("must be positive")
-            except (TypeError, ValueError):
+            interval_s = _parse_exact_int(entry.get("interval_s"))
+            if not isinstance(interval_s, int) or isinstance(interval_s, bool) or interval_s <= 0:
                 logger.warning(
                     "cache_auto_refresh entry %d (plugin=%r): 'interval_s' must be a positive integer; skipping",
                     i,
                     plugin,
                 )
                 continue
-            raw_ttl = entry.get("ttl_s")
+            raw_ttl = _parse_exact_int(entry.get("ttl_s")) if entry.get("ttl_s") is not None else None
             if raw_ttl is not None:
-                if isinstance(raw_ttl, bool):
-                    raw_ttl = None  # force fallback
-                try:
-                    ttl_s = int(raw_ttl)
-                    if ttl_s <= 0:
-                        raise ValueError("must be positive")
-                except (TypeError, ValueError):
+                if not isinstance(raw_ttl, int) or isinstance(raw_ttl, bool) or raw_ttl <= 0:
                     logger.warning(
                         "cache_auto_refresh entry %d (plugin=%r): 'ttl_s' must be a positive integer; using interval_s",
                         i,
                         plugin,
                     )
                     ttl_s = interval_s
+                else:
+                    ttl_s = raw_ttl
             else:
                 ttl_s = interval_s
-            raw_max_stale = entry.get("max_stale_s")
+            raw_max_stale = _parse_exact_int(entry.get("max_stale_s")) if entry.get("max_stale_s") is not None else None
             if raw_max_stale is not None:
-                if isinstance(raw_max_stale, bool):
-                    raw_max_stale = None  # force fallback
-                try:
-                    max_stale_s = int(raw_max_stale)
-                    if max_stale_s <= 0:
-                        raise ValueError("must be positive")
-                except (TypeError, ValueError):
+                if not isinstance(raw_max_stale, int) or isinstance(raw_max_stale, bool) or raw_max_stale <= 0:
                     logger.warning(
                         "cache_auto_refresh entry %d (plugin=%r): 'max_stale_s' must be a positive integer; using default",
                         i,
                         plugin,
                     )
                     max_stale_s = int(interval_s * 1.5)
+                else:
+                    max_stale_s = raw_max_stale
             else:
                 max_stale_s = int(interval_s * 1.5)
             if max_stale_s < ttl_s:

@@ -1095,6 +1095,42 @@ class TestCacheAutoRefreshConfig(_TempHomeBase):
         config = Config()
         self.assertEqual(config.cache_auto_refresh[0]["max_stale_s"], int(7200 * 1.5))
 
+    def test_float_interval_s_skips_entry(self):
+        self.write_config({
+            "cache_auto_refresh": [
+                {"plugin": "news", "interval_s": 1.9},
+            ]
+        })
+        config = Config()
+        self.assertEqual(config.cache_auto_refresh, [])
+
+    def test_whole_float_interval_s_accepted(self):
+        self.write_config({
+            "cache_auto_refresh": [
+                {"plugin": "news", "interval_s": 7200.0},
+            ]
+        })
+        config = Config()
+        self.assertEqual(config.cache_auto_refresh[0]["interval_s"], 7200)
+
+    def test_float_ttl_s_falls_back_to_interval(self):
+        self.write_config({
+            "cache_auto_refresh": [
+                {"plugin": "news", "interval_s": 7200, "ttl_s": 1.9},
+            ]
+        })
+        config = Config()
+        self.assertEqual(config.cache_auto_refresh[0]["ttl_s"], 7200)
+
+    def test_float_max_stale_s_falls_back_to_default(self):
+        self.write_config({
+            "cache_auto_refresh": [
+                {"plugin": "news", "interval_s": 7200, "max_stale_s": 1.9},
+            ]
+        })
+        config = Config()
+        self.assertEqual(config.cache_auto_refresh[0]["max_stale_s"], int(7200 * 1.5))
+
 
 if __name__ == '__main__':
     unittest.main()
