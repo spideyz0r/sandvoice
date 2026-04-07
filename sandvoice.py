@@ -402,6 +402,15 @@ class SandVoice:
                 )
                 continue
 
+            cache_key = _derive_cache_key(plugin_name, entry, self.config)
+            if cache_key is None:
+                logger.warning(
+                    "cache_auto_refresh: plugin %r has no _cache_key(); "
+                    "skipping entry (plugin does not support caching)",
+                    plugin_name_raw,
+                )
+                continue
+
             interval_s = entry['interval_s']
             ttl_s = entry['ttl_s']
             max_stale_s = entry['max_stale_s']
@@ -461,14 +470,6 @@ class SandVoice:
                     )
                     continue
 
-                cache_key = _derive_cache_key(plugin_name, entry, self.config)
-                if cache_key is None:
-                    logger.warning(
-                        "cache_auto_refresh: could not derive cache key for plugin %r; "
-                        "periodic task not registered",
-                        plugin_name_raw,
-                    )
-                    continue
                 task_name = f"cache_refresh:{cache_key}"
                 # Avoid duplicates when tasks.yaml is absent (sync_tasks was skipped).
                 # Only check active/paused tasks — completed historical entries must not
