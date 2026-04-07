@@ -392,7 +392,7 @@ class SandVoice:
             )
             return
 
-        for entry in entries:
+        for i, entry in enumerate(entries):
             plugin_name_raw = str(entry.get('plugin', '')).strip()
             plugin_name = normalize_plugin_name(plugin_name_raw)
 
@@ -436,7 +436,7 @@ class SandVoice:
 
             threading.Thread(
                 target=_run_warmup,
-                name=f"cache-warmup-{plugin_name}",
+                name=f"cache-warmup-{plugin_name}-{i}",
                 daemon=True,
             ).start()
             logger.info("cache_auto_refresh: warmup started for plugin %r", plugin_name_raw)

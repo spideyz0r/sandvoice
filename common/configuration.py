@@ -588,7 +588,7 @@ class Config:
                 "interval_s": interval_s,
                 "ttl_s": ttl_s,
                 "max_stale_s": max_stale_s,
-                "query": str(entry.get("query") or plugin).strip(),
+                "query": str(entry.get("query") or "").strip() or plugin,
             }
             for optional_key in ("rss_url", "location", "unit"):
                 if optional_key in entry and entry[optional_key] is not None:

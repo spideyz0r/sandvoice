@@ -88,8 +88,16 @@ def process(user_input, route_data, s):
         refresh_only = route_data.get('refresh_only', False)
         cache = getattr(s, 'cache', None)
         key = _cache_key()
-        ttl_s = route_data.get('ttl_s', _DEFAULT_TTL_S)
-        max_stale_s = route_data.get('max_stale_s', _DEFAULT_MAX_STALE_S)
+        try:
+            ttl_s = max(1, int(route_data.get('ttl_s', _DEFAULT_TTL_S)))
+        except (TypeError, ValueError):
+            ttl_s = _DEFAULT_TTL_S
+        try:
+            max_stale_s = max(1, int(route_data.get('max_stale_s', _DEFAULT_MAX_STALE_S)))
+        except (TypeError, ValueError):
+            max_stale_s = _DEFAULT_MAX_STALE_S
+        if max_stale_s < ttl_s:
+            max_stale_s = ttl_s
 
         # Try serving from cache when not a background refresh
         if not refresh_only and cache is not None:
