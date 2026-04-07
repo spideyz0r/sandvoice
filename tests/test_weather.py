@@ -152,6 +152,24 @@ class TestWeatherPluginWithCache(unittest.TestCase):
         self.assertEqual(entry.value, "It is 20°C in London.")
 
     @patch('plugins.weather.plugin.OpenWeatherReader')
+    def test_ttl_override_from_route(self, MockReader):
+        MockReader.return_value.get_current_weather.return_value = _WEATHER_DATA
+        s = _make_sandvoice(cache=self.cache)
+        from plugins.weather import process
+        with patch.object(self.cache, 'set', wraps=self.cache.set) as mock_set:
+            process("weather", {"ttl_s": 3600, "max_stale_s": 7200}, s)
+        mock_set.assert_called_once_with(_CACHE_KEY, "It is 20°C in London.", ttl_s=3600, max_stale_s=7200)
+
+    @patch('plugins.weather.plugin.OpenWeatherReader')
+    def test_ttl_falls_back_to_config(self, MockReader):
+        MockReader.return_value.get_current_weather.return_value = _WEATHER_DATA
+        s = _make_sandvoice(cache=self.cache, cache_weather_ttl_s=1800, cache_weather_max_stale_s=3600)
+        from plugins.weather import process
+        with patch.object(self.cache, 'set', wraps=self.cache.set) as mock_set:
+            process("weather", {}, s)
+        mock_set.assert_called_once_with(_CACHE_KEY, "It is 20°C in London.", ttl_s=1800, max_stale_s=3600)
+
+    @patch('plugins.weather.plugin.OpenWeatherReader')
     def test_api_error_does_not_cache(self, MockReader):
         MockReader.return_value.get_current_weather.return_value = {"error": "bad"}
         s = _make_sandvoice(cache=self.cache)

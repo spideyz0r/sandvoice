@@ -73,6 +73,18 @@ def process(user_input, route, s):
         refresh_only = route.get('refresh_only', False)
         cache = getattr(s, 'cache', None)
         cache_key = _cache_key(location, unit)
+        try:
+            raw_ttl = route.get('ttl_s')
+            ttl_s = s.config.cache_weather_ttl_s if (raw_ttl is None or isinstance(raw_ttl, bool)) else max(1, int(raw_ttl))
+        except (TypeError, ValueError):
+            ttl_s = s.config.cache_weather_ttl_s
+        try:
+            raw_max_stale = route.get('max_stale_s')
+            max_stale_s = s.config.cache_weather_max_stale_s if (raw_max_stale is None or isinstance(raw_max_stale, bool)) else max(1, int(raw_max_stale))
+        except (TypeError, ValueError):
+            max_stale_s = s.config.cache_weather_max_stale_s
+        if max_stale_s < ttl_s:
+            max_stale_s = ttl_s
 
         # Try serving from cache when not a background refresh
         if not refresh_only and cache is not None:
@@ -109,8 +121,8 @@ def process(user_input, route, s):
                     cache.set(
                         cache_key,
                         response_text,
-                        ttl_s=s.config.cache_weather_ttl_s,
-                        max_stale_s=s.config.cache_weather_max_stale_s,
+                        ttl_s=ttl_s,
+                        max_stale_s=max_stale_s,
                     )
                     logger.debug("Weather cache updated: key=%r", cache_key)
                 except Exception as e:
