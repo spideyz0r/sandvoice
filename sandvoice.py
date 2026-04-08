@@ -405,8 +405,8 @@ class SandVoice:
             cache_key = _derive_cache_key(plugin_name, entry, self.config)
             if cache_key is None:
                 logger.warning(
-                    "cache_auto_refresh: plugin %r has no _cache_key(); "
-                    "skipping entry (plugin does not support caching)",
+                    "cache_auto_refresh: skipping entry for plugin %r "
+                    "(no _cache_key() or key derivation failed)",
                     plugin_name_raw,
                 )
                 continue
