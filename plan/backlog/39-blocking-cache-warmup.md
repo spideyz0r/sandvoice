@@ -21,8 +21,8 @@ starts.
 ## Goal
 
 Block SandVoice startup until the cache warmup completes (or times out), so the first
-user query is always served from cache. Mirror the Alexa model: the device is silent for
-a few seconds on startup, then announces it is ready.
+user query hits cache unless warmup times out. Mirror the Alexa model: the device is
+silent for a few seconds on startup, then announces it is ready.
 
 ---
 
@@ -66,7 +66,7 @@ behaviour) for users who prefer the old behaviour.
   `cache_warmup_timeout_s` (track wall-clock elapsed, subtract from remaining budget for
   each successive join).
 - Print `"Warming up cache ({plugins})..."` before the join loop.
-- Print `"Cache ready."` after (whether all succeeded or timed out).
+- Print `"Ready."` after (whether all succeeded or timed out).
 
 ### `_run_warmup()` closure
 
