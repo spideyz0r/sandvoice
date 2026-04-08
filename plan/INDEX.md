@@ -127,6 +127,10 @@ plan/
 **Document**: [completed/23-request-timing-summary-log.md](./completed/23-request-timing-summary-log.md)
 **Description**: Emit a single INFO line per request summarising transcription, routing, plugin, and TTS timing plus cache status. Enables clean benchmarking without enabling `log_level: debug`. Per-request `_req_cache_hit_type` snapshot isolates summary from concurrent scheduler-thread cache reads. Requires Plan 28. Extended in PR #113 to include optional `filler@Xs` tag showing when the voice filler phrase finished relative to plugin start.
 
+### Priority 20: Background Cache for Frequent Voice Queries
+**Document**: [completed/20-background-cache-frequent-voice-queries.md](./completed/20-background-cache-frequent-voice-queries.md)
+**Description**: SQLite-backed `VoiceCache` with TTL/max_stale freshness model. Cache integration for weather, hacker-news, and news plugins. `cache_auto_refresh` config drives startup warmup threads and periodic scheduler tasks per plugin.
+
 ### Priority 38: README Modernization
 **Document**: [completed/38-readme-modernization.md](./completed/38-readme-modernization.md)
 **Description**: Updated README to reflect the plugin manifest system, correct model defaults (`gpt-5-mini`, `gpt-4.1-nano`), `tmp_files_path` trailing-slash requirement, `~` expansion notes for config paths, quoted string config values, and consistent `./sandvoice.py` invocation throughout.
@@ -154,11 +158,6 @@ plan/
 **Pending:**
 - ⏸️ Phase 6: Raspberry Pi Testing (CPU usage, compatibility validation)
 
-### Priority 20: Background Cache for Frequent Voice Queries
-**Document**: [in-progress/20-background-cache-frequent-voice-queries.md](./in-progress/20-background-cache-frequent-voice-queries.md)
-**Status**: Weather plugin fully integrated. Scope narrowed: hacker_news and news plugins remaining; realtime/realtime_websearch excluded (real-time by design).
-**Description**: Opt-in background refresh of weather/news info to enable instant spoken answers with freshness hints.
-
 ---
 
 ## Backlog 📋
@@ -178,6 +177,10 @@ plan/
 ### Priority 18: TTS Micro-Pauses and Pacing
 **Document**: [backlog/18-tts-micro-pauses-and-pacing.md](./backlog/18-tts-micro-pauses-and-pacing.md)
 **Description**: Add configurable pauses between TTS chunks to make speech feel less rushed.
+
+### Priority 39: Blocking Cache Warmup with Timeout and Retries
+**Document**: [backlog/39-blocking-cache-warmup.md](./backlog/39-blocking-cache-warmup.md)
+**Description**: Block SandVoice startup until `cache_auto_refresh` warmup completes (or times out), so the first user query always hits cache. Configurable timeout (`cache_warmup_timeout_s`, default 15s) and per-plugin retries (`cache_warmup_retries`, default 3). Prints a startup message while waiting.
 
 ### Priority 37: Context-Aware Routing
 **Document**: [backlog/37-context-aware-routing.md](./backlog/37-context-aware-routing.md)
