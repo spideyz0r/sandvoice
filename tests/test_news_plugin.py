@@ -80,6 +80,13 @@ class TestNewsPluginNoCache(unittest.TestCase):
             news_plugin.process('news', {'route': 'news', 'rss_url': padded_url}, s)
         mock_init.assert_called_once_with(_RSS_URL, 5)
 
+    def test_non_string_rss_url_falls_back_to_config(self):
+        s = _make_s(rss_url=_RSS_URL)
+        with patch.object(news_plugin_module.RSSReader, '__init__', return_value=None) as mock_init, \
+             patch.object(news_plugin_module.RSSReader, 'get_latest_news', return_value=_NEWS_ITEMS):
+            news_plugin.process('news', {'route': 'news', 'rss_url': 123}, s)
+        mock_init.assert_called_once_with(_RSS_URL, 5)
+
     def test_refresh_only_returns_none(self):
         s = _make_s()
         with patch.object(news_plugin_module.RSSReader, 'get_latest_news', return_value=_NEWS_ITEMS):

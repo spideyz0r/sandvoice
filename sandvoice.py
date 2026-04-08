@@ -474,12 +474,7 @@ class SandVoice:
                 # Avoid duplicates when tasks.yaml is absent (sync_tasks was skipped).
                 # Only check active/paused tasks — completed historical entries must not
                 # block re-registration on future startups.
-                scheduler_db = getattr(self.scheduler, '_db', None)
-                existing_task = None
-                if scheduler_db is not None:
-                    get_by_name = getattr(scheduler_db, 'get_active_or_paused_task_by_name', None)
-                    if callable(get_by_name):
-                        existing_task = get_by_name(task_name)
+                existing_task = self.scheduler.get_active_or_paused_task_by_name(task_name)
                 if existing_task is not None:
                     logger.debug(
                         "cache_auto_refresh: active/paused task %r already exists; "

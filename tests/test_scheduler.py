@@ -633,6 +633,43 @@ class TestTaskScheduler(unittest.TestCase):
             self.db.set_status(task_id, "unknown_status")
 
 
+# ── TaskScheduler.get_active_or_paused_task_by_name ────────────────────────────
+
+class TestSchedulerGetActiveOrPausedByName(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp()
+        self.db = SchedulerDB(os.path.join(self.tmp, "test.db"))
+        self.scheduler = TaskScheduler(
+            db=self.db,
+            speak_fn=MagicMock(),
+            invoke_plugin_fn=MagicMock(),
+            poll_interval_s=60,
+        )
+        self.future = (datetime.now(timezone.utc) + timedelta(seconds=60)).isoformat()
+
+    def tearDown(self):
+        self.scheduler.stop()
+        self.db.close()
+        import shutil
+        shutil.rmtree(self.tmp, ignore_errors=True)
+
+    def test_returns_active_task(self):
+        self.scheduler.add_task(
+            name="cache_refresh:news:http://example.com/rss",
+            schedule_type="interval", schedule_value="3600",
+            action_type="plugin", action_payload={"plugin": "news", "query": "news"},
+        )
+        found = self.scheduler.get_active_or_paused_task_by_name(
+            "cache_refresh:news:http://example.com/rss"
+        )
+        self.assertIsNotNone(found)
+
+    def test_returns_none_for_unknown_name(self):
+        self.assertIsNone(
+            self.scheduler.get_active_or_paused_task_by_name("nonexistent")
+        )
+
+
 # ── SchedulerDB.get_active_or_paused_task_by_name ──────────────────────────────
 
 class TestGetActiveOrPausedTaskByName(unittest.TestCase):

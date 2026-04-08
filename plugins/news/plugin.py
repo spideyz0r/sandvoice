@@ -47,8 +47,7 @@ class RSSReader:
 def process(user_input, route, s):
     try:
         _route_rss_url = route.get('rss_url')
-        if isinstance(_route_rss_url, str):
-            _route_rss_url = _route_rss_url.strip()
+        _route_rss_url = _route_rss_url.strip() if isinstance(_route_rss_url, str) else None
         rss_url = _route_rss_url or s.config.rss_news
         refresh_only = route.get('refresh_only', False)
         cache = getattr(s, 'cache', None)

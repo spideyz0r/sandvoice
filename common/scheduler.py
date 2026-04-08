@@ -329,6 +329,10 @@ class TaskScheduler:
         self._db.set_status(task_id, "completed")
         logger.info("Task cancelled: %s", task_id)
 
+    def get_active_or_paused_task_by_name(self, name: str):
+        """Return the active/paused task with the given name, or None."""
+        return self._db.get_active_or_paused_task_by_name(name)
+
     # ── internals ──────────────────────────────────────────────────────────
 
     def _first_run(self, schedule_type: str, schedule_value: str) -> str:
