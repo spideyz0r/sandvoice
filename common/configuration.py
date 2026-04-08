@@ -130,6 +130,7 @@ class Config:
             "cache_enabled": "disabled",
             "cache_weather_ttl_s": 10800,    # 3 hours — refresh window
             "cache_weather_max_stale_s": 21600,  # 6 hours — hard expiry
+            "cache_auto_refresh": [],
 
             # Task Scheduler (Plan 21)
             "scheduler_enabled": "disabled",
@@ -276,6 +277,7 @@ class Config:
                 self.cache_weather_ttl_s,
             )
             self.cache_weather_max_stale_s = self.cache_weather_ttl_s
+        self.cache_auto_refresh = self._parse_cache_auto_refresh(self.get("cache_auto_refresh"))
 
         # Voice UX
         voice_ack_earcon = self.get("voice_ack_earcon")
@@ -474,6 +476,113 @@ class Config:
             self.summary_words = self.get("summary_words")
         if "search_sources" in self.config:
             self.search_sources = self.get("search_sources")
+
+    def _parse_cache_auto_refresh(self, raw):
+        """Validate and normalise the cache_auto_refresh list.
+
+        Each entry must have:
+          - ``plugin``: non-empty string
+          - ``interval_s``: positive integer
+
+        Optional fields:
+          - ``query``: string (defaults to plugin name)
+          - ``ttl_s``: positive integer (defaults to ``interval_s``)
+          - ``max_stale_s``: positive integer (defaults to ``int(interval_s * 1.5)``)
+          - ``rss_url``: string (news plugin only; overrides ``rss_news`` config)
+          - ``location``: string (weather plugin only; overrides ``location`` config)
+          - ``unit``: string (weather plugin only; overrides ``unit`` config)
+
+        Invalid entries are logged as warnings and skipped.
+        """
+        if raw is None:
+            return []
+        if not isinstance(raw, list):
+            logger.warning(
+                "cache_auto_refresh must be a list; ignoring invalid value of type %s",
+                type(raw).__name__,
+            )
+            return []
+        validated = []
+        for i, entry in enumerate(raw):
+            if not isinstance(entry, dict):
+                logger.warning(
+                    "cache_auto_refresh entry %d: expected a mapping, got %s; skipping",
+                    i,
+                    type(entry).__name__,
+                )
+                continue
+            plugin = entry.get("plugin")
+            if not isinstance(plugin, str):
+                logger.warning(
+                    "cache_auto_refresh entry %d: 'plugin' must be a non-empty string; skipping",
+                    i,
+                )
+                continue
+            plugin = plugin.strip()
+            if not plugin:
+                logger.warning(
+                    "cache_auto_refresh entry %d: 'plugin' must be a non-empty string; skipping",
+                    i,
+                )
+                continue
+            interval_s = _parse_exact_int(entry.get("interval_s"))
+            if not isinstance(interval_s, int) or isinstance(interval_s, bool) or interval_s <= 0:
+                logger.warning(
+                    "cache_auto_refresh entry %d (plugin=%r): 'interval_s' must be a positive integer; skipping",
+                    i,
+                    plugin,
+                )
+                continue
+            raw_ttl = _parse_exact_int(entry.get("ttl_s")) if entry.get("ttl_s") is not None else None
+            if raw_ttl is not None:
+                if not isinstance(raw_ttl, int) or isinstance(raw_ttl, bool) or raw_ttl <= 0:
+                    logger.warning(
+                        "cache_auto_refresh entry %d (plugin=%r): 'ttl_s' must be a positive integer; using interval_s",
+                        i,
+                        plugin,
+                    )
+                    ttl_s = interval_s
+                else:
+                    ttl_s = raw_ttl
+            else:
+                ttl_s = interval_s
+            raw_max_stale = _parse_exact_int(entry.get("max_stale_s")) if entry.get("max_stale_s") is not None else None
+            if raw_max_stale is not None:
+                if not isinstance(raw_max_stale, int) or isinstance(raw_max_stale, bool) or raw_max_stale <= 0:
+                    logger.warning(
+                        "cache_auto_refresh entry %d (plugin=%r): 'max_stale_s' must be a positive integer; using default",
+                        i,
+                        plugin,
+                    )
+                    max_stale_s = int(interval_s * 1.5)
+                else:
+                    max_stale_s = raw_max_stale
+            else:
+                max_stale_s = int(interval_s * 1.5)
+            if max_stale_s < ttl_s:
+                logger.warning(
+                    "cache_auto_refresh entry %d (plugin=%r): 'max_stale_s' (%d) is less than "
+                    "'ttl_s' (%d); clamping max_stale_s to ttl_s.",
+                    i,
+                    plugin,
+                    max_stale_s,
+                    ttl_s,
+                )
+                max_stale_s = ttl_s
+            normalised = {
+                "plugin": plugin,
+                "interval_s": interval_s,
+                "ttl_s": ttl_s,
+                "max_stale_s": max_stale_s,
+                "query": str(entry.get("query") or "").strip() or plugin,
+            }
+            for optional_key in ("rss_url", "location", "unit"):
+                if optional_key in entry and entry[optional_key] is not None:
+                    optional_value = str(entry[optional_key]).strip()
+                    if optional_value:
+                        normalised[optional_key] = optional_value
+            validated.append(normalised)
+        return validated
 
     def _load_tasks_file(self):
         if not self.tasks_file_exists:

@@ -633,6 +633,43 @@ class TestTaskScheduler(unittest.TestCase):
             self.db.set_status(task_id, "unknown_status")
 
 
+# ── TaskScheduler.get_active_or_paused_task_by_name ────────────────────────────
+
+class TestSchedulerGetActiveOrPausedByName(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp()
+        self.db = SchedulerDB(os.path.join(self.tmp, "test.db"))
+        self.scheduler = TaskScheduler(
+            db=self.db,
+            speak_fn=MagicMock(),
+            invoke_plugin_fn=MagicMock(),
+            poll_interval_s=60,
+        )
+        self.future = (datetime.now(timezone.utc) + timedelta(seconds=60)).isoformat()
+
+    def tearDown(self):
+        self.scheduler.stop()
+        self.db.close()
+        import shutil
+        shutil.rmtree(self.tmp, ignore_errors=True)
+
+    def test_returns_active_task(self):
+        self.scheduler.add_task(
+            name="cache_refresh:news:http://example.com/rss",
+            schedule_type="interval", schedule_value="3600",
+            action_type="plugin", action_payload={"plugin": "news", "query": "news"},
+        )
+        found = self.scheduler.get_active_or_paused_task_by_name(
+            "cache_refresh:news:http://example.com/rss"
+        )
+        self.assertIsNotNone(found)
+
+    def test_returns_none_for_unknown_name(self):
+        self.assertIsNone(
+            self.scheduler.get_active_or_paused_task_by_name("nonexistent")
+        )
+
+
 # ── SchedulerDB.get_active_or_paused_task_by_name ──────────────────────────────
 
 class TestGetActiveOrPausedTaskByName(unittest.TestCase):
@@ -1141,21 +1178,20 @@ class TestSandVoiceSchedulerInit(unittest.TestCase):
         sv.ai.generate_response.assert_not_called()
         self.assertEqual(result, "canonical")
 
-    def test_scheduler_context_route_message_uses_scheduler_route(self):
-        """_SchedulerContext.route_message must delegate to _scheduler_route_message,
-        not SandVoice.route_message, so plugins calling ctx.route_message() still
-        use the scheduler AI."""
+    def test_scheduler_context_route_message_uses_context_ai(self):
+        """_SchedulerContext.route_message must route via _route_message_with_ai using
+        the context's own AI instance, not the main route_message or directly
+        _scheduler_route_message, so each context (scheduler or warmup) uses its own AI."""
         from sandvoice import _SchedulerContext
         sv = self._make_stub()
-        sv._scheduler_ai = MagicMock()
-        sv.ai = MagicMock()
-        sv._scheduler_route_message = MagicMock(return_value="scheduler routed")
+        context_ai = MagicMock()
+        sv._route_message_with_ai = MagicMock(return_value="context routed")
         sv.route_message = MagicMock(return_value="main routed")
-        ctx = _SchedulerContext(sv, sv._scheduler_ai)
+        ctx = _SchedulerContext(sv, context_ai)
         result = ctx.route_message("query", {"route": "plugin"})
-        sv._scheduler_route_message.assert_called_once_with("query", {"route": "plugin"})
+        sv._route_message_with_ai.assert_called_once_with(context_ai, "query", {"route": "plugin"})
         sv.route_message.assert_not_called()
-        self.assertEqual(result, "scheduler routed")
+        self.assertEqual(result, "context routed")
 
 
 class TestAddTaskPluginNameNormalization(unittest.TestCase):
@@ -1340,6 +1376,116 @@ class TestResolveTz(unittest.TestCase):
         from zoneinfo import ZoneInfo
         result = TaskScheduler._resolve_tz("America/Toronto")
         self.assertIsInstance(result, ZoneInfo)
+
+
+class TestWarmupCache(unittest.TestCase):
+    """Tests for SandVoice._warmup_cache()."""
+
+    def _make_stub(self, cache_auto_refresh=None, cache_enabled=True, scheduler=None):
+        from sandvoice import SandVoice
+        sv = object.__new__(SandVoice)
+        sv.config = MagicMock()
+        sv.config.cache_enabled = cache_enabled
+        sv.config.cache_auto_refresh = cache_auto_refresh or []
+        sv.cache = MagicMock() if cache_enabled else None
+        sv.scheduler = scheduler
+        sv.plugins = {}
+        sv._ai_audio_lock = threading.Lock()
+        sv._scheduler_ai = None
+        sv._scheduler_audio = None
+        return sv
+
+    def test_no_entries_returns_immediately(self):
+        sv = self._make_stub(cache_auto_refresh=[])
+        # Should complete without error or thread launch
+        sv._warmup_cache()
+
+    def test_cache_disabled_skips_warmup(self):
+        sv = self._make_stub(
+            cache_auto_refresh=[{"plugin": "news", "interval_s": 7200, "ttl_s": 7200, "max_stale_s": 10800, "query": "news"}],
+            cache_enabled=False,
+        )
+        sv._warmup_cache()  # must not raise
+
+    def test_unknown_plugin_skipped(self):
+        sv = self._make_stub(cache_auto_refresh=[
+            {"plugin": "nonexistent", "interval_s": 3600, "ttl_s": 3600, "max_stale_s": 5400, "query": "nonexistent"},
+        ])
+        sv._warmup_cache()  # must not raise; plugin not in sv.plugins
+
+    def test_plugin_without_cache_key_skipped(self):
+        """Plugin missing _cache_key() must be skipped — no warmup thread launched."""
+        from sandvoice import SandVoice
+        sv = self._make_stub()
+        # Add a plugin that exists but has no _cache_key
+        sv.plugins["echo"] = MagicMock()
+        sv.config.cache_auto_refresh = [
+            {"plugin": "echo", "interval_s": 3600, "ttl_s": 3600, "max_stale_s": 5400, "query": "echo"},
+        ]
+        with patch("sandvoice._derive_cache_key", return_value=None):
+            sv._warmup_cache()
+        sv.plugins["echo"].assert_not_called()
+
+    def test_warmup_thread_launched_for_valid_entry(self):
+        """A valid entry with a known plugin and _cache_key must launch a warmup thread."""
+        import sys
+        sv = self._make_stub()
+        plugin_fn = MagicMock(return_value=None)
+        sv.plugins["news"] = plugin_fn
+
+        launched = []
+
+        def fake_thread(target, name, daemon):
+            launched.append(name)
+            return MagicMock()
+
+        sv.config.cache_auto_refresh = [
+            {"plugin": "news", "interval_s": 7200, "ttl_s": 7200, "max_stale_s": 10800, "query": "news"},
+        ]
+        with patch("sandvoice._derive_cache_key", return_value="news:https://rss.example.com"), \
+             patch("sandvoice.threading.Thread", side_effect=fake_thread):
+            sv._warmup_cache()
+
+        self.assertEqual(len(launched), 1)
+        self.assertIn("cache-warmup-news-0", launched)
+
+    def test_thread_names_unique_for_same_plugin(self):
+        """Multiple entries for the same plugin must get unique thread names."""
+        sv = self._make_stub()
+        sv.plugins["news"] = MagicMock(return_value=None)
+        sv.config.cache_auto_refresh = [
+            {"plugin": "news", "interval_s": 7200, "ttl_s": 7200, "max_stale_s": 10800, "query": "news 1"},
+            {"plugin": "news", "interval_s": 3600, "ttl_s": 3600, "max_stale_s": 5400, "query": "news 2"},
+        ]
+
+        launched = []
+
+        def fake_thread(target, name, daemon):
+            launched.append(name)
+            return MagicMock()
+
+        with patch("sandvoice._derive_cache_key", return_value="news:key"), \
+             patch("sandvoice.threading.Thread", side_effect=fake_thread):
+            sv._warmup_cache()
+
+        self.assertEqual(launched, ["cache-warmup-news-0", "cache-warmup-news-1"])
+
+    def test_override_entry_skips_scheduler_task(self):
+        """Entries with rss_url/location/unit overrides must skip periodic task registration."""
+        sv = self._make_stub()
+        sv.plugins["news"] = MagicMock(return_value=None)
+        mock_scheduler = MagicMock()
+        sv.scheduler = mock_scheduler
+        sv.config.cache_auto_refresh = [
+            {"plugin": "news", "interval_s": 7200, "ttl_s": 7200, "max_stale_s": 10800,
+             "query": "news", "rss_url": "https://custom.feed/rss.xml"},
+        ]
+
+        with patch("sandvoice._derive_cache_key", return_value="news:https://custom.feed/rss.xml"), \
+             patch("sandvoice.threading.Thread", return_value=MagicMock()):
+            sv._warmup_cache()
+
+        mock_scheduler.add_task.assert_not_called()
 
 
 if __name__ == "__main__":

@@ -12,7 +12,7 @@ from common.db import SchedulerDB
 from common.scheduler import TaskScheduler
 from common.plugin_loader import load_manifest, check_env_vars, build_extra_routes_text
 
-import argparse, atexit, importlib, importlib.util, logging, os, signal, sys
+import argparse, atexit, importlib, importlib.util, inspect, logging, os, signal, sys
 import queue, threading, time
 import re
 
@@ -51,6 +51,41 @@ def plugin_route_alias(name):
     return name.replace("_", "-")
 
 
+def _derive_cache_key(plugin_name, entry, config):
+    """Call the plugin's ``_cache_key()`` helper to derive the cache key for an
+    auto-refresh entry.  Parameters are inferred from ``entry`` and ``config``
+    by matching the function's parameter names.
+
+    Returns the cache key string, or ``None`` if the plugin has no ``_cache_key``
+    or if the call fails.
+    """
+    import sys as _sys
+    mod = None
+    for module_key in (f"plugins.{plugin_name}.plugin", f"plugins.{plugin_name}"):
+        mod = _sys.modules.get(module_key)
+        if mod is not None:
+            break
+    if mod is None:
+        return None
+    cache_key_fn = getattr(mod, "_cache_key", None)
+    if cache_key_fn is None:
+        return None
+    try:
+        sig = inspect.signature(cache_key_fn)
+        kwargs = {}
+        for param in sig.parameters:
+            if param == "rss_url":
+                kwargs["rss_url"] = entry.get("rss_url") or getattr(config, "rss_news", None)
+            elif param == "location":
+                kwargs["location"] = entry.get("location") or getattr(config, "location", None)
+            elif param == "unit":
+                kwargs["unit"] = entry.get("unit") or getattr(config, "unit", "metric")
+        return cache_key_fn(**kwargs)
+    except Exception as e:
+        logger.warning("Failed to derive cache key for plugin %r: %s", plugin_name, e)
+        return None
+
+
 def resolve_plugin_route_name(route_name, plugins):
     """Resolve a route name to the best matching plugin key."""
     normalized_route = normalize_route_name(route_name)
@@ -73,8 +108,8 @@ class _SchedulerContext:
         self.ai = scheduler_ai
 
     def route_message(self, *args, **kwargs):
-        """Route messages via the scheduler AI to avoid polluting interactive history."""
-        return self._base._scheduler_route_message(*args, **kwargs)
+        """Route messages via this context's AI instance to avoid polluting interactive history."""
+        return self._base._route_message_with_ai(self.ai, *args, **kwargs)
 
     def __getattr__(self, name):
         return getattr(self._base, name)
@@ -95,6 +130,7 @@ class SandVoice:
         self._scheduler_ai = None  # set by _init_scheduler() on success; None when disabled
         self.cache = self._init_cache()
         self.scheduler = self._init_scheduler()
+        self._warmup_cache()
         if self.args.cli:
             self.config.cli_input = True
 
@@ -338,6 +374,136 @@ class SandVoice:
             self._scheduler_ai = None
             return None
 
+    def _warmup_cache(self):
+        """Warm cache from ``cache_auto_refresh`` config entries and register periodic
+        scheduler tasks.
+
+        Must be called **after** ``_init_scheduler()`` (which runs ``sync_tasks`` that
+        deletes tasks not in ``tasks.yaml``).  Re-registering here on every startup is
+        intentional — these are config-driven tasks, not user-managed ``tasks.yaml`` tasks.
+        """
+        entries = getattr(self.config, 'cache_auto_refresh', [])
+        if not entries:
+            return
+
+        if not self.config.cache_enabled or self.cache is None:
+            logger.warning(
+                "cache_auto_refresh is configured but cache is disabled; skipping warmup"
+            )
+            return
+
+        for i, entry in enumerate(entries):
+            plugin_name_raw = str(entry.get('plugin', '')).strip()
+            plugin_name = normalize_plugin_name(plugin_name_raw)
+
+            if plugin_name not in self.plugins:
+                logger.warning(
+                    "cache_auto_refresh: unknown plugin %r; skipping entry", plugin_name_raw
+                )
+                continue
+
+            cache_key = _derive_cache_key(plugin_name, entry, self.config)
+            if cache_key is None:
+                logger.warning(
+                    "cache_auto_refresh: skipping entry for plugin %r "
+                    "(no _cache_key() or key derivation failed)",
+                    plugin_name_raw,
+                )
+                continue
+
+            interval_s = entry['interval_s']
+            ttl_s = entry['ttl_s']
+            max_stale_s = entry['max_stale_s']
+            query = entry['query']
+
+            route = {
+                'route': plugin_name,
+                'refresh_only': True,
+                'ttl_s': ttl_s,
+                'max_stale_s': max_stale_s,
+            }
+            for optional_key in ('rss_url', 'location', 'unit'):
+                if optional_key in entry:
+                    route[optional_key] = entry[optional_key]
+
+            # Fire an immediate background warmup for this entry.
+            # Each thread gets its own AI instance to avoid conversation-history
+            # races: AI.generate_response() mutates self.conversation_history and
+            # sharing a single instance across concurrent threads is not thread-safe.
+            def _run_warmup(q=query, r=dict(route), pname=plugin_name):
+                try:
+                    logger.debug("cache_auto_refresh warmup: invoking %r", pname)
+                    thread_ai = AI(self.config)
+                    resolved = resolve_plugin_route_name(r['route'], self.plugins)
+                    r['route'] = resolved
+                    ctx = _SchedulerContext(self, thread_ai)
+                    self.plugins[resolved](q, r, ctx)
+                except Exception as e:
+                    logger.warning(
+                        "cache_auto_refresh warmup error for plugin %r: %s", pname, e
+                    )
+
+            threading.Thread(
+                target=_run_warmup,
+                name=f"cache-warmup-{plugin_name}-{i}",
+                daemon=True,
+            ).start()
+            logger.info("cache_auto_refresh: warmup started for plugin %r", plugin_name_raw)
+
+            # Register a periodic scheduler task if the scheduler is running.
+            # Tasks are re-registered every startup (config-driven, not tasks.yaml).
+            if self.scheduler is not None:
+                # Skip periodic task registration for entries with per-entry overrides
+                # (rss_url, location, unit) that affect the cache key.  The scheduler
+                # dispatch only forwards (plugin_name, query, refresh_only) and cannot
+                # pass these overrides to the plugin route, so a periodic task would
+                # refresh a different cache key than the one warmed at startup.
+                _override_keys = ('rss_url', 'location', 'unit')
+                has_override = any(k in entry for k in _override_keys)
+                if has_override:
+                    logger.warning(
+                        "cache_auto_refresh: periodic refresh not registered for plugin %r — "
+                        "entry has per-entry overrides (%s) that cannot be forwarded through "
+                        "the scheduler. Startup warmup will still run.",
+                        plugin_name_raw,
+                        ', '.join(k for k in _override_keys if k in entry),
+                    )
+                    continue
+
+                task_name = f"cache_refresh:{cache_key}"
+                # Avoid duplicates when tasks.yaml is absent (sync_tasks was skipped).
+                # Only check active/paused tasks — completed historical entries must not
+                # block re-registration on future startups.
+                existing_task = self.scheduler.get_active_or_paused_task_by_name(task_name)
+                if existing_task is not None:
+                    logger.debug(
+                        "cache_auto_refresh: active/paused task %r already exists; "
+                        "skipping registration",
+                        task_name,
+                    )
+                    continue
+                try:
+                    self.scheduler.add_task(
+                        name=task_name,
+                        schedule_type='interval',
+                        schedule_value=str(interval_s),
+                        action_type='plugin',
+                        action_payload={
+                            'plugin': plugin_name_raw,
+                            'query': query,
+                            'refresh_only': True,
+                        },
+                    )
+                    logger.info(
+                        "cache_auto_refresh: registered task %r (every %ds)",
+                        task_name,
+                        interval_s,
+                    )
+                except Exception as e:
+                    logger.warning(
+                        "cache_auto_refresh: failed to register task %r: %s", task_name, e
+                    )
+
     def _scheduler_speak(self, text):
         if not text or not self.config.bot_voice:
             return
@@ -365,18 +531,27 @@ class SandVoice:
                         logger.warning("Scheduler plugin: audio playback failed for '%s': %s", failed_file, error)
         return result
 
-    def _scheduler_route_message(self, user_input, route):
-        """Route a scheduler-triggered message using a dedicated AI instance to avoid
-        polluting the interactive conversation history."""
+    def _route_message_with_ai(self, ai, user_input, route):
+        """Route a message using the supplied AI instance.
+
+        Used by both ``_scheduler_route_message`` (shared scheduler AI) and warmup
+        threads (per-thread AI), so that nested routing calls always use the same AI
+        instance as the enclosing context rather than falling back to a shared one.
+        """
         normalized_route = dict(route)
         normalized_route["route"] = resolve_plugin_route_name(route.get("route"), self.plugins)
         logger.debug("Route: %s -> %s", route, normalized_route)
         logger.debug("Plugins: %s", self.plugins.keys())
         if normalized_route["route"] in self.plugins:
-            ctx = _SchedulerContext(self, self._scheduler_ai)
+            ctx = _SchedulerContext(self, ai)
             return self.plugins[normalized_route["route"]](user_input, normalized_route, ctx)
         else:
-            return self._scheduler_ai.generate_response(user_input).content
+            return ai.generate_response(user_input).content
+
+    def _scheduler_route_message(self, user_input, route):
+        """Route a scheduler-triggered message using a dedicated AI instance to avoid
+        polluting the interactive conversation history."""
+        return self._route_message_with_ai(self._scheduler_ai, user_input, route)
 
     def route_message(self, user_input, route):
         normalized_route = dict(route)
