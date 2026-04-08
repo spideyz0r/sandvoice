@@ -1381,12 +1381,16 @@ class TestResolveTz(unittest.TestCase):
 class TestWarmupCache(unittest.TestCase):
     """Tests for SandVoice._warmup_cache()."""
 
-    def _make_stub(self, cache_auto_refresh=None, cache_enabled=True, scheduler=None):
+    def _make_stub(self, cache_auto_refresh=None, cache_enabled=True, scheduler=None,
+                   warmup_timeout=0, warmup_retries=1, warmup_retry_delay=0.0):
         from sandvoice import SandVoice
         sv = object.__new__(SandVoice)
         sv.config = MagicMock()
         sv.config.cache_enabled = cache_enabled
         sv.config.cache_auto_refresh = cache_auto_refresh or []
+        sv.config.cache_warmup_timeout_s = warmup_timeout
+        sv.config.cache_warmup_retries = warmup_retries
+        sv.config.cache_warmup_retry_delay_s = warmup_retry_delay
         sv.cache = MagicMock() if cache_enabled else None
         sv.scheduler = scheduler
         sv.plugins = {}
@@ -1486,6 +1490,145 @@ class TestWarmupCache(unittest.TestCase):
             sv._warmup_cache()
 
         mock_scheduler.add_task.assert_not_called()
+
+    def test_warmup_blocks_until_threads_finish(self):
+        """When timeout > 0, _warmup_cache() must join all warmup threads."""
+        import threading as _threading
+
+        sv = self._make_stub(warmup_timeout=5)
+        sv.plugins["news"] = MagicMock(return_value=None)
+        sv.config.cache_auto_refresh = [
+            {"plugin": "news", "interval_s": 7200, "ttl_s": 7200, "max_stale_s": 10800, "query": "news"},
+        ]
+
+        join_called = []
+        mock_thread = MagicMock()
+        mock_thread.join.side_effect = lambda timeout: join_called.append(timeout)
+
+        with patch("sandvoice._derive_cache_key", return_value="news:key"), \
+             patch("sandvoice.threading.Thread", return_value=mock_thread):
+            sv._warmup_cache()
+
+        self.assertTrue(len(join_called) == 1)
+        self.assertGreater(join_called[0], 0)
+
+    def test_warmup_continues_after_timeout(self):
+        """When the timeout budget is exhausted, remaining threads are not joined."""
+        sv = self._make_stub(warmup_timeout=0.001)  # 1ms — will expire almost immediately
+        sv.plugins["news"] = MagicMock(return_value=None)
+        sv.config.cache_auto_refresh = [
+            {"plugin": "news", "interval_s": 7200, "ttl_s": 7200, "max_stale_s": 10800, "query": "news 1"},
+            {"plugin": "news", "interval_s": 3600, "ttl_s": 3600, "max_stale_s": 5400, "query": "news 2"},
+        ]
+
+        join_calls = []
+
+        def slow_join(timeout):
+            import time as _time
+            _time.sleep(0.01)  # longer than the timeout budget
+            join_calls.append(timeout)
+
+        mock_thread = MagicMock()
+        mock_thread.join.side_effect = slow_join
+
+        with patch("sandvoice._derive_cache_key", return_value="news:key"), \
+             patch("sandvoice.threading.Thread", return_value=mock_thread):
+            sv._warmup_cache()
+
+        # At least one thread was attempted; not all necessarily finished
+        self.assertGreaterEqual(mock_thread.start.call_count, 2)
+
+    def test_warmup_timeout_zero_fires_and_forgets(self):
+        """When cache_warmup_timeout_s is 0, threads are started but never joined."""
+        sv = self._make_stub(warmup_timeout=0)
+        sv.plugins["news"] = MagicMock(return_value=None)
+        sv.config.cache_auto_refresh = [
+            {"plugin": "news", "interval_s": 7200, "ttl_s": 7200, "max_stale_s": 10800, "query": "news"},
+        ]
+
+        mock_thread = MagicMock()
+
+        with patch("sandvoice._derive_cache_key", return_value="news:key"), \
+             patch("sandvoice.threading.Thread", return_value=mock_thread):
+            sv._warmup_cache()
+
+        mock_thread.start.assert_called_once()
+        mock_thread.join.assert_not_called()
+
+    def test_warmup_retries_on_failure(self):
+        """Plugin raises on first call, succeeds on second; must be called twice."""
+        import threading as _threading
+        _RealThread = _threading.Thread
+
+        call_count = []
+
+        def flaky_plugin(query, route, ctx):
+            call_count.append(1)
+            if len(call_count) == 1:
+                raise RuntimeError("transient failure")
+
+        sv = self._make_stub(warmup_timeout=0, warmup_retries=3, warmup_retry_delay=0.0)
+        sv.plugins["news"] = flaky_plugin
+        sv.config.cache_auto_refresh = [
+            {"plugin": "news", "interval_s": 7200, "ttl_s": 7200, "max_stale_s": 10800, "query": "news"},
+        ]
+
+        threads = []
+
+        def real_thread(target, name, daemon):
+            t = _RealThread(target=target, name=name, daemon=daemon)
+            threads.append(t)
+            return t
+
+        with patch("sandvoice._derive_cache_key", return_value="news:key"), \
+             patch("sandvoice.AI"), \
+             patch("sandvoice.resolve_plugin_route_name", return_value="news"), \
+             patch("sandvoice._SchedulerContext"), \
+             patch("sandvoice.threading.Thread", side_effect=real_thread):
+            sv._warmup_cache()
+
+        for t in threads:
+            t.join(timeout=5)
+
+        self.assertEqual(len(call_count), 2)
+
+    def test_warmup_gives_up_after_max_retries(self):
+        """Plugin always raises; must be called cache_warmup_retries times, then WARNING logged."""
+        import threading as _threading
+        _RealThread = _threading.Thread
+
+        call_count = []
+
+        def always_failing_plugin(query, route, ctx):
+            call_count.append(1)
+            raise RuntimeError("always fails")
+
+        sv = self._make_stub(warmup_timeout=0, warmup_retries=3, warmup_retry_delay=0.0)
+        sv.plugins["news"] = always_failing_plugin
+        sv.config.cache_auto_refresh = [
+            {"plugin": "news", "interval_s": 7200, "ttl_s": 7200, "max_stale_s": 10800, "query": "news"},
+        ]
+
+        threads = []
+
+        def real_thread(target, name, daemon):
+            t = _RealThread(target=target, name=name, daemon=daemon)
+            threads.append(t)
+            return t
+
+        with patch("sandvoice._derive_cache_key", return_value="news:key"), \
+             patch("sandvoice.AI"), \
+             patch("sandvoice.resolve_plugin_route_name", return_value="news"), \
+             patch("sandvoice._SchedulerContext"), \
+             patch("sandvoice.threading.Thread", side_effect=real_thread), \
+             self.assertLogs("sandvoice", level="WARNING") as cm:
+            sv._warmup_cache()
+
+        for t in threads:
+            t.join(timeout=5)
+
+        self.assertEqual(len(call_count), 3)
+        self.assertTrue(any("failed after" in line for line in cm.output))
 
 
 if __name__ == "__main__":

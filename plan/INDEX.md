@@ -143,6 +143,11 @@ plan/
 
 ## In Progress 🚧
 
+### Priority 39: Blocking Cache Warmup with Timeout and Retries
+**Document**: [in-progress/39-blocking-cache-warmup.md](./in-progress/39-blocking-cache-warmup.md)
+**Status**: Implementation starting
+**Description**: Block SandVoice startup until `cache_auto_refresh` warmup completes (or times out), so the first user query hits cache unless warmup times out. Configurable timeout (`cache_warmup_timeout_s`, default 15s) and per-plugin retries (`cache_warmup_retries`, default 3). Prints a startup message while waiting.
+
 ### Priority 4: Wake Word Mode
 **Document**: [in-progress/04-wake-word-mode.md](./in-progress/04-wake-word-mode.md)
 **Status**: Phases 1-5 completed (macOS), Phase 6 pending (Raspberry Pi testing)
@@ -182,9 +187,6 @@ plan/
 **Document**: [backlog/37-context-aware-routing.md](./backlog/37-context-aware-routing.md)
 **Description**: Pass the last N conversation turns to `define_route` so the routing LLM can correctly resolve follow-up utterances. Fixes misrouting of clarifications (e.g. "I mean the FIFA World Cup" after a realtime_websearch query routing to `news`).
 
-### Priority 39: Blocking Cache Warmup with Timeout and Retries
-**Document**: [backlog/39-blocking-cache-warmup.md](./backlog/39-blocking-cache-warmup.md)
-**Description**: Block SandVoice startup until `cache_auto_refresh` warmup completes (or times out), so the first user query hits cache unless warmup times out. Configurable timeout (`cache_warmup_timeout_s`, default 15s) and per-plugin retries (`cache_warmup_retries`, default 3). Prints a startup message while waiting.
 
 ### Future Enhancements
 **Document**: [backlog/FUTURE.md](./backlog/FUTURE.md)
