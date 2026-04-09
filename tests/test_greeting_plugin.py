@@ -43,6 +43,38 @@ class TestGreetingCacheKey(unittest.TestCase):
         for hour in range(0, 5):
             self.assertEqual(self._key_for_hour(hour), "greeting:night")
 
+    def test_valid_timezone_used_when_available(self):
+        """_cache_key resolves the bucket using config.timezone when it is a valid IANA zone."""
+        from plugins.greeting.plugin import _cache_key
+        try:
+            from zoneinfo import ZoneInfo
+        except ImportError:
+            self.skipTest("zoneinfo not available")
+
+        config = MagicMock()
+        config.timezone = "UTC"
+        # Just verify no exception is raised and the result is a valid bucket.
+        result = _cache_key({}, config)
+        self.assertIn(result, [
+            "greeting:morning", "greeting:afternoon",
+            "greeting:evening", "greeting:night",
+        ])
+
+    def test_invalid_timezone_falls_back_to_local(self):
+        """_cache_key logs a warning and falls back to local time for an unresolvable TZ."""
+        from plugins.greeting.plugin import _cache_key
+
+        config = MagicMock()
+        config.timezone = "INVALID/TIMEZONE"
+
+        with self.assertLogs("plugins.greeting.plugin", level="WARNING"):
+            result = _cache_key({}, config)
+
+        self.assertIn(result, [
+            "greeting:morning", "greeting:afternoon",
+            "greeting:evening", "greeting:night",
+        ])
+
 
 class TestGreetingCacheHit(unittest.TestCase):
     def test_cache_hit_returns_cached_text_without_llm(self):
