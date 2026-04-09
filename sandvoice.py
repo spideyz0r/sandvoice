@@ -540,14 +540,14 @@ class SandVoice:
                     )
 
         if warmup_threads and timeout > 0:
-            print(f"Warming up cache ({', '.join(warmup_plugin_names)})...")
+            print(f"Warming up cache ({', '.join(warmup_plugin_names)})...", flush=True)
             deadline = time.monotonic() + timeout
             for t in warmup_threads:
                 remaining = deadline - time.monotonic()
                 if remaining <= 0:
                     break
                 t.join(timeout=remaining)
-            print("Ready.")
+            print("Ready.", flush=True)
 
     def _scheduler_speak(self, text):
         if not text or not self.config.bot_voice:

@@ -1526,17 +1526,23 @@ class TestWarmupCache(unittest.TestCase):
             _time.sleep(0.01)  # longer than the timeout budget
             join_calls.append(timeout)
 
-        mock_thread = MagicMock()
-        mock_thread.join.side_effect = slow_join
+        created_threads = []
+
+        def make_mock_thread(*args, **kwargs):
+            t = MagicMock()
+            t.join.side_effect = slow_join
+            created_threads.append(t)
+            return t
 
         with patch("sandvoice._derive_cache_key", return_value="news:key"), \
-             patch("sandvoice.threading.Thread", return_value=mock_thread):
+             patch("sandvoice.threading.Thread", side_effect=make_mock_thread):
             sv._warmup_cache()
 
         # At least one join was attempted before the timeout budget was exhausted.
         self.assertGreaterEqual(len(join_calls), 1)
-        # Multiple warmup threads were started; not all necessarily finished.
-        self.assertGreaterEqual(mock_thread.start.call_count, 2)
+        # Two distinct thread objects were created and each started once.
+        self.assertEqual(len(created_threads), 2)
+        self.assertTrue(all(t.start.call_count == 1 for t in created_threads))
 
     def test_warmup_timeout_zero_fires_and_forgets(self):
         """When cache_warmup_timeout_s is 0, threads are started but never joined."""
