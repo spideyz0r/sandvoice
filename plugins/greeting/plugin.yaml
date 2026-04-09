@@ -1,0 +1,6 @@
+name: greeting
+version: 1.0.0
+
+route_description: >
+  The user is greeting the bot. For example: "Hello", "Hi", "Good morning",
+  "Good afternoon", "Good evening", "Bom dia", "Boa tarde", "Boa noite", "Hey".
