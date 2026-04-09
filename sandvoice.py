@@ -443,48 +443,47 @@ class SandVoice:
                     "because cache_warmup_retries=%d",
                     plugin_name, retries,
                 )
-                continue
-
-            def _run_warmup(q=query, r=dict(route), pname=plugin_name,
-                            max_retries=retries, delay=retry_delay):
-                attempt = 0
-                while True:
-                    try:
-                        logger.debug(
-                            "cache_auto_refresh warmup: invoking %r (attempt %d)",
-                            pname, attempt + 1,
-                        )
-                        thread_ai = AI(self.config)
-                        resolved = resolve_plugin_route_name(r['route'], self.plugins)
-                        r['route'] = resolved
-                        ctx = _SchedulerContext(self, thread_ai)
-                        self.plugins[resolved](q, r, ctx)
-                        return
-                    except Exception as e:
-                        attempt += 1
-                        if attempt >= max_retries:
-                            logger.warning(
-                                "cache_auto_refresh warmup for plugin %r failed after "
-                                "%d attempt(s): %s",
-                                pname, attempt, e,
+            else:
+                def _run_warmup(q=query, r=dict(route), pname=plugin_name,
+                                max_retries=retries, delay=retry_delay):
+                    attempt = 0
+                    while True:
+                        try:
+                            logger.debug(
+                                "cache_auto_refresh warmup: invoking %r (attempt %d)",
+                                pname, attempt + 1,
                             )
+                            thread_ai = AI(self.config)
+                            resolved = resolve_plugin_route_name(r['route'], self.plugins)
+                            r['route'] = resolved
+                            ctx = _SchedulerContext(self, thread_ai)
+                            self.plugins[resolved](q, r, ctx)
                             return
-                        logger.debug(
-                            "cache_auto_refresh warmup for plugin %r: attempt %d failed "
-                            "(%s); retrying in %.1fs",
-                            pname, attempt, e, delay,
-                        )
-                        time.sleep(delay)
+                        except Exception as e:
+                            attempt += 1
+                            if attempt >= max_retries:
+                                logger.warning(
+                                    "cache_auto_refresh warmup for plugin %r failed after "
+                                    "%d attempt(s): %s",
+                                    pname, attempt, e,
+                                )
+                                return
+                            logger.debug(
+                                "cache_auto_refresh warmup for plugin %r: attempt %d failed "
+                                "(%s); retrying in %.1fs",
+                                pname, attempt, e, delay,
+                            )
+                            time.sleep(delay)
 
-            t = threading.Thread(
-                target=_run_warmup,
-                name=f"cache-warmup-{plugin_name}-{i}",
-                daemon=True,
-            )
-            warmup_threads.append(t)
-            warmup_plugin_names.append(plugin_name_raw)
-            t.start()
-            logger.info("cache_auto_refresh: warmup started for plugin %r", plugin_name_raw)
+                t = threading.Thread(
+                    target=_run_warmup,
+                    name=f"cache-warmup-{plugin_name}-{i}",
+                    daemon=True,
+                )
+                warmup_threads.append(t)
+                warmup_plugin_names.append(plugin_name_raw)
+                t.start()
+                logger.info("cache_auto_refresh: warmup started for plugin %r", plugin_name_raw)
 
             # Register a periodic scheduler task if the scheduler is running.
             # Tasks are re-registered every startup (config-driven, not tasks.yaml).

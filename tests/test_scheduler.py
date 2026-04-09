@@ -1603,17 +1603,16 @@ class TestWarmupCache(unittest.TestCase):
             call_count.append(1)
             raise RuntimeError("always fails")
 
-        sv = self._make_stub(warmup_timeout=0, warmup_retries=3, warmup_retry_delay=0.0)
+        # Use a positive timeout so _warmup_cache() joins the thread before
+        # returning, guaranteeing the WARNING is captured inside assertLogs.
+        sv = self._make_stub(warmup_timeout=5, warmup_retries=3, warmup_retry_delay=0.0)
         sv.plugins["news"] = always_failing_plugin
         sv.config.cache_auto_refresh = [
             {"plugin": "news", "interval_s": 7200, "ttl_s": 7200, "max_stale_s": 10800, "query": "news"},
         ]
 
-        threads = []
-
         def real_thread(target, name, daemon):
             t = _RealThread(target=target, name=name, daemon=daemon)
-            threads.append(t)
             return t
 
         with patch("sandvoice._derive_cache_key", return_value="news:key"), \
@@ -1623,9 +1622,6 @@ class TestWarmupCache(unittest.TestCase):
              patch("sandvoice.threading.Thread", side_effect=real_thread), \
              self.assertLogs("sandvoice", level="WARNING") as cm:
             sv._warmup_cache()
-
-        for t in threads:
-            t.join(timeout=5)
 
         self.assertEqual(len(call_count), 3)
         self.assertTrue(any("failed after" in line for line in cm.output))
