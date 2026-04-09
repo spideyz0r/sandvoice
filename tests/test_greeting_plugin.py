@@ -10,18 +10,12 @@ def _make_s(cache=None):
     return s
 
 
-def _make_cache_entry(value, fresh=True):
-    entry = MagicMock()
-    entry.value = value
-    return entry, fresh
-
-
 class TestGreetingCacheKey(unittest.TestCase):
     def _key_for_hour(self, hour):
         from plugins.greeting.plugin import _cache_key
         with patch("plugins.greeting.plugin.datetime") as mock_dt:
             mock_dt.now.return_value.hour = hour
-            return _cache_key({}, MagicMock())
+            return _cache_key(MagicMock())
 
     def test_morning_bucket(self):
         for hour in range(5, 12):
@@ -54,7 +48,7 @@ class TestGreetingCacheKey(unittest.TestCase):
         config = MagicMock()
         config.timezone = "UTC"
         # Just verify no exception is raised and the result is a valid bucket.
-        result = _cache_key({}, config)
+        result = _cache_key(config)
         self.assertIn(result, [
             "greeting:morning", "greeting:afternoon",
             "greeting:evening", "greeting:night",
@@ -63,12 +57,16 @@ class TestGreetingCacheKey(unittest.TestCase):
     def test_invalid_timezone_falls_back_to_local(self):
         """_cache_key logs a warning and falls back to local time for an unresolvable TZ."""
         from plugins.greeting.plugin import _cache_key
+        try:
+            from zoneinfo import ZoneInfo  # noqa: F401
+        except ImportError:
+            self.skipTest("zoneinfo not available")
 
         config = MagicMock()
         config.timezone = "INVALID/TIMEZONE"
 
         with self.assertLogs("plugins.greeting.plugin", level="WARNING"):
-            result = _cache_key({}, config)
+            result = _cache_key(config)
 
         self.assertIn(result, [
             "greeting:morning", "greeting:afternoon",

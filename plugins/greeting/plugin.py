@@ -26,7 +26,7 @@ def _resolve_tz(config):
         return None
 
 
-def _cache_key(route, config):
+def _cache_key(config=None):
     tz = _resolve_tz(config)
     hour = datetime.now(tz).hour
     if 5 <= hour < 12:
@@ -43,7 +43,7 @@ def _cache_key(route, config):
 def process(user_input, route, s):
     refresh_only = route.get('refresh_only', False)
     cache = getattr(s, 'cache', None)
-    cache_key = _cache_key(route, s.config)
+    cache_key = _cache_key(s.config)
     ttl_s = route.get('ttl_s', _DEFAULT_TTL_S)
     max_stale_s = route.get('max_stale_s', _DEFAULT_MAX_STALE_S)
 
