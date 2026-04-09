@@ -13,9 +13,11 @@ def _make_s(cache=None):
 class TestGreetingCacheKey(unittest.TestCase):
     def _key_for_hour(self, hour):
         from plugins.greeting.plugin import _cache_key
+        config = MagicMock()
+        config.timezone = None
         with patch("plugins.greeting.plugin.datetime") as mock_dt:
             mock_dt.now.return_value.hour = hour
-            return _cache_key(MagicMock())
+            return _cache_key(config)
 
     def test_morning_bucket(self):
         for hour in range(5, 12):

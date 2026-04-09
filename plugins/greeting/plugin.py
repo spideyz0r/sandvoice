@@ -17,7 +17,7 @@ _DEFAULT_MAX_STALE_S = 5400
 def _resolve_tz(config):
     """Return a ZoneInfo for config.timezone, or None to fall back to local time."""
     tz_name = getattr(config, 'timezone', None)
-    if not tz_name or ZoneInfo is None:
+    if not isinstance(tz_name, str) or not tz_name.strip() or ZoneInfo is None:
         return None
     try:
         return ZoneInfo(tz_name)

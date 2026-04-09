@@ -53,11 +53,11 @@ All greetings within the same time bucket share one cache entry.
 
 ## Behaviour
 
-- **Cache hit (fresh)**: return stored text immediately, no LLM call
-- **Cache miss / stale**: run full pipeline (weather lookup + greeting LLM), store result
+- **Cache hit (fresh or stale-but-acceptable)**: if the cached entry is within `max_stale_s`, return stored text immediately — no LLM call
+- **Cache miss / too stale to serve**: run full pipeline (weather lookup + greeting LLM), store result
 - **`refresh_only=True`**: run full pipeline, store result, return `None` (no TTS)
 
-The weather comment inside the greeting may be up to `ttl_s` seconds stale — accepted
+The weather comment inside the greeting may be up to `max_stale_s` seconds stale — accepted
 trade-off for instant response.
 
 ---
