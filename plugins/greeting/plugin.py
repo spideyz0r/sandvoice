@@ -58,27 +58,32 @@ def process(user_input, route, s):
             logger.warning("Greeting cache read failed for key=%r: %s", cache_key, e)
 
     # Live generation: fetch weather then generate greeting
-    manifests = getattr(s, '_plugin_manifests', [])
-    extra_routes = build_extra_routes_text(manifests, location=s.config.location)
-    weather_route = s.ai.define_route("What's the weather?", extra_routes=extra_routes)
-    weather_response = s.route_message("What's the weather?", weather_route)
+    try:
+        manifests = getattr(s, '_plugin_manifests', [])
+        extra_routes = build_extra_routes_text(manifests, location=s.config.location)
+        weather_route = s.ai.define_route("What's the weather?", extra_routes=extra_routes)
+        weather_response = s.route_message("What's the weather?", weather_route)
 
-    extra_system = f"""
+        extra_system = f"""
     Greet the user! You are very friendly.
     Depending on the current date and time use good evening/afternoon/morning match the greeting with the time.
     Casually make a friendly and short comment on the weather. Weather info to consider the answer: {weather_response}
     Considering the current day and time, make a fun fact comment about today or this month.
     """
-    response_text = s.ai.generate_response(user_input, extra_system).content
+        response_text = s.ai.generate_response(user_input, extra_system).content
 
-    if cache is not None:
-        try:
-            cache.set(cache_key, response_text, ttl_s=ttl_s, max_stale_s=max_stale_s)
-            logger.debug("Greeting cache updated: key=%r", cache_key)
-        except Exception as e:
-            logger.warning("Greeting cache write failed for key=%r: %s", cache_key, e)
+        if cache is not None:
+            try:
+                cache.set(cache_key, response_text, ttl_s=ttl_s, max_stale_s=max_stale_s)
+                logger.debug("Greeting cache updated: key=%r", cache_key)
+            except Exception as e:
+                logger.warning("Greeting cache write failed for key=%r: %s", cache_key, e)
 
-    if refresh_only:
-        return None
-
-    return response_text
+        if refresh_only:
+            return None
+        return response_text
+    except Exception as e:
+        logger.error("Greeting plugin error: %s", e)
+        if refresh_only:
+            return None
+        return "Unable to greet you right now. Please try again."

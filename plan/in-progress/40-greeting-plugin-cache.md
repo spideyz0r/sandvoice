@@ -33,8 +33,9 @@ request within the same time bucket.
 ## Cache Key
 
 ```python
-def _cache_key(route, config):
-    hour = datetime.now().hour
+def _cache_key(config=None):
+    tz = _resolve_tz(config)  # uses config.timezone via ZoneInfo; falls back to local time
+    hour = datetime.now(tz).hour
     if 5 <= hour < 12:
         bucket = "morning"
     elif 12 <= hour < 18:
@@ -89,7 +90,7 @@ route_description: "The user is greeting the bot. For example: 'Hello', 'Hi', 'G
 ### `plugins/greeting/plugin.py`
 
 - Move existing logic from `plugins/greeting.py`
-- Add `_cache_key(route, config)` using time-of-day bucket
+- Add `_cache_key(config=None)` using time-of-day bucket (timezone-aware via `config.timezone`)
 - Wrap `process()` with cache read (hit → return) / write (miss → store)
 - Add `refresh_only` support: skip return if `route.get('refresh_only')`
 - Remove `greeting` entry from `routes.yaml` (manifest self-registers it)

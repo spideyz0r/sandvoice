@@ -217,6 +217,41 @@ class TestGreetingCacheFailure(unittest.TestCase):
         self.assertEqual(result, "Boa tarde!")
 
 
+class TestGreetingLiveGenerationFailure(unittest.TestCase):
+    def test_llm_error_returns_friendly_message(self):
+        """When the LLM call raises, process() returns a friendly string and does not re-raise."""
+        from plugins.greeting.plugin import process
+
+        s = _make_s(cache=None)
+        s.ai.define_route.return_value = {"route": "weather"}
+        s.route_message.return_value = "12°C"
+        s.ai.generate_response.side_effect = Exception("API timeout")
+
+        with patch("plugins.greeting.plugin._cache_key", return_value="greeting:morning"), \
+             patch("plugins.greeting.plugin.build_extra_routes_text", return_value=""), \
+             self.assertLogs("plugins.greeting.plugin", level="ERROR"):
+            result = process("bom dia", {}, s)
+
+        self.assertIsInstance(result, str)
+        self.assertNotEqual(result, "")
+
+    def test_llm_error_with_refresh_only_returns_none(self):
+        """When the LLM call raises during a background refresh, process() returns None."""
+        from plugins.greeting.plugin import process
+
+        s = _make_s(cache=None)
+        s.ai.define_route.return_value = {"route": "weather"}
+        s.route_message.return_value = "12°C"
+        s.ai.generate_response.side_effect = Exception("API timeout")
+
+        with patch("plugins.greeting.plugin._cache_key", return_value="greeting:morning"), \
+             patch("plugins.greeting.plugin.build_extra_routes_text", return_value=""), \
+             self.assertLogs("plugins.greeting.plugin", level="ERROR"):
+            result = process("bom dia", {"refresh_only": True}, s)
+
+        self.assertIsNone(result)
+
+
 class TestGreetingNoCacheConfigured(unittest.TestCase):
     def test_no_cache_still_generates_response(self):
         from plugins.greeting.plugin import process
