@@ -41,7 +41,7 @@ def _cache_key(config=None):
 
 
 def process(user_input, route, s):
-    refresh_only = route.get('refresh_only', False)
+    refresh_only = route.get('refresh_only') is True
     cache = getattr(s, 'cache', None)
     cache_key = _cache_key(s.config)
     ttl_s = route.get('ttl_s', _DEFAULT_TTL_S)
@@ -83,7 +83,7 @@ def process(user_input, route, s):
             return None
         return response_text
     except Exception as e:
-        logger.error("Greeting plugin error: %s", e)
+        logger.error("Greeting plugin error: %s", e, exc_info=logger.isEnabledFor(logging.DEBUG))
         if refresh_only:
             return None
         return "Unable to greet you right now. Please try again."

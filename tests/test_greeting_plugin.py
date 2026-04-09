@@ -40,7 +40,7 @@ class TestGreetingCacheKey(unittest.TestCase):
             self.assertEqual(self._key_for_hour(hour), "greeting:night")
 
     def test_valid_timezone_used_when_available(self):
-        """_cache_key resolves the bucket using config.timezone when it is a valid IANA zone."""
+        """_cache_key calls datetime.now() with the ZoneInfo when config.timezone is valid."""
         from plugins.greeting.plugin import _cache_key
         try:
             from zoneinfo import ZoneInfo
@@ -49,12 +49,13 @@ class TestGreetingCacheKey(unittest.TestCase):
 
         config = MagicMock()
         config.timezone = "UTC"
-        # Just verify no exception is raised and the result is a valid bucket.
-        result = _cache_key(config)
-        self.assertIn(result, [
-            "greeting:morning", "greeting:afternoon",
-            "greeting:evening", "greeting:night",
-        ])
+
+        with patch("plugins.greeting.plugin.datetime") as mock_dt:
+            mock_dt.now.return_value.hour = 9
+            result = _cache_key(config)
+
+        self.assertEqual(result, "greeting:morning")
+        mock_dt.now.assert_called_once_with(ZoneInfo("UTC"))
 
     def test_invalid_timezone_falls_back_to_local(self):
         """_cache_key logs a warning and falls back to local time for an unresolvable TZ."""
@@ -178,6 +179,7 @@ class TestGreetingRefreshOnly(unittest.TestCase):
         self.assertIsNone(result)
         # LLM was called despite cache having an entry (refresh_only bypasses read)
         s.ai.generate_response.assert_called_once()
+        cache.get.assert_not_called()
 
 
 class TestGreetingCacheFailure(unittest.TestCase):
