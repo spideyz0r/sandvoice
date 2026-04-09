@@ -132,6 +132,11 @@ class Config:
             "cache_weather_max_stale_s": 21600,  # 6 hours — hard expiry
             "cache_auto_refresh": [],
 
+            # Blocking Cache Warmup (Plan 39)
+            "cache_warmup_timeout_s": 15,   # max seconds to wait for all warmup threads (0 = fire-and-forget)
+            "cache_warmup_retries": 3,       # max attempts per plugin before giving up
+            "cache_warmup_retry_delay_s": 2, # seconds between retry attempts
+
             # Task Scheduler (Plan 21)
             "scheduler_enabled": "disabled",
             "scheduler_poll_interval": 30,
@@ -278,6 +283,21 @@ class Config:
             )
             self.cache_weather_max_stale_s = self.cache_weather_ttl_s
         self.cache_auto_refresh = self._parse_cache_auto_refresh(self.get("cache_auto_refresh"))
+        _timeout = _parse_exact_int(self.get("cache_warmup_timeout_s"))
+        if isinstance(_timeout, int) and not isinstance(_timeout, bool):
+            self.cache_warmup_timeout_s = max(0, _timeout)
+        else:
+            self.cache_warmup_timeout_s = self.defaults["cache_warmup_timeout_s"]
+        _retries = _parse_exact_int(self.get("cache_warmup_retries"))
+        if isinstance(_retries, int) and not isinstance(_retries, bool):
+            self.cache_warmup_retries = max(0, _retries)
+        else:
+            self.cache_warmup_retries = self.defaults["cache_warmup_retries"]
+        _delay = _parse_exact_float(self.get("cache_warmup_retry_delay_s"))
+        if isinstance(_delay, (int, float)) and not isinstance(_delay, bool):
+            self.cache_warmup_retry_delay_s = max(0.0, float(_delay))
+        else:
+            self.cache_warmup_retry_delay_s = self.defaults["cache_warmup_retry_delay_s"]
 
         # Voice UX
         voice_ack_earcon = self.get("voice_ack_earcon")

@@ -392,6 +392,10 @@ class SandVoice:
             )
             return
 
+        warmup_threads = []
+        warmup_plugin_names = []
+        timeout = self.config.cache_warmup_timeout_s
+
         for i, entry in enumerate(entries):
             plugin_name_raw = str(entry.get('plugin', '')).strip()
             plugin_name = normalize_plugin_name(plugin_name_raw)
@@ -430,25 +434,56 @@ class SandVoice:
             # Each thread gets its own AI instance to avoid conversation-history
             # races: AI.generate_response() mutates self.conversation_history and
             # sharing a single instance across concurrent threads is not thread-safe.
-            def _run_warmup(q=query, r=dict(route), pname=plugin_name):
-                try:
-                    logger.debug("cache_auto_refresh warmup: invoking %r", pname)
-                    thread_ai = AI(self.config)
-                    resolved = resolve_plugin_route_name(r['route'], self.plugins)
-                    r['route'] = resolved
-                    ctx = _SchedulerContext(self, thread_ai)
-                    self.plugins[resolved](q, r, ctx)
-                except Exception as e:
-                    logger.warning(
-                        "cache_auto_refresh warmup error for plugin %r: %s", pname, e
-                    )
+            retries = self.config.cache_warmup_retries
+            retry_delay = self.config.cache_warmup_retry_delay_s
 
-            threading.Thread(
-                target=_run_warmup,
-                name=f"cache-warmup-{plugin_name}-{i}",
-                daemon=True,
-            ).start()
-            logger.info("cache_auto_refresh: warmup started for plugin %r", plugin_name_raw)
+            if retries <= 0:
+                logger.debug(
+                    "cache_auto_refresh warmup: skipping immediate warmup for %r "
+                    "because cache_warmup_retries=%d",
+                    plugin_name, retries,
+                )
+            else:
+                def _run_warmup(q=query, r=dict(route), pname=plugin_name,
+                                max_retries=retries, delay=retry_delay):
+                    attempt = 0
+                    while True:
+                        try:
+                            logger.debug(
+                                "cache_auto_refresh warmup: invoking %r (attempt %d)",
+                                pname, attempt + 1,
+                            )
+                            thread_ai = AI(self.config)
+                            resolved = resolve_plugin_route_name(r['route'], self.plugins)
+                            r['route'] = resolved
+                            ctx = _SchedulerContext(self, thread_ai)
+                            self.plugins[resolved](q, r, ctx)
+                            return
+                        except Exception as e:
+                            attempt += 1
+                            if attempt >= max_retries:
+                                logger.warning(
+                                    "cache_auto_refresh warmup for plugin %r failed after "
+                                    "%d attempt(s): %s",
+                                    pname, attempt, e,
+                                )
+                                return
+                            logger.debug(
+                                "cache_auto_refresh warmup for plugin %r: attempt %d failed "
+                                "(%s); retrying in %.1fs",
+                                pname, attempt, e, delay,
+                            )
+                            time.sleep(delay)
+
+                t = threading.Thread(
+                    target=_run_warmup,
+                    name=f"cache-warmup-{plugin_name}-{i}",
+                    daemon=True,
+                )
+                warmup_threads.append(t)
+                warmup_plugin_names.append(plugin_name_raw)
+                t.start()
+                logger.info("cache_auto_refresh: warmup started for plugin %r", plugin_name_raw)
 
             # Register a periodic scheduler task if the scheduler is running.
             # Tasks are re-registered every startup (config-driven, not tasks.yaml).
@@ -503,6 +538,16 @@ class SandVoice:
                     logger.warning(
                         "cache_auto_refresh: failed to register task %r: %s", task_name, e
                     )
+
+        if warmup_threads and timeout > 0:
+            print(f"Warming up cache ({', '.join(warmup_plugin_names)})...", flush=True)
+            deadline = time.monotonic() + timeout
+            for t in warmup_threads:
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
+                    break
+                t.join(timeout=remaining)
+            print("Ready.", flush=True)
 
     def _scheduler_speak(self, text):
         if not text or not self.config.bot_voice:

@@ -368,11 +368,19 @@ cache_auto_refresh:
     interval_s: 10800       # refresh every 3 hours
 ```
 
-On startup SandVoice fetches each listed plugin immediately in a background thread (no audio played). When the scheduler is also enabled, a background task named `cache_refresh:<cache_key>` is auto-registered to repeat the refresh every `interval_s` seconds — also silent.
+On startup SandVoice fetches each listed plugin immediately in parallel background threads and waits for all of them to finish (up to `cache_warmup_timeout_s` seconds) before becoming ready. A startup message is printed while waiting and `"Ready."` is printed when done. Any thread that does not finish in time keeps running in the background. When the scheduler is also enabled, a background task named `cache_refresh:<cache_key>` is auto-registered to repeat the refresh every `interval_s` seconds — also silent.
 
 `ttl_s` and `max_stale_s` are supported by all three caching plugins (`weather`, `hacker-news`, `news`) and control the freshness of the entry written during the startup warmup. Both default to `interval_s` and `int(interval_s * 1.5)` respectively if omitted. Periodic scheduler-driven refreshes use the plugin's built-in defaults (the scheduler dispatch does not forward them).
 
 For the `news` plugin, `rss_url` overrides the `rss_news` config value and is used as the cache key discriminator — two entries with different `rss_url` values are cached independently. Entries with `rss_url`, `location`, or `unit` overrides only run the startup warmup; no periodic scheduler task is registered for them (since the scheduler cannot forward these fields to the plugin).
+
+#### Warmup tuning
+
+| Key | Default | Description |
+|---|---|---|
+| `cache_warmup_timeout_s` | `15` | Max seconds to wait for all warmup threads. Set to `0` for fire-and-forget (old behaviour). |
+| `cache_warmup_retries` | `3` | Max attempts per plugin before giving up on warmup. |
+| `cache_warmup_retry_delay_s` | `2` | Seconds between retry attempts. |
 
 > **Note**: `cache_auto_refresh` requires `cache_enabled: enabled`. If the scheduler is disabled, the startup warmup still runs but no periodic tasks are registered.
 

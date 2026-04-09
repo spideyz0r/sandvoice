@@ -1132,5 +1132,101 @@ class TestCacheAutoRefreshConfig(_TempHomeBase):
         self.assertEqual(config.cache_auto_refresh[0]["max_stale_s"], int(7200 * 1.5))
 
 
+class TestCacheWarmupConfig(_TempHomeBase):
+    """cache_warmup_timeout_s, cache_warmup_retries, cache_warmup_retry_delay_s defaults and validation."""
+
+    def test_defaults(self):
+        self.write_config({})
+        config = Config()
+        self.assertEqual(config.cache_warmup_timeout_s, 15)
+        self.assertEqual(config.cache_warmup_retries, 3)
+        self.assertAlmostEqual(config.cache_warmup_retry_delay_s, 2.0)
+
+    def test_custom_timeout(self):
+        self.write_config({"cache_warmup_timeout_s": 30})
+        config = Config()
+        self.assertEqual(config.cache_warmup_timeout_s, 30)
+
+    def test_timeout_zero_allowed(self):
+        self.write_config({"cache_warmup_timeout_s": 0})
+        config = Config()
+        self.assertEqual(config.cache_warmup_timeout_s, 0)
+
+    def test_negative_timeout_clamped_to_zero(self):
+        self.write_config({"cache_warmup_timeout_s": -5})
+        config = Config()
+        self.assertEqual(config.cache_warmup_timeout_s, 0)
+
+    def test_invalid_timeout_falls_back_to_default(self):
+        self.write_config({"cache_warmup_timeout_s": "bad"})
+        config = Config()
+        self.assertEqual(config.cache_warmup_timeout_s, 15)
+
+    def test_custom_retries(self):
+        self.write_config({"cache_warmup_retries": 5})
+        config = Config()
+        self.assertEqual(config.cache_warmup_retries, 5)
+
+    def test_retries_zero_allowed(self):
+        self.write_config({"cache_warmup_retries": 0})
+        config = Config()
+        self.assertEqual(config.cache_warmup_retries, 0)
+
+    def test_negative_retries_clamped_to_zero(self):
+        self.write_config({"cache_warmup_retries": -1})
+        config = Config()
+        self.assertEqual(config.cache_warmup_retries, 0)
+
+    def test_invalid_retries_falls_back_to_default(self):
+        self.write_config({"cache_warmup_retries": "bad"})
+        config = Config()
+        self.assertEqual(config.cache_warmup_retries, 3)
+
+    def test_custom_retry_delay(self):
+        self.write_config({"cache_warmup_retry_delay_s": 5.0})
+        config = Config()
+        self.assertAlmostEqual(config.cache_warmup_retry_delay_s, 5.0)
+
+    def test_retry_delay_zero_allowed(self):
+        self.write_config({"cache_warmup_retry_delay_s": 0})
+        config = Config()
+        self.assertAlmostEqual(config.cache_warmup_retry_delay_s, 0.0)
+
+    def test_negative_retry_delay_clamped_to_zero(self):
+        self.write_config({"cache_warmup_retry_delay_s": -1})
+        config = Config()
+        self.assertAlmostEqual(config.cache_warmup_retry_delay_s, 0.0)
+
+    def test_invalid_retry_delay_falls_back_to_default(self):
+        self.write_config({"cache_warmup_retry_delay_s": "bad"})
+        config = Config()
+        self.assertAlmostEqual(config.cache_warmup_retry_delay_s, 2.0)
+
+    def test_bool_timeout_falls_back_to_default(self):
+        self.write_config({"cache_warmup_timeout_s": True})
+        config = Config()
+        self.assertEqual(config.cache_warmup_timeout_s, 15)
+
+    def test_bool_retries_falls_back_to_default(self):
+        self.write_config({"cache_warmup_retries": True})
+        config = Config()
+        self.assertEqual(config.cache_warmup_retries, 3)
+
+    def test_bool_retry_delay_falls_back_to_default(self):
+        self.write_config({"cache_warmup_retry_delay_s": True})
+        config = Config()
+        self.assertAlmostEqual(config.cache_warmup_retry_delay_s, 2.0)
+
+    def test_nan_retry_delay_falls_back_to_default(self):
+        self.write_config({"cache_warmup_retry_delay_s": ".nan"})
+        config = Config()
+        self.assertAlmostEqual(config.cache_warmup_retry_delay_s, 2.0)
+
+    def test_inf_retry_delay_falls_back_to_default(self):
+        self.write_config({"cache_warmup_retry_delay_s": ".inf"})
+        config = Config()
+        self.assertAlmostEqual(config.cache_warmup_retry_delay_s, 2.0)
+
+
 if __name__ == '__main__':
     unittest.main()
