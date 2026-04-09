@@ -1535,7 +1535,9 @@ class TestWarmupCache(unittest.TestCase):
              patch("sandvoice.threading.Thread", return_value=mock_thread):
             sv._warmup_cache()
 
-        # At least one thread was attempted; not all necessarily finished
+        # At least one join was attempted before the timeout budget was exhausted.
+        self.assertGreaterEqual(len(join_calls), 1)
+        # Multiple warmup threads were started; not all necessarily finished.
         self.assertGreaterEqual(mock_thread.start.call_count, 2)
 
     def test_warmup_timeout_zero_fires_and_forgets(self):

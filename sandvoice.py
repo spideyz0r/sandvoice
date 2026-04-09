@@ -438,7 +438,7 @@ class SandVoice:
             retry_delay = self.config.cache_warmup_retry_delay_s
 
             def _run_warmup(q=query, r=dict(route), pname=plugin_name,
-                            max_retries=retries, delay=retry_delay):
+                            max_retries=max(1, retries), delay=retry_delay):
                 attempt = 0
                 while True:
                     try:

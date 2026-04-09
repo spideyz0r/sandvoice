@@ -145,7 +145,7 @@ plan/
 
 ### Priority 39: Blocking Cache Warmup with Timeout and Retries
 **Document**: [in-progress/39-blocking-cache-warmup.md](./in-progress/39-blocking-cache-warmup.md)
-**Status**: Implementation starting
+**Status**: In progress
 **Description**: Block SandVoice startup until `cache_auto_refresh` warmup completes (or times out), so the first user query hits cache unless warmup times out. Configurable timeout (`cache_warmup_timeout_s`, default 15s) and per-plugin retries (`cache_warmup_retries`, default 3). Prints a startup message while waiting.
 
 ### Priority 4: Wake Word Mode

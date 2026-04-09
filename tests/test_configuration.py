@@ -1202,6 +1202,31 @@ class TestCacheWarmupConfig(_TempHomeBase):
         config = Config()
         self.assertAlmostEqual(config.cache_warmup_retry_delay_s, 2.0)
 
+    def test_bool_timeout_falls_back_to_default(self):
+        self.write_config({"cache_warmup_timeout_s": True})
+        config = Config()
+        self.assertEqual(config.cache_warmup_timeout_s, 15)
+
+    def test_bool_retries_falls_back_to_default(self):
+        self.write_config({"cache_warmup_retries": True})
+        config = Config()
+        self.assertEqual(config.cache_warmup_retries, 3)
+
+    def test_bool_retry_delay_falls_back_to_default(self):
+        self.write_config({"cache_warmup_retry_delay_s": True})
+        config = Config()
+        self.assertAlmostEqual(config.cache_warmup_retry_delay_s, 2.0)
+
+    def test_nan_retry_delay_falls_back_to_default(self):
+        self.write_config({"cache_warmup_retry_delay_s": ".nan"})
+        config = Config()
+        self.assertAlmostEqual(config.cache_warmup_retry_delay_s, 2.0)
+
+    def test_inf_retry_delay_falls_back_to_default(self):
+        self.write_config({"cache_warmup_retry_delay_s": ".inf"})
+        config = Config()
+        self.assertAlmostEqual(config.cache_warmup_retry_delay_s, 2.0)
+
 
 if __name__ == '__main__':
     unittest.main()
