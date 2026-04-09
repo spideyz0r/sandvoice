@@ -437,8 +437,16 @@ class SandVoice:
             retries = self.config.cache_warmup_retries
             retry_delay = self.config.cache_warmup_retry_delay_s
 
+            if retries <= 0:
+                logger.debug(
+                    "cache_auto_refresh warmup: skipping immediate warmup for %r "
+                    "because cache_warmup_retries=%d",
+                    plugin_name, retries,
+                )
+                continue
+
             def _run_warmup(q=query, r=dict(route), pname=plugin_name,
-                            max_retries=max(1, retries), delay=retry_delay):
+                            max_retries=retries, delay=retry_delay):
                 attempt = 0
                 while True:
                     try:

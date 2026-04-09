@@ -1493,8 +1493,6 @@ class TestWarmupCache(unittest.TestCase):
 
     def test_warmup_blocks_until_threads_finish(self):
         """When timeout > 0, _warmup_cache() must join all warmup threads."""
-        import threading as _threading
-
         sv = self._make_stub(warmup_timeout=5)
         sv.plugins["news"] = MagicMock(return_value=None)
         sv.config.cache_auto_refresh = [
