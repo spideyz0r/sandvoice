@@ -191,6 +191,18 @@ plan/
 **Description**: Pass the last N conversation turns to `define_route` so the routing LLM can correctly resolve follow-up utterances. Fixes misrouting of clarifications (e.g. "I mean the FIFA World Cup" after a realtime_websearch query routing to `news`).
 
 
+### Priority 41: Provider Interface ABCs
+**Document**: [backlog/41-provider-abcs.md](./backlog/41-provider-abcs.md)
+**Description**: Define `LLMProvider`, `TTSProvider`, and `STTProvider` abstract base classes in `common/providers/base.py`. Purely additive — no existing code changed. Foundation for Plans 42 and 43.
+
+### Priority 42: OpenAI Provider Implementations
+**Document**: [backlog/42-openai-provider-implementations.md](./backlog/42-openai-provider-implementations.md)
+**Description**: Implement `OpenAILLMProvider`, `OpenAITTSProvider`, and `OpenAISTTProvider` in `common/providers/`. Logic moved from `AI` class; `AI` is unchanged in this plan. Requires Plan 41.
+
+### Priority 43: AI Facade Migration
+**Document**: [backlog/43-ai-facade-migration.md](./backlog/43-ai-facade-migration.md)
+**Description**: Refactor `AI` into a thin facade: owns `conversation_history`, delegates capabilities to provider instances, and exposes `AI.from_config(config)` factory. Adds `llm_provider`, `tts_provider`, `stt_provider` config keys (all default to `openai`). All call sites unchanged. Requires Plans 41 and 42.
+
 ### Future Enhancements
 **Document**: [backlog/FUTURE.md](./backlog/FUTURE.md)
 **Description**: Long-term feature ideas including API Cost Management, Conversation History Management, Code Deduplication, Timers & Reminders, Music Control, Smart Home Integration, Calendar Integration, Todo List Management, Multi-User Support, and Conversation Memory.
