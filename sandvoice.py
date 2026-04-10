@@ -132,6 +132,9 @@ class SandVoice:
         self._scheduler_ai = None  # set by _init_scheduler() on success; None when disabled
         self.cache = self._init_cache()
         self.scheduler = self._init_scheduler()
+        self._warmup_threads = []
+        self._warmup_timeout = 0
+        self._warmup_plugin_names = []
         self._warmup_cache()
         if self.args.cli:
             self.config.cli_input = True
@@ -394,9 +397,10 @@ class SandVoice:
             )
             return
 
-        warmup_threads = []
-        warmup_plugin_names = []
+        warmup_threads = self._warmup_threads
+        warmup_plugin_names = self._warmup_plugin_names
         timeout = self.config.cache_warmup_timeout_s
+        self._warmup_timeout = timeout
 
         for i, entry in enumerate(entries):
             plugin_name_raw = str(entry.get('plugin', '')).strip()
@@ -541,15 +545,22 @@ class SandVoice:
                         "cache_auto_refresh: failed to register task %r: %s", task_name, e
                     )
 
-        if warmup_threads and timeout > 0:
-            print(f"Warming up cache ({', '.join(warmup_plugin_names)})...", flush=True)
-            deadline = time.monotonic() + timeout
-            for t in warmup_threads:
-                remaining = deadline - time.monotonic()
-                if remaining <= 0:
-                    break
-                t.join(timeout=remaining)
-            print("Ready.", flush=True)
+    def _join_warmup_threads(self):
+        """Block until all cache warmup threads finish (or the timeout expires)."""
+        threads = self._warmup_threads
+        timeout = self._warmup_timeout
+        if not threads or timeout <= 0:
+            return
+        deadline = time.monotonic() + timeout
+        for t in threads:
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                break
+            t.join(timeout=remaining)
+        logger.info(
+            "Cache warmup done: %s",
+            ", ".join(self._warmup_plugin_names) if self._warmup_plugin_names else "(none)",
+        )
 
     def _scheduler_speak(self, text):
         if not text or not self.config.bot_voice:
@@ -944,22 +955,34 @@ if __name__ == "__main__":
             ),
         )
 
+        has_warmup = bool(sandvoice._warmup_threads)
+        voice_filler = None
         if sandvoice.config.voice_filler_phrases and sandvoice.config.bot_voice:
             voice_filler = VoiceFillerCache(sandvoice.config, sandvoice.ai)
-            warm = WarmPhase([WarmTask("voice-filler", voice_filler.warm, required=True)])
+
+        if has_warmup or voice_filler is not None:
             if ui:
                 ui.start_warm_spinner("warming up")
             t_warm = time.monotonic()
-            try:
-                warm.run()
-            except RuntimeError as e:
-                if ui:
-                    ui.close()
-                print("Error: Voice filler warm phase failed. Details:")
-                print(f"  {e}")
-                sys.exit(1)
+
+            # Join cache warmup threads first (they were started early in __init__).
+            sandvoice._join_warmup_threads()
+
+            # Then warm voice filler (sequential avoids concurrent API contention).
+            if voice_filler is not None:
+                try:
+                    WarmPhase([WarmTask("voice-filler", voice_filler.warm, required=True)]).run()
+                except RuntimeError as e:
+                    if ui:
+                        ui.close()
+                    print("Error: Voice filler warm phase failed. Details:")
+                    print(f"  {e}")
+                    sys.exit(1)
+
             if ui:
                 ui.stop_spinner("ready", time.monotonic() - t_warm)
+
+        if voice_filler is not None:
             wake_word_mode.voice_filler = voice_filler
 
         wake_word_mode.run()
