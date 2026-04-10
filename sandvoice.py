@@ -80,6 +80,8 @@ def _derive_cache_key(plugin_name, entry, config):
                 kwargs["location"] = entry.get("location") or getattr(config, "location", None)
             elif param == "unit":
                 kwargs["unit"] = entry.get("unit") or getattr(config, "unit", "metric")
+            elif param == "config":
+                kwargs["config"] = config
         return cache_key_fn(**kwargs)
     except Exception as e:
         logger.warning("Failed to derive cache key for plugin %r: %s", plugin_name, e)
@@ -505,7 +507,7 @@ class SandVoice:
                     )
                     continue
 
-                task_name = f"cache_refresh:{cache_key}"
+                task_name = f"cache_refresh:{plugin_name_raw}:{query}"
                 # Avoid duplicates when tasks.yaml is absent (sync_tasks was skipped).
                 # Only check active/paused tasks — completed historical entries must not
                 # block re-registration on future startups.
