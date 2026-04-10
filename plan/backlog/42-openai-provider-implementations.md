@@ -113,7 +113,8 @@ Duplication is intentional and temporary — Plan 43 removes it.
 - [ ] `OpenAILLMProvider`, `OpenAITTSProvider`, `OpenAISTTProvider` each implement their
       ABC without `TypeError`
 - [ ] Provider classes are importable from `common.providers`
-- [ ] No existing files are modified
+- [ ] No existing runtime code paths are modified; only `common/providers/__init__.py`
+      (introduced in Plan 41) is updated to export the new provider classes
 - [ ] Full test coverage (>80%) for all three provider classes using mocked `openai_client`
 - [ ] Tests verify that conversation history is not mutated by provider methods
 - [ ] Existing `tests/test_ai.py` suite still passes unchanged

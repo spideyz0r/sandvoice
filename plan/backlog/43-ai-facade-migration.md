@@ -143,7 +143,9 @@ Helpers that are not provider-specific remain in `ai.py`:
 - [ ] All existing tests pass; `test_ai.py` updated to use `AI(llm, tts, stt, config)`
       direct constructor with mock providers
 - [ ] Coverage >80% for updated `ai.py`
-- [ ] No OpenAI-specific code remains in `AI` (only in provider classes)
+- [ ] No OpenAI-specific code in `AI` instance methods; `AI.from_config` is the
+      intentional provider wiring point and may contain OpenAI client construction
+      (via `_build_*_provider` helpers) — that is by design, not a violation
 
 ## Dependencies
 
@@ -152,7 +154,7 @@ Helpers that are not provider-specific remain in `ai.py`:
 
 ## Notes
 
-- `_SchedulerContext` in `scheduler.py` creates its own `AI` instance — it should also
+- `_SchedulerContext` in `sandvoice.py` creates its own `AI` instance — it should also
   call `AI.from_config`; verify it still passes an isolated `conversation_history`
   (it does, because history is now on `AI`, not shared between instances)
 - Keep `transcribe_and_translate` as the public name on `AI` to avoid touching all
