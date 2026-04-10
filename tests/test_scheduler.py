@@ -1397,6 +1397,9 @@ class TestWarmupCache(unittest.TestCase):
         sv._ai_audio_lock = threading.Lock()
         sv._scheduler_ai = None
         sv._scheduler_audio = None
+        sv._warmup_threads = []
+        sv._warmup_timeout = warmup_timeout
+        sv._warmup_plugin_names = []
         return sv
 
     def test_no_entries_returns_immediately(self):
@@ -1492,7 +1495,7 @@ class TestWarmupCache(unittest.TestCase):
         mock_scheduler.add_task.assert_not_called()
 
     def test_warmup_blocks_until_threads_finish(self):
-        """When timeout > 0, _warmup_cache() must join all warmup threads."""
+        """When timeout > 0, _join_warmup_threads() must join all warmup threads."""
         sv = self._make_stub(warmup_timeout=5)
         sv.plugins["news"] = MagicMock(return_value=None)
         sv.config.cache_auto_refresh = [
@@ -1502,10 +1505,12 @@ class TestWarmupCache(unittest.TestCase):
         join_called = []
         mock_thread = MagicMock()
         mock_thread.join.side_effect = lambda timeout: join_called.append(timeout)
+        mock_thread.is_alive.return_value = False  # thread finished cleanly → "done" log path
 
         with patch("sandvoice._derive_cache_key", return_value="news:key"), \
              patch("sandvoice.threading.Thread", return_value=mock_thread):
             sv._warmup_cache()
+        sv._join_warmup_threads()
 
         self.assertTrue(len(join_called) == 1)
         self.assertGreater(join_called[0], 0)
@@ -1531,12 +1536,14 @@ class TestWarmupCache(unittest.TestCase):
         def make_mock_thread(*args, **kwargs):
             t = MagicMock()
             t.join.side_effect = slow_join
+            t.is_alive.return_value = True  # timeout exhausted → threads still running
             created_threads.append(t)
             return t
 
         with patch("sandvoice._derive_cache_key", return_value="news:key"), \
              patch("sandvoice.threading.Thread", side_effect=make_mock_thread):
             sv._warmup_cache()
+        sv._join_warmup_threads()
 
         # At least one join was attempted before the timeout budget was exhausted.
         self.assertGreaterEqual(len(join_calls), 1)
@@ -1557,6 +1564,7 @@ class TestWarmupCache(unittest.TestCase):
         with patch("sandvoice._derive_cache_key", return_value="news:key"), \
              patch("sandvoice.threading.Thread", return_value=mock_thread):
             sv._warmup_cache()
+        sv._join_warmup_threads()  # timeout=0, so must not join
 
         mock_thread.start.assert_called_once()
         mock_thread.join.assert_not_called()
@@ -1628,6 +1636,7 @@ class TestWarmupCache(unittest.TestCase):
              patch("sandvoice.threading.Thread", side_effect=real_thread), \
              self.assertLogs("sandvoice", level="WARNING") as cm:
             sv._warmup_cache()
+            sv._join_warmup_threads()
 
         self.assertEqual(len(call_count), 3)
         self.assertTrue(any("failed after" in line for line in cm.output))

@@ -141,16 +141,15 @@ plan/
 
 ### Priority 39: Blocking Cache Warmup with Timeout and Retries
 **Document**: [completed/39-blocking-cache-warmup.md](./completed/39-blocking-cache-warmup.md)
-**Description**: Block SandVoice startup until `cache_auto_refresh` warmup completes (or times out), so the first user query hits cache unless warmup times out. Configurable timeout (`cache_warmup_timeout_s`, default 15s) and per-plugin retries (`cache_warmup_retries`, default 3). Prints a startup message while waiting.
+**Description**: Block SandVoice startup until `cache_auto_refresh` warmup completes (or times out), so the first user query hits cache unless warmup times out. Configurable timeout (`cache_warmup_timeout_s`, default 15s) and per-plugin retries (`cache_warmup_retries`, default 3). Warmup runs under the terminal UI spinner (integrated in Plan 40).
+
+### Priority 40: Greeting Plugin Cache
+**Document**: [completed/40-greeting-plugin-cache.md](./completed/40-greeting-plugin-cache.md)
+**Description**: Migrate `plugins/greeting.py` to a folder-based manifest plugin and add time-bucket caching (`greeting:morning/afternoon/evening/night`). Wired into `cache_auto_refresh` so the greeting is warm at startup — instant response for "bom dia", "boa tarde", "boa noite". Cache warmup now runs under the terminal UI warm spinner alongside voice filler warm-up.
 
 ---
 
 ## In Progress 🚧
-
-### Priority 40: Greeting Plugin Cache
-**Document**: [in-progress/40-greeting-plugin-cache.md](./in-progress/40-greeting-plugin-cache.md)
-**Status**: In progress
-**Description**: Migrate `plugins/greeting.py` to a folder-based manifest plugin and add time-bucket caching (`greeting:morning/afternoon/evening/night`). Wired into `cache_auto_refresh` so the greeting is warm at startup — instant response for "bom dia", "boa tarde", "boa noite".
 
 ### Priority 4: Wake Word Mode
 **Document**: [in-progress/04-wake-word-mode.md](./in-progress/04-wake-word-mode.md)
