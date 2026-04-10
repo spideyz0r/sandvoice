@@ -397,6 +397,8 @@ class SandVoice:
             )
             return
 
+        self._warmup_threads.clear()
+        self._warmup_plugin_names.clear()
         warmup_threads = self._warmup_threads
         warmup_plugin_names = self._warmup_plugin_names
         timeout = self.config.cache_warmup_timeout_s
@@ -557,10 +559,15 @@ class SandVoice:
             if remaining <= 0:
                 break
             t.join(timeout=remaining)
-        logger.info(
-            "Cache warmup done: %s",
-            ", ".join(self._warmup_plugin_names) if self._warmup_plugin_names else "(none)",
-        )
+        still_alive = sum(1 for t in threads if t.is_alive())
+        plugins = ", ".join(self._warmup_plugin_names) if self._warmup_plugin_names else "(none)"
+        if still_alive:
+            logger.info(
+                "Cache warmup timed out: %d thread(s) still running (%s)",
+                still_alive, plugins,
+            )
+        else:
+            logger.info("Cache warmup done: %s", plugins)
 
     def _scheduler_speak(self, text):
         if not text or not self.config.bot_voice:
@@ -955,7 +962,7 @@ if __name__ == "__main__":
             ),
         )
 
-        has_warmup = bool(sandvoice._warmup_threads)
+        has_warmup = bool(sandvoice._warmup_threads) and sandvoice._warmup_timeout > 0
         voice_filler = None
         if sandvoice.config.voice_filler_phrases and sandvoice.config.bot_voice:
             voice_filler = VoiceFillerCache(sandvoice.config, sandvoice.ai)
@@ -988,6 +995,7 @@ if __name__ == "__main__":
         wake_word_mode.run()
     # Default mode (ESC key) or CLI mode
     else:
+        sandvoice._join_warmup_threads()
         while True:
             logger.debug("Conversation history: %s", sandvoice.ai.conversation_history)
             logger.debug("SandVoice: %s", sandvoice)
