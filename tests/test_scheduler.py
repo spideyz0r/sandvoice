@@ -1505,6 +1505,7 @@ class TestWarmupCache(unittest.TestCase):
         join_called = []
         mock_thread = MagicMock()
         mock_thread.join.side_effect = lambda timeout: join_called.append(timeout)
+        mock_thread.is_alive.return_value = False  # thread finished cleanly → "done" log path
 
         with patch("sandvoice._derive_cache_key", return_value="news:key"), \
              patch("sandvoice.threading.Thread", return_value=mock_thread):
@@ -1535,6 +1536,7 @@ class TestWarmupCache(unittest.TestCase):
         def make_mock_thread(*args, **kwargs):
             t = MagicMock()
             t.join.side_effect = slow_join
+            t.is_alive.return_value = True  # timeout exhausted → threads still running
             created_threads.append(t)
             return t
 
