@@ -49,8 +49,12 @@ class TTSProvider(ABC):
 
 class STTProvider(ABC):
     @abstractmethod
-    def transcribe(self, audio_file_path, model=None) -> str:
-        """Transcribe audio file to text. Return the transcript string."""
+    def transcribe(self, audio_file_path=None, model=None) -> str:
+        """Transcribe audio file to text.
+
+        If `audio_file_path` is None, use the configured temporary recording path.
+        Return the transcript string.
+        """
 ```
 
 ### New file: `common/providers/__init__.py`

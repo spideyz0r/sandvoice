@@ -201,7 +201,7 @@ plan/
 
 ### Priority 43: AI Facade Migration
 **Document**: [backlog/43-ai-facade-migration.md](./backlog/43-ai-facade-migration.md)
-**Description**: Refactor `AI` into a thin facade: owns `conversation_history`, delegates capabilities to provider instances, and exposes `AI.from_config(config)` factory. Adds `llm_provider`, `tts_provider`, `stt_provider` config keys (all default to `openai`). All call sites unchanged. Requires Plans 41 and 42.
+**Description**: Refactor `AI` into a thin facade: owns `conversation_history`, delegates capabilities to provider instances, and exposes `AI.from_config(config)` factory. Adds `llm_provider`, `tts_provider`, `stt_provider` config keys (all default to `openai`). Runtime method call sites (`generate_response`, `text_to_speech`, etc.) remain unchanged; only construction changes to `AI.from_config(config)`. Requires Plans 41 and 42.
 
 ### Future Enhancements
 **Document**: [backlog/FUTURE.md](./backlog/FUTURE.md)

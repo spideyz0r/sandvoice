@@ -8,8 +8,10 @@ class, which still owns all the logic directly. This plan completes the migratio
 to provider instances, and exposes a factory (`AI.from_config`) that reads config to
 pick and instantiate the right providers.
 
-All call sites (`sandvoice.py`, `wake_word.py`, plugins, scheduler) remain unchanged —
-`s.ai.generate_response(...)` still works.
+Runtime method call sites (`sandvoice.py`, `wake_word.py`, plugins, scheduler) remain
+unchanged — `s.ai.generate_response(...)` still works. The only change to entry points
+is construction: `sandvoice.py` and `wake_word.py` switch from `AI(config)` to
+`AI.from_config(config)`.
 
 ## Goal
 
