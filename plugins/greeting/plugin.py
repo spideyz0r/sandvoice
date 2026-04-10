@@ -12,6 +12,7 @@ logger = logging.getLogger(__name__)
 
 _DEFAULT_TTL_S = 3600
 _DEFAULT_MAX_STALE_S = 5400
+_TZ_CACHE = {}  # tz_name → ZoneInfo or None; avoids repeated resolution and duplicate warnings
 
 
 def _resolve_tz(config):
@@ -19,10 +20,16 @@ def _resolve_tz(config):
     tz_name = getattr(config, 'timezone', None)
     if not isinstance(tz_name, str) or not tz_name.strip() or ZoneInfo is None:
         return None
+    tz_name = tz_name.strip()
+    if tz_name in _TZ_CACHE:
+        return _TZ_CACHE[tz_name]
     try:
-        return ZoneInfo(tz_name)
+        tz = ZoneInfo(tz_name)
+        _TZ_CACHE[tz_name] = tz
+        return tz
     except Exception as exc:
         logger.warning("greeting: timezone %r could not be resolved (%s); using local time.", tz_name, exc)
+        _TZ_CACHE[tz_name] = None
         return None
 
 

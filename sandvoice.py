@@ -507,7 +507,7 @@ class SandVoice:
                     )
                     continue
 
-                task_name = f"cache_refresh:{cache_key}"
+                task_name = f"cache_refresh:{plugin_name_raw}:{query}"
                 # Avoid duplicates when tasks.yaml is absent (sync_tasks was skipped).
                 # Only check active/paused tasks — completed historical entries must not
                 # block re-registration on future startups.

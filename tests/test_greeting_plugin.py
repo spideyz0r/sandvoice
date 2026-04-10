@@ -68,6 +68,10 @@ class TestGreetingCacheKey(unittest.TestCase):
         config = MagicMock()
         config.timezone = "INVALID/TIMEZONE"
 
+        # Clear the module-level cache so this test always exercises the warning path.
+        import plugins.greeting.plugin as _plugin_mod
+        _plugin_mod._TZ_CACHE.pop("INVALID/TIMEZONE", None)
+
         with self.assertLogs("plugins.greeting.plugin", level="WARNING"):
             result = _cache_key(config)
 
