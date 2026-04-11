@@ -1,9 +1,7 @@
 import json
 import os
 import tempfile
-import threading
 import unittest
-from types import SimpleNamespace
 from unittest.mock import MagicMock, Mock, patch, mock_open
 
 from common.providers import OpenAILLMProvider, OpenAITTSProvider, OpenAISTTProvider
@@ -27,7 +25,7 @@ def _make_config(**kwargs):
     config.speech_to_text_translate_provider = "whisper"
     config.speech_to_text_translate_model = "gpt-5-mini"
     config.tmp_recording = "/tmp/recording"
-    config.tmp_files_path = tempfile.mkdtemp()
+    config.tmp_files_path = "/tmp"
     config.sandvoice_path = "/fake/path"
     config.verbosity = "brief"
     config.stream_responses = False
@@ -78,7 +76,7 @@ class TestOpenAILLMProviderGenerateResponse(unittest.TestCase):
         self.assertEqual(messages[1]["content"], "User: previous")
         self.assertEqual(messages[2]["content"], "Sandbot: response")
         self.assertEqual(messages[-1]["role"], "user")
-        self.assertEqual(messages[-1]["content"], "hi")
+        self.assertEqual(messages[-1]["content"], "User: hi")
 
     def test_does_not_mutate_conversation_history(self):
         self.client.chat.completions.create.return_value = self._mock_completion("ok")
@@ -296,9 +294,13 @@ class TestOpenAITTSProviderInit(unittest.TestCase):
 
 class TestOpenAITTSProviderTextToSpeech(unittest.TestCase):
     def setUp(self):
+        self._tmp_dir = tempfile.TemporaryDirectory()
         self.client = MagicMock()
-        self.config = _make_config()
+        self.config = _make_config(tmp_files_path=self._tmp_dir.name)
         self.provider = OpenAITTSProvider(self.client, self.config)
+
+    def tearDown(self):
+        self._tmp_dir.cleanup()
 
     def test_returns_list_of_file_paths(self):
         mock_response = Mock()
@@ -383,9 +385,6 @@ class TestOpenAISTTProviderTranscribe(unittest.TestCase):
         f.write(b"fake audio")
         f.close()
         return f.name
-
-    def tearDown(self):
-        pass
 
     def test_translate_via_whisper(self):
         self.config.speech_to_text_task = "translate"

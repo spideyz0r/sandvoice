@@ -1,7 +1,6 @@
 import datetime
 import json
 import logging
-import os
 
 import yaml
 from jinja2 import Template
@@ -56,48 +55,68 @@ class OpenAILLMProvider(LLMProvider):
             system_role = system_role + "Consider the following to answer your question: " + extra_info
         return system_role
 
+    def _build_messages(self, user_input, conversation_history, system_role):
+        """Build the messages list for chat completions.
+
+        conversation_history entries are prefixed strings (e.g. "User: ...") matching
+        the format used throughout the codebase. user_input is prefixed to stay consistent.
+        """
+        return (
+            [{"role": "system", "content": system_role}]
+            + [{"role": "user", "content": message} for message in conversation_history]
+            + [{"role": "user", "content": f"User: {user_input}"}]
+        )
+
     @retry_with_backoff(max_attempts=3, initial_delay=1)
-    def generate_response(self, user_input, conversation_history, extra_info=None, model=None):
-        try:
-            if not model:
-                model = self._config.gpt_response_model
+    def _call_generate_response(self, user_input, conversation_history, extra_info=None, model=None):
+        """Make the API call. Raises on failure so retry_with_backoff can retry."""
+        if not model:
+            model = self._config.gpt_response_model
 
-            system_role = self._build_system_role(extra_info)
-            logger.debug("generate_response system_role: %s", system_role)
+        system_role = self._build_system_role(extra_info)
+        logger.debug(
+            "generate_response: length=%d verbosity=%s has_extra_info=%s model=%s history=%d",
+            len(system_role),
+            getattr(self._config, "verbosity", "brief"),
+            extra_info is not None,
+            model,
+            len(conversation_history),
+        )
 
-            # Only treat explicit boolean True as enabled.
-            stream_responses = (getattr(self._config, "stream_responses", False) is True)
+        # Only treat explicit boolean True as enabled.
+        stream_responses = (getattr(self._config, "stream_responses", False) is True)
+        messages = self._build_messages(user_input, conversation_history, system_role)
 
-            messages = (
-                [{"role": "system", "content": system_role}]
-                + [{"role": "user", "content": message} for message in conversation_history]
-                + [{"role": "user", "content": user_input}]
-            )
-
-            if not stream_responses:
-                completion = self._client.chat.completions.create(
-                    model=model,
-                    messages=messages,
-                )
-                return completion.choices[0].message
-
-            stream = self._client.chat.completions.create(
+        if not stream_responses:
+            completion = self._client.chat.completions.create(
                 model=model,
                 messages=messages,
-                stream=True,
             )
+            return completion.choices[0].message
 
-            collected = []
-            for event in stream:
-                try:
-                    delta = event.choices[0].delta
-                    piece = getattr(delta, "content", None)
-                except Exception:
-                    piece = None
-                if piece:
-                    collected.append(piece)
+        stream = self._client.chat.completions.create(
+            model=model,
+            messages=messages,
+            stream=True,
+        )
 
-            return SimpleNamespace(content="".join(collected))
+        collected = []
+        for event in stream:
+            try:
+                delta = event.choices[0].delta
+                piece = getattr(delta, "content", None)
+            except Exception:
+                piece = None
+            if piece:
+                collected.append(piece)
+
+        return SimpleNamespace(content="".join(collected))
+
+    def generate_response(self, user_input, conversation_history, extra_info=None, model=None):
+        try:
+            return self._call_generate_response(
+                user_input, conversation_history, extra_info=extra_info, model=model
+            )
         except Exception as e:
             error_msg = handle_api_error(e, service_name="OpenAI GPT")
             logger.error("Response generation error: %s", e)
@@ -117,12 +136,7 @@ class OpenAILLMProvider(LLMProvider):
             model = self._config.gpt_response_model
 
         system_role = self._build_system_role(extra_info)
-
-        messages = (
-            [{"role": "system", "content": system_role}]
-            + [{"role": "user", "content": message} for message in conversation_history]
-            + [{"role": "user", "content": user_input}]
-        )
+        messages = self._build_messages(user_input, conversation_history, system_role)
 
         try:
             stream = self._client.chat.completions.create(
@@ -147,31 +161,35 @@ class OpenAILLMProvider(LLMProvider):
             pass  # caller assembles and appends the assistant turn
 
     @retry_with_backoff(max_attempts=3, initial_delay=1)
+    def _call_define_route(self, user_input, model=None, extra_routes=None):
+        """Make the routing API call. Raises on failure so retry_with_backoff can retry."""
+        if not model:
+            model = self._config.gpt_route_model
+        with open(f"{self._config.sandvoice_path}/routes.yaml", 'r') as f:
+            template_str = f.read()
+        template = Template(template_str)
+        rendered_config = template.render(location=self._config.location)
+        system_role = yaml.safe_load(rendered_config)
+        route_role_text = system_role['route_role']
+        if extra_routes:
+            route_role_text = route_role_text.rstrip() + extra_routes
+
+        logger.info("Routing: %r", user_input)
+        completion = self._client.chat.completions.create(
+            model=model,
+            messages=[
+                {"role": "system", "content": route_role_text},
+                {"role": "user", "content": user_input},
+            ]
+        )
+        route = json.loads(completion.choices[0].message.content)
+        result = _normalize_route_response(route)
+        logger.info("Route chosen: %s", result)
+        return result
+
     def define_route(self, user_input, model=None, extra_routes=None):
         try:
-            if not model:
-                model = self._config.gpt_route_model
-            with open(f"{self._config.sandvoice_path}/routes.yaml", 'r') as f:
-                template_str = f.read()
-            template = Template(template_str)
-            rendered_config = template.render(location=self._config.location)
-            system_role = yaml.safe_load(rendered_config)
-            route_role_text = system_role['route_role']
-            if extra_routes:
-                route_role_text = route_role_text.rstrip() + extra_routes
-
-            logger.info("Routing: %r", user_input)
-            completion = self._client.chat.completions.create(
-                model=model,
-                messages=[
-                    {"role": "system", "content": route_role_text},
-                    {"role": "user", "content": user_input},
-                ]
-            )
-            route = json.loads(completion.choices[0].message.content)
-            result = _normalize_route_response(route)
-            logger.info("Route chosen: %s", result)
-            return result
+            return self._call_define_route(user_input, model=model, extra_routes=extra_routes)
         except FileNotFoundError as e:
             error_msg = handle_file_error(e, operation="read", filename="routes.yaml")
             logger.error("Routes file error: %s", e)
@@ -189,11 +207,11 @@ class OpenAILLMProvider(LLMProvider):
             return {"route": DEFAULT_ROUTE_NAME, "reason": "API error"}
 
     @retry_with_backoff(max_attempts=3, initial_delay=1)
-    def text_summary(self, user_input, extra_info=None, words="100", model=None):
-        try:
-            if not model:
-                model = self._config.gpt_summary_model
-            system_role = f"""
+    def _call_text_summary(self, user_input, extra_info=None, words="100", model=None):
+        """Make the summary API call. Raises on failure so retry_with_backoff can retry."""
+        if not model:
+            model = self._config.gpt_summary_model
+        system_role = f"""
             You're a bot summaries texts in {words} words.
             If there is a date of the text you are reading, mention the date in the summary.
             The summary must content the most important information of the text.
@@ -203,18 +221,22 @@ class OpenAILLMProvider(LLMProvider):
             You will receive a text and you need to summarize it in {words} words and return the title and the summary.
             You must be able to answer the user's question with the summary. For example, if the user is asking for a recipe, your answer must have the recipe.
             The only condition that will allow you bypass the limit of {words} words is if that amount of words is not enough to summarize the text.
-            Do your best to be as close to the limit  of {words} words as possible.
+            Do your best to be as close to the limit of {words} words as possible.
             """
-            if extra_info is not None:
-                system_role = f"Consider that this is the question of the user: {extra_info}\n\n" + system_role
+        if extra_info is not None:
+            system_role = f"Consider that this is the question of the user: {extra_info}\n\n" + system_role
 
-            completion = self._client.chat.completions.create(
-                model=model,
-                messages=[
-                    {"role": "system", "content": system_role},
-                    {"role": "user", "content": user_input}
-                ])
-            return json.loads(completion.choices[0].message.content)
+        completion = self._client.chat.completions.create(
+            model=model,
+            messages=[
+                {"role": "system", "content": system_role},
+                {"role": "user", "content": user_input}
+            ])
+        return json.loads(completion.choices[0].message.content)
+
+    def text_summary(self, user_input, extra_info=None, words="100", model=None):
+        try:
+            return self._call_text_summary(user_input, extra_info=extra_info, words=words, model=model)
         except json.JSONDecodeError as e:
             logger.error("Summary JSON parse error: %s", e)
             print("Error parsing summary response from AI.")
