@@ -33,7 +33,6 @@ class OpenAITTSProvider(TTSProvider):
     @retry_with_backoff(max_attempts=3, initial_delay=1)
     def _generate_tts_files(self, text, model, voice):
         """Generate TTS audio files. Raises on failure so @retry_with_backoff can retry."""
-        warnings.filterwarnings("ignore", category=DeprecationWarning)
         chunks = split_text_for_tts(text)
         if not chunks:
             return []
@@ -53,7 +52,9 @@ class OpenAITTSProvider(TTSProvider):
                     input=chunk
                 )
                 output_files.append(speech_file_path)
-                response.stream_to_file(speech_file_path)
+                with warnings.catch_warnings():
+                    warnings.simplefilter("ignore", DeprecationWarning)
+                    response.stream_to_file(speech_file_path)
                 logger.debug("TTS file created: thread=%s, file=%s",
                              threading.current_thread().name, os.path.basename(speech_file_path))
         except Exception:

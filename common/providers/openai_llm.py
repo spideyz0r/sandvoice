@@ -212,16 +212,16 @@ class OpenAILLMProvider(LLMProvider):
         if not model:
             model = self._config.gpt_summary_model
         system_role = f"""
-            You're a bot summaries texts in {words} words.
-            If there is a date of the text you are reading, mention the date in the summary.
-            The summary must content the most important information of the text.
-            Your answer will be in json format: {{"title": "some title", "text": "the summary here"}}.
-            The text must be translated to {self._config.language} if required.
-            If one of the texts has no content or has an error, figure something out from the title.
-            You will receive a text and you need to summarize it in {words} words and return the title and the summary.
-            You must be able to answer the user's question with the summary. For example, if the user is asking for a recipe, your answer must have the recipe.
-            The only condition that will allow you bypass the limit of {words} words is if that amount of words is not enough to summarize the text.
-            Do your best to be as close to the limit of {words} words as possible.
+            You are a bot that summarizes texts in {words} words.
+            If the text includes a date, mention it in the summary.
+            The summary must contain the most important information from the text.
+            Your answer must be in JSON format: {{"title": "some title", "text": "the summary here"}}.
+            Translate the text into {self._config.language} if required.
+            If a text has no content or contains an error, infer what you can from the title.
+            You will receive a text and must summarize it in {words} words, returning both the title and the summary.
+            The summary must help answer the user's question. For example, if the user is asking for a recipe, your answer must include the recipe.
+            You may exceed the limit of {words} words only if that is necessary to summarize the text adequately.
+            Do your best to stay as close as possible to the limit of {words} words.
             """
         if extra_info is not None:
             system_role = f"Consider that this is the question of the user: {extra_info}\n\n" + system_role
