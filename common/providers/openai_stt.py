@@ -49,6 +49,7 @@ class OpenAISTTProvider(STTProvider):
                 if language_hint:
                     kwargs["language"] = language_hint
                 transcript = self._client.audio.transcriptions.create(**kwargs)
+            source_text = transcript.text or ""
         except FileNotFoundError as e:
             error_msg = handle_file_error(e, operation="read", filename=os.path.basename(file_path))
             logger.error("Transcription file error: %s", e)
@@ -61,7 +62,6 @@ class OpenAISTTProvider(STTProvider):
             raise
 
         # Chat-completions translation — separate try block to avoid mislabelling errors
-        source_text = transcript.text or ""
         if not source_text.strip():
             return ""
 
