@@ -147,6 +147,10 @@ plan/
 **Document**: [completed/40-greeting-plugin-cache.md](./completed/40-greeting-plugin-cache.md)
 **Description**: Migrate `plugins/greeting.py` to a folder-based manifest plugin and add time-bucket caching (`greeting:morning/afternoon/evening/night`). Wired into `cache_auto_refresh` so the greeting is warm at startup — instant response for "bom dia", "boa tarde", "boa noite". Cache warmup now runs under the terminal UI warm spinner alongside voice filler warm-up.
 
+### Priority 41: Provider Interface ABCs
+**Document**: [completed/41-provider-abcs.md](./completed/41-provider-abcs.md)
+**Description**: Define `LLMProvider`, `TTSProvider`, and `STTProvider` abstract base classes in `common/providers/base.py`. Purely additive — no existing code changed. Foundation for Plans 42 and 43.
+
 ---
 
 ## In Progress 🚧
@@ -189,11 +193,6 @@ plan/
 ### Priority 37: Context-Aware Routing
 **Document**: [backlog/37-context-aware-routing.md](./backlog/37-context-aware-routing.md)
 **Description**: Pass the last N conversation turns to `define_route` so the routing LLM can correctly resolve follow-up utterances. Fixes misrouting of clarifications (e.g. "I mean the FIFA World Cup" after a realtime_websearch query routing to `news`).
-
-
-### Priority 41: Provider Interface ABCs
-**Document**: [backlog/41-provider-abcs.md](./backlog/41-provider-abcs.md)
-**Description**: Define `LLMProvider`, `TTSProvider`, and `STTProvider` abstract base classes in `common/providers/base.py`. Purely additive — no existing code changed. Foundation for Plans 42 and 43.
 
 ### Priority 42: OpenAI Provider Implementations
 **Document**: [backlog/42-openai-provider-implementations.md](./backlog/42-openai-provider-implementations.md)
