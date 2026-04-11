@@ -15,6 +15,7 @@ class OpenAITTSProvider(TTSProvider):
     def __init__(self, openai_client, config):
         self._client = openai_client
         self._config = config
+        self.config = config  # exposed for retry_with_backoff
 
     def text_to_speech(self, text, model=None, voice=None) -> list:
         logger.debug("TTS generation called from thread %s: text=%s...",

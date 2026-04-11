@@ -18,6 +18,7 @@ class OpenAILLMProvider(LLMProvider):
     def __init__(self, openai_client, config):
         self._client = openai_client
         self._config = config
+        self.config = config  # exposed for retry_with_backoff
 
     def _build_system_role(self, extra_info=None):
         now = datetime.datetime.now()
@@ -67,9 +68,11 @@ class OpenAILLMProvider(LLMProvider):
             # Only treat explicit boolean True as enabled.
             stream_responses = (getattr(self._config, "stream_responses", False) is True)
 
-            messages = [
-                {"role": "system", "content": system_role},
-            ] + [{"role": "user", "content": message} for message in conversation_history]
+            messages = (
+                [{"role": "system", "content": system_role}]
+                + [{"role": "user", "content": message} for message in conversation_history]
+                + [{"role": "user", "content": user_input}]
+            )
 
             if not stream_responses:
                 completion = self._client.chat.completions.create(
@@ -115,9 +118,11 @@ class OpenAILLMProvider(LLMProvider):
 
         system_role = self._build_system_role(extra_info)
 
-        messages = [
-            {"role": "system", "content": system_role},
-        ] + [{"role": "user", "content": message} for message in conversation_history]
+        messages = (
+            [{"role": "system", "content": system_role}]
+            + [{"role": "user", "content": message} for message in conversation_history]
+            + [{"role": "user", "content": user_input}]
+        )
 
         try:
             stream = self._client.chat.completions.create(
@@ -197,11 +202,11 @@ class OpenAILLMProvider(LLMProvider):
             If one of the texts has no content or has an error, figure something out from the title.
             You will receive a text and you need to summarize it in {words} words and return the title and the summary.
             You must be able to answer the user's question with the summary. For example, if the user is asking for a recipe, your answer must have the recipe.
-            The only condition that will allow you bypass the limite of {words} words is if that amount of words is not enough to summarize the text.
+            The only condition that will allow you bypass the limit of {words} words is if that amount of words is not enough to summarize the text.
             Do your best to be as close to the limit  of {words} words as possible.
             """
             if extra_info is not None:
-                system_role = "Consider that this is the question of the user: {extra_info}" + system_role
+                system_role = f"Consider that this is the question of the user: {extra_info}\n\n" + system_role
 
             completion = self._client.chat.completions.create(
                 model=model,

@@ -73,10 +73,12 @@ class TestOpenAILLMProviderGenerateResponse(unittest.TestCase):
         self.provider.generate_response("hi", history)
         call_args = self.client.chat.completions.create.call_args
         messages = call_args[1]["messages"]
-        # system message + history messages
+        # system message + history messages + current user prompt
         self.assertEqual(messages[0]["role"], "system")
         self.assertEqual(messages[1]["content"], "User: previous")
         self.assertEqual(messages[2]["content"], "Sandbot: response")
+        self.assertEqual(messages[-1]["role"], "user")
+        self.assertEqual(messages[-1]["content"], "hi")
 
     def test_does_not_mutate_conversation_history(self):
         self.client.chat.completions.create.return_value = self._mock_completion("ok")
