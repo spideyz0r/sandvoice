@@ -151,6 +151,10 @@ plan/
 **Document**: [completed/41-provider-abcs.md](./completed/41-provider-abcs.md)
 **Description**: Define `LLMProvider`, `TTSProvider`, and `STTProvider` abstract base classes in `common/providers/base.py`. Purely additive — no existing code changed. Foundation for Plans 42 and 43.
 
+### Priority 42: OpenAI Provider Implementations
+**Document**: [completed/42-openai-provider-implementations.md](./completed/42-openai-provider-implementations.md)
+**Description**: Implement `OpenAILLMProvider`, `OpenAITTSProvider`, and `OpenAISTTProvider` in `common/providers/`. Logic extracted from `AI` class; `AI` is unchanged. Requires Plan 41.
+
 ---
 
 ## In Progress 🚧
@@ -193,10 +197,6 @@ plan/
 ### Priority 37: Context-Aware Routing
 **Document**: [backlog/37-context-aware-routing.md](./backlog/37-context-aware-routing.md)
 **Description**: Pass the last N conversation turns to `define_route` so the routing LLM can correctly resolve follow-up utterances. Fixes misrouting of clarifications (e.g. "I mean the FIFA World Cup" after a realtime_websearch query routing to `news`).
-
-### Priority 42: OpenAI Provider Implementations
-**Document**: [backlog/42-openai-provider-implementations.md](./backlog/42-openai-provider-implementations.md)
-**Description**: Implement `OpenAILLMProvider`, `OpenAITTSProvider`, and `OpenAISTTProvider` in `common/providers/`. Logic moved from `AI` class; `AI` is unchanged in this plan. Requires Plan 41.
 
 ### Priority 43: AI Facade Migration
 **Document**: [backlog/43-ai-facade-migration.md](./backlog/43-ai-facade-migration.md)
