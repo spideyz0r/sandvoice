@@ -14,15 +14,14 @@ logger = logging.getLogger(__name__)
 class OpenAITTSProvider(TTSProvider):
     def __init__(self, openai_client, config):
         self._client = openai_client
-        self._config = config
-        self.config = config  # exposed for retry_with_backoff
+        self.config = config
 
     def text_to_speech(self, text, model=None, voice=None) -> list:
         logger.debug("TTS generation called from thread %s: text=%s...",
                      threading.current_thread().name, text[:50] if text else "empty")
         logger.debug("TTS generation full text length: %d chars", len(text) if text else 0)
-        model = model or self._config.text_to_speech_model
-        voice = voice or self._config.bot_voice_model
+        model = model or self.config.text_to_speech_model
+        voice = voice or self.config.bot_voice_model
         try:
             return self._generate_tts_files(text, model, voice)
         except Exception as e:
@@ -43,7 +42,7 @@ class OpenAITTSProvider(TTSProvider):
         try:
             for i, chunk in enumerate(chunks, start=1):
                 speech_file_path = os.path.join(
-                    self._config.tmp_files_path,
+                    self.config.tmp_files_path,
                     f"tts-response-{response_id}-chunk-{i:03d}.mp3",
                 )
                 response = self._client.audio.speech.create(

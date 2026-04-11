@@ -16,12 +16,11 @@ logger = logging.getLogger(__name__)
 class OpenAILLMProvider(LLMProvider):
     def __init__(self, openai_client, config):
         self._client = openai_client
-        self._config = config
-        self.config = config  # exposed for retry_with_backoff
+        self.config = config
 
     def _build_system_role(self, extra_info=None):
         now = datetime.datetime.now()
-        verbosity = getattr(self._config, "verbosity", "brief")
+        verbosity = getattr(self.config, "verbosity", "brief")
         if verbosity == "detailed":
             verbosity_instruction = (
                 "Verbosity: detailed. Provide thorough, structured answers by default. "
@@ -40,14 +39,14 @@ class OpenAILLMProvider(LLMProvider):
             )
 
         system_role = f"""
-            Your name is {self._config.botname}.
+            Your name is {self.config.botname}.
             You are an assistant written in Python by Breno Brand.
-            You must answer in {self._config.language}.
-            The person that is talking to you is in the {self._config.timezone} time zone.
-            The person that is talking to you is located in {self._config.location}.
+            You must answer in {self.config.language}.
+            The person that is talking to you is in the {self.config.timezone} time zone.
+            The person that is talking to you is located in {self.config.location}.
             Current date and time to be considered when answering the message: {now}.
             Never answer as a chat, for example reading your name in a conversation.
-            DO NOT reply to messages with the format "{self._config.botname}": <message here>.
+            DO NOT reply to messages with the format "{self.config.botname}": <message here>.
             Reply in a natural and human way.
             {verbosity_instruction}
             """
@@ -71,20 +70,20 @@ class OpenAILLMProvider(LLMProvider):
     def _call_generate_response(self, user_input, conversation_history, extra_info=None, model=None):
         """Make the API call. Raises on failure so retry_with_backoff can retry."""
         if not model:
-            model = self._config.gpt_response_model
+            model = self.config.gpt_response_model
 
         system_role = self._build_system_role(extra_info)
         logger.debug(
             "generate_response: length=%d verbosity=%s has_extra_info=%s model=%s history=%d",
             len(system_role),
-            getattr(self._config, "verbosity", "brief"),
+            getattr(self.config, "verbosity", "brief"),
             extra_info is not None,
             model,
             len(conversation_history),
         )
 
         # Only treat explicit boolean True as enabled.
-        stream_responses = (getattr(self._config, "stream_responses", False) is True)
+        stream_responses = (getattr(self.config, "stream_responses", False) is True)
         messages = self._build_messages(user_input, conversation_history, system_role)
 
         if not stream_responses:
@@ -133,7 +132,7 @@ class OpenAILLMProvider(LLMProvider):
         ambiguous when partial output has already been emitted.
         """
         if not model:
-            model = self._config.gpt_response_model
+            model = self.config.gpt_response_model
 
         system_role = self._build_system_role(extra_info)
         messages = self._build_messages(user_input, conversation_history, system_role)
@@ -164,11 +163,11 @@ class OpenAILLMProvider(LLMProvider):
     def _call_define_route(self, user_input, model=None, extra_routes=None):
         """Make the routing API call. Raises on failure so retry_with_backoff can retry."""
         if not model:
-            model = self._config.gpt_route_model
-        with open(f"{self._config.sandvoice_path}/routes.yaml", 'r') as f:
+            model = self.config.gpt_route_model
+        with open(f"{self.config.sandvoice_path}/routes.yaml", 'r') as f:
             template_str = f.read()
         template = Template(template_str)
-        rendered_config = template.render(location=self._config.location)
+        rendered_config = template.render(location=self.config.location)
         system_role = yaml.safe_load(rendered_config)
         route_role_text = system_role['route_role']
         if extra_routes:
@@ -210,13 +209,13 @@ class OpenAILLMProvider(LLMProvider):
     def _call_text_summary(self, user_input, extra_info=None, words="100", model=None):
         """Make the summary API call. Raises on failure so retry_with_backoff can retry."""
         if not model:
-            model = self._config.gpt_summary_model
+            model = self.config.gpt_summary_model
         system_role = f"""
             You are a bot that summarizes texts in {words} words.
             If the text includes a date, mention it in the summary.
             The summary must contain the most important information from the text.
             Your answer must be in JSON format: {{"title": "some title", "text": "the summary here"}}.
-            Translate the text into {self._config.language} if required.
+            Translate the text into {self.config.language} if required.
             If a text has no content or contains an error, infer what you can from the title.
             You will receive a text and must summarize it in {words} words, returning both the title and the summary.
             The summary must help answer the user's question. For example, if the user is asking for a recipe, your answer must include the recipe.

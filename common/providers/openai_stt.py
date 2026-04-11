@@ -10,8 +10,7 @@ logger = logging.getLogger(__name__)
 class OpenAISTTProvider(STTProvider):
     def __init__(self, openai_client, config):
         self._client = openai_client
-        self._config = config
-        self.config = config  # exposed for retry_with_backoff
+        self.config = config
 
     @retry_with_backoff(max_attempts=3, initial_delay=1)
     def transcribe(self, audio_file_path=None, model=None) -> str:
@@ -21,14 +20,14 @@ class OpenAISTTProvider(STTProvider):
         Return the transcript string.
         """
         if not model:
-            model = self._config.speech_to_text_model
+            model = self.config.speech_to_text_model
 
-        file_path = audio_file_path if audio_file_path else (self._config.tmp_recording + ".mp3")
+        file_path = audio_file_path if audio_file_path else (self.config.tmp_recording + ".mp3")
 
-        task = getattr(self._config, 'speech_to_text_task', 'translate')
-        language_hint = getattr(self._config, 'speech_to_text_language', '')
-        translate_provider = getattr(self._config, 'speech_to_text_translate_provider', 'whisper')
-        translate_model = getattr(self._config, 'speech_to_text_translate_model', 'gpt-5-mini')
+        task = getattr(self.config, 'speech_to_text_task', 'translate')
+        language_hint = getattr(self.config, 'speech_to_text_language', '')
+        translate_provider = getattr(self.config, 'speech_to_text_translate_provider', 'whisper')
+        translate_model = getattr(self.config, 'speech_to_text_translate_model', 'gpt-5-mini')
 
         try:
             with open(file_path, "rb") as file:
