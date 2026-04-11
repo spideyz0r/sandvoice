@@ -40,22 +40,22 @@ class OpenAITTSProvider(TTSProvider):
         output_files = []
 
         try:
-            for i, chunk in enumerate(chunks, start=1):
-                speech_file_path = os.path.join(
-                    self.config.tmp_files_path,
-                    f"tts-response-{response_id}-chunk-{i:03d}.mp3",
-                )
-                response = self._client.audio.speech.create(
-                    model=model,
-                    voice=voice,
-                    input=chunk
-                )
-                output_files.append(speech_file_path)
-                with warnings.catch_warnings():
-                    warnings.simplefilter("ignore", DeprecationWarning)
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore", DeprecationWarning)
+                for i, chunk in enumerate(chunks, start=1):
+                    speech_file_path = os.path.join(
+                        self.config.tmp_files_path,
+                        f"tts-response-{response_id}-chunk-{i:03d}.mp3",
+                    )
+                    response = self._client.audio.speech.create(
+                        model=model,
+                        voice=voice,
+                        input=chunk
+                    )
+                    output_files.append(speech_file_path)
                     response.stream_to_file(speech_file_path)
-                logger.debug("TTS file created: thread=%s, file=%s",
-                             threading.current_thread().name, os.path.basename(speech_file_path))
+                    logger.debug("TTS file created: thread=%s, file=%s",
+                                 threading.current_thread().name, os.path.basename(speech_file_path))
         except Exception:
             for f in output_files:
                 try:
