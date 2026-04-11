@@ -121,7 +121,7 @@ class SandVoice:
     def __init__(self):
         self.parse_args()
         self.config = Config()
-        self.ai = AI(self.config)
+        self.ai = AI.from_config(self.config)
         if not os.path.exists(self.config.tmp_files_path):
             os.makedirs(self.config.tmp_files_path)
         self.plugins = {}
@@ -351,7 +351,7 @@ class SandVoice:
         ai = None
         db = None
         try:
-            ai = AI(self.config)
+            ai = AI.from_config(self.config)
             db = SchedulerDB(self.config.scheduler_db_path)
             scheduler = TaskScheduler(
                 db=db,
@@ -461,7 +461,7 @@ class SandVoice:
                                 "cache_auto_refresh warmup: invoking %r (attempt %d)",
                                 pname, attempt + 1,
                             )
-                            thread_ai = AI(self.config)
+                            thread_ai = AI.from_config(self.config)
                             resolved = resolve_plugin_route_name(r['route'], self.plugins)
                             r['route'] = resolved
                             ctx = _SchedulerContext(self, thread_ai)

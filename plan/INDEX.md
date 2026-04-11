@@ -155,6 +155,10 @@ plan/
 **Document**: [completed/42-openai-provider-implementations.md](./completed/42-openai-provider-implementations.md)
 **Description**: Implement `OpenAILLMProvider`, `OpenAITTSProvider`, and `OpenAISTTProvider` in `common/providers/`. Logic extracted from `AI` class; `AI` is unchanged. Requires Plan 41.
 
+### Priority 43: AI Facade Migration
+**Document**: [completed/43-ai-facade-migration.md](./completed/43-ai-facade-migration.md)
+**Description**: Refactor `AI` into a thin facade: owns `conversation_history`, delegates capabilities to provider instances, and exposes `AI.from_config(config)` factory. Adds `llm_provider`, `tts_provider`, `stt_provider` config keys (all default to `openai`). Runtime method call sites (`generate_response`, `text_to_speech`, etc.) remain unchanged; only construction changes to `AI.from_config(config)`. Requires Plans 41 and 42.
+
 ---
 
 ## In Progress 🚧
@@ -197,10 +201,6 @@ plan/
 ### Priority 37: Context-Aware Routing
 **Document**: [backlog/37-context-aware-routing.md](./backlog/37-context-aware-routing.md)
 **Description**: Pass the last N conversation turns to `define_route` so the routing LLM can correctly resolve follow-up utterances. Fixes misrouting of clarifications (e.g. "I mean the FIFA World Cup" after a realtime_websearch query routing to `news`).
-
-### Priority 43: AI Facade Migration
-**Document**: [backlog/43-ai-facade-migration.md](./backlog/43-ai-facade-migration.md)
-**Description**: Refactor `AI` into a thin facade: owns `conversation_history`, delegates capabilities to provider instances, and exposes `AI.from_config(config)` factory. Adds `llm_provider`, `tts_provider`, `stt_provider` config keys (all default to `openai`). Runtime method call sites (`generate_response`, `text_to_speech`, etc.) remain unchanged; only construction changes to `AI.from_config(config)`. Requires Plans 41 and 42.
 
 ### Future Enhancements
 **Document**: [backlog/FUTURE.md](./backlog/FUTURE.md)
