@@ -76,11 +76,13 @@ class TestTextToSpeechChunking(unittest.TestCase):
         ai, tts = self._make_ai(["/tmp/chunk-001.mp3", "/tmp/chunk-002.mp3"])
         files = ai.text_to_speech("long text")
         self.assertEqual(len(files), 2)
+        tts.text_to_speech.assert_called_once_with("long text", model=None, voice=None)
 
     def test_text_to_speech_returns_empty_on_failure(self):
         ai, tts = self._make_ai([])
         result = ai.text_to_speech("hello")
         self.assertEqual(result, [])
+        tts.text_to_speech.assert_called_once_with("hello", model=None, voice=None)
 
 
 

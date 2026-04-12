@@ -142,19 +142,16 @@ class TestProviderFactories(unittest.TestCase):
         self.client = Mock()
 
     def test_build_llm_openai(self):
-        from common.providers import OpenAILLMProvider
         config = _make_config(llm_provider="openai")
         provider = _build_llm_provider(config, self.client)
         self.assertIsInstance(provider, OpenAILLMProvider)
 
     def test_build_tts_openai(self):
-        from common.providers import OpenAITTSProvider
         config = _make_config(tts_provider="openai")
         provider = _build_tts_provider(config, self.client)
         self.assertIsInstance(provider, OpenAITTSProvider)
 
     def test_build_stt_openai(self):
-        from common.providers import OpenAISTTProvider
         config = _make_config(stt_provider="openai")
         provider = _build_stt_provider(config, self.client)
         self.assertIsInstance(provider, OpenAISTTProvider)

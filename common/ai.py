@@ -180,6 +180,26 @@ class ErrorMessage:
         self.content = content
 
 
+_SUPPORTED_PROVIDERS = {"openai"}
+
+
+def _validate_provider_names(config):
+    """Raise ValueError for any unsupported provider name.
+
+    Called by from_config before the API-key check so a misconfigured
+    provider gives an actionable error rather than a misleading missing-key
+    message.  _build_*_provider functions also validate as a safety net for
+    direct callers; both reference _SUPPORTED_PROVIDERS as the single source
+    of truth.
+    """
+    for field in ("llm_provider", "tts_provider", "stt_provider"):
+        name = getattr(config, field, "openai")
+        if name not in _SUPPORTED_PROVIDERS:
+            error_msg = f"Unknown {field}: {name!r}"
+            print(f"Error: {error_msg}")
+            raise ValueError(error_msg)
+
+
 def _build_llm_provider(config, openai_client):
     # Deferred import to avoid circular dependency: openai_llm imports from common.ai
     from common.providers import OpenAILLMProvider
@@ -203,9 +223,6 @@ def _build_stt_provider(config, openai_client):
     if provider == "openai":
         return OpenAISTTProvider(openai_client, config)
     raise ValueError(f"Unknown stt_provider: {provider!r}")
-
-
-_SUPPORTED_PROVIDERS = {"openai"}
 
 
 class AI:
@@ -236,16 +253,7 @@ class AI:
         setup_error_logging(config)
         # Validate provider names before checking the API key so a misconfigured
         # provider gives an actionable error rather than "Missing OPENAI_API_KEY".
-        provider_fields = {
-            "llm_provider": getattr(config, "llm_provider", "openai"),
-            "tts_provider": getattr(config, "tts_provider", "openai"),
-            "stt_provider": getattr(config, "stt_provider", "openai"),
-        }
-        for field, name in provider_fields.items():
-            if name not in _SUPPORTED_PROVIDERS:
-                error_msg = f"Unknown {field}: {name!r}"
-                print(f"Error: {error_msg}")
-                raise ValueError(error_msg)
+        _validate_provider_names(config)
         if not os.environ.get('OPENAI_API_KEY'):
             error_msg = "Missing OPENAI_API_KEY environment variable. Please set it and try again."
             print(f"Error: {error_msg}")
