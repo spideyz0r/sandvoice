@@ -209,7 +209,7 @@ _SUPPORTED_PROVIDERS = {"openai"}
 
 
 class AI:
-    def __init__(self, llm, tts, stt, config, openai_client=None):
+    def __init__(self, llm, tts, stt, config, *, openai_client=None):
         self.config = config
         self._llm = llm
         self._tts = tts
