@@ -213,6 +213,11 @@ class AI:
         self._stt = stt
         self.conversation_history = []
 
+    @property
+    def openai_client(self):
+        """Return the underlying OpenAI client for plugins that use the API directly."""
+        return getattr(self._llm, '_client', None)
+
     @classmethod
     def from_config(cls, config):
         setup_error_logging(config)
