@@ -205,22 +205,47 @@ def _build_stt_provider(config, openai_client):
     raise ValueError(f"Unknown stt_provider: {provider!r}")
 
 
+_SUPPORTED_PROVIDERS = {"openai"}
+
+
 class AI:
-    def __init__(self, llm, tts, stt, config):
+    def __init__(self, llm, tts, stt, config, openai_client=None):
         self.config = config
         self._llm = llm
         self._tts = tts
         self._stt = stt
+        self._openai_client = openai_client
         self.conversation_history = []
 
     @property
     def openai_client(self):
-        """Return the underlying OpenAI client for plugins that use the API directly."""
-        return getattr(self._llm, '_client', None)
+        """Return the underlying OpenAI client for plugins that use the API directly.
+
+        Raises AttributeError if the AI was not constructed via from_config or the
+        configured provider does not expose an OpenAI client.
+        """
+        if self._openai_client is None:
+            raise AttributeError(
+                "openai_client is not available: AI was not constructed via "
+                "from_config, or the configured provider does not use an OpenAI client."
+            )
+        return self._openai_client
 
     @classmethod
     def from_config(cls, config):
         setup_error_logging(config)
+        # Validate provider names before checking the API key so a misconfigured
+        # provider gives an actionable error rather than "Missing OPENAI_API_KEY".
+        provider_fields = {
+            "llm_provider": getattr(config, "llm_provider", "openai"),
+            "tts_provider": getattr(config, "tts_provider", "openai"),
+            "stt_provider": getattr(config, "stt_provider", "openai"),
+        }
+        for field, name in provider_fields.items():
+            if name not in _SUPPORTED_PROVIDERS:
+                error_msg = f"Unknown {field}: {name!r}"
+                print(f"Error: {error_msg}")
+                raise ValueError(error_msg)
         if not os.environ.get('OPENAI_API_KEY'):
             error_msg = "Missing OPENAI_API_KEY environment variable. Please set it and try again."
             print(f"Error: {error_msg}")
@@ -229,7 +254,7 @@ class AI:
         llm = _build_llm_provider(config, openai_client)
         tts = _build_tts_provider(config, openai_client)
         stt = _build_stt_provider(config, openai_client)
-        return cls(llm, tts, stt, config)
+        return cls(llm, tts, stt, config, openai_client=openai_client)
 
     def generate_response(self, user_input, extra_info=None, model=None):
         # Append user turn first so history is consistent even if the call fails.

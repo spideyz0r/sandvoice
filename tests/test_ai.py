@@ -106,6 +106,32 @@ class TestAIFromConfig(unittest.TestCase):
             AI.from_config(config)
         self.assertIn("OPENAI_API_KEY", str(ctx.exception))
 
+    def test_unknown_provider_raises_before_api_key_check(self):
+        # Provider validation must happen before the API key check so a
+        # misconfigured provider name gives the actionable error, not a
+        # misleading "Missing OPENAI_API_KEY" message.
+        del os.environ['OPENAI_API_KEY']
+        config = _make_config(llm_provider="mistral")
+        with self.assertRaises(ValueError) as ctx:
+            AI.from_config(config)
+        self.assertIn("llm_provider", str(ctx.exception))
+        self.assertNotIn("OPENAI_API_KEY", str(ctx.exception))
+
+    @patch('common.ai.OpenAI')
+    @patch('common.ai.setup_error_logging')
+    def test_openai_client_accessible_after_from_config(self, mock_setup, mock_openai):
+        config = _make_config()
+        ai = AI.from_config(config)
+        # from_config stores the client; the property must return it.
+        self.assertIs(ai.openai_client, mock_openai.return_value)
+
+    def test_openai_client_raises_when_not_set(self):
+        llm, tts, stt = _make_providers()
+        ai = AI(llm, tts, stt, _make_config())
+        with self.assertRaises(AttributeError) as ctx:
+            _ = ai.openai_client
+        self.assertIn("from_config", str(ctx.exception))
+
 
 # ---------------------------------------------------------------------------
 # Provider factory helpers
