@@ -197,7 +197,7 @@ def _validate_provider_names(config):
     """
     for field in ("llm_provider", "tts_provider", "stt_provider"):
         raw = getattr(config, field, None)
-        name = str(raw).strip().lower() if raw else "openai"
+        name = (str(raw).strip().lower() if raw is not None else "") or "openai"
         if name not in _SUPPORTED_PROVIDERS:
             error_msg = f"Unknown {field}: {name!r}"
             print(f"Error: {error_msg}")
@@ -209,7 +209,8 @@ def _build_llm_provider(config, openai_client):
     from common.providers import OpenAILLMProvider
     # Dispatch dict keys must match _SUPPORTED_PROVIDERS.
     _dispatch = {"openai": OpenAILLMProvider}
-    provider = (getattr(config, "llm_provider", None) or "openai").strip().lower()
+    raw = getattr(config, "llm_provider", None)
+    provider = (str(raw).strip().lower() if raw is not None else "") or "openai"
     klass = _dispatch.get(provider)
     if klass is None:
         raise ValueError(f"Unknown llm_provider: {provider!r}")
@@ -219,7 +220,8 @@ def _build_llm_provider(config, openai_client):
 def _build_tts_provider(config, openai_client):
     from common.providers import OpenAITTSProvider
     _dispatch = {"openai": OpenAITTSProvider}
-    provider = (getattr(config, "tts_provider", None) or "openai").strip().lower()
+    raw = getattr(config, "tts_provider", None)
+    provider = (str(raw).strip().lower() if raw is not None else "") or "openai"
     klass = _dispatch.get(provider)
     if klass is None:
         raise ValueError(f"Unknown tts_provider: {provider!r}")
@@ -229,7 +231,8 @@ def _build_tts_provider(config, openai_client):
 def _build_stt_provider(config, openai_client):
     from common.providers import OpenAISTTProvider
     _dispatch = {"openai": OpenAISTTProvider}
-    provider = (getattr(config, "stt_provider", None) or "openai").strip().lower()
+    raw = getattr(config, "stt_provider", None)
+    provider = (str(raw).strip().lower() if raw is not None else "") or "openai"
     klass = _dispatch.get(provider)
     if klass is None:
         raise ValueError(f"Unknown stt_provider: {provider!r}")

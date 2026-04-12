@@ -119,6 +119,15 @@ class TestAIFromConfig(unittest.TestCase):
 
     @patch('common.ai.OpenAI')
     @patch('common.ai.setup_error_logging')
+    def test_whitespace_only_provider_defaults_to_openai(self, mock_setup, mock_openai):
+        # Whitespace-only provider values must normalize to "openai", not raise
+        # Unknown provider: '' — same as None/empty.
+        config = _make_config(llm_provider="   ", tts_provider="   ", stt_provider="   ")
+        ai = AI.from_config(config)
+        self.assertIsInstance(ai, AI)
+
+    @patch('common.ai.OpenAI')
+    @patch('common.ai.setup_error_logging')
     def test_openai_client_accessible_after_from_config(self, mock_setup, mock_openai):
         config = _make_config()
         ai = AI.from_config(config)
