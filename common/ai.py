@@ -188,9 +188,10 @@ def _validate_provider_names(config):
 
     Called by from_config before the API-key check so a misconfigured
     provider gives an actionable error rather than a misleading missing-key
-    message.  _build_*_provider functions also validate as a safety net for
-    direct callers; both reference _SUPPORTED_PROVIDERS as the single source
-    of truth.
+    message.  _SUPPORTED_PROVIDERS is the canonical set; _build_*_provider
+    functions also raise ValueError for unknown names as a defensive safety
+    net for direct callers, but they do not reference _SUPPORTED_PROVIDERS
+    directly — update both when adding a new provider.
     """
     for field in ("llm_provider", "tts_provider", "stt_provider"):
         name = getattr(config, field, "openai")
