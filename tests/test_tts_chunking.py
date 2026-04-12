@@ -50,7 +50,7 @@ class TestSplitTextForTTS(unittest.TestCase):
         self.assertTrue(chunks[0].endswith("."))
 
 
-class TestTextToSpeechChunking(unittest.TestCase):
+class TestTextToSpeechDelegation(unittest.TestCase):
     """Tests that AI.text_to_speech delegates correctly to the TTS provider.
 
     Detailed chunking, file naming, and cleanup behaviour is tested in

@@ -186,15 +186,18 @@ _SUPPORTED_PROVIDERS = {"openai"}
 def _validate_provider_names(config):
     """Raise ValueError for any unsupported provider name.
 
-    Called by from_config before the API-key check so a misconfigured
-    provider gives an actionable error rather than a misleading missing-key
-    message.  _SUPPORTED_PROVIDERS is the canonical set; _build_*_provider
-    functions also raise ValueError for unknown names as a defensive safety
-    net for direct callers, but they do not reference _SUPPORTED_PROVIDERS
-    directly — update both when adding a new provider.
+    Normalises each value (strip, lower, None/empty → "openai") before
+    checking against _SUPPORTED_PROVIDERS.  Called by from_config before the
+    API-key check so a misconfigured provider gives an actionable error rather
+    than a misleading missing-key message.
+
+    _build_*_provider helpers use dispatch dicts whose keys correspond to
+    _SUPPORTED_PROVIDERS.  Update _SUPPORTED_PROVIDERS and each dispatch dict
+    together when adding a new provider.
     """
     for field in ("llm_provider", "tts_provider", "stt_provider"):
-        name = getattr(config, field, "openai")
+        raw = getattr(config, field, None)
+        name = str(raw).strip().lower() if raw else "openai"
         if name not in _SUPPORTED_PROVIDERS:
             error_msg = f"Unknown {field}: {name!r}"
             print(f"Error: {error_msg}")
@@ -204,26 +207,33 @@ def _validate_provider_names(config):
 def _build_llm_provider(config, openai_client):
     # Deferred import to avoid circular dependency: openai_llm imports from common.ai
     from common.providers import OpenAILLMProvider
-    provider = getattr(config, "llm_provider", "openai")
-    if provider == "openai":
-        return OpenAILLMProvider(openai_client, config)
-    raise ValueError(f"Unknown llm_provider: {provider!r}")
+    # Dispatch dict keys must match _SUPPORTED_PROVIDERS.
+    _dispatch = {"openai": OpenAILLMProvider}
+    provider = (getattr(config, "llm_provider", None) or "openai").strip().lower()
+    klass = _dispatch.get(provider)
+    if klass is None:
+        raise ValueError(f"Unknown llm_provider: {provider!r}")
+    return klass(openai_client, config)
 
 
 def _build_tts_provider(config, openai_client):
     from common.providers import OpenAITTSProvider
-    provider = getattr(config, "tts_provider", "openai")
-    if provider == "openai":
-        return OpenAITTSProvider(openai_client, config)
-    raise ValueError(f"Unknown tts_provider: {provider!r}")
+    _dispatch = {"openai": OpenAITTSProvider}
+    provider = (getattr(config, "tts_provider", None) or "openai").strip().lower()
+    klass = _dispatch.get(provider)
+    if klass is None:
+        raise ValueError(f"Unknown tts_provider: {provider!r}")
+    return klass(openai_client, config)
 
 
 def _build_stt_provider(config, openai_client):
     from common.providers import OpenAISTTProvider
-    provider = getattr(config, "stt_provider", "openai")
-    if provider == "openai":
-        return OpenAISTTProvider(openai_client, config)
-    raise ValueError(f"Unknown stt_provider: {provider!r}")
+    _dispatch = {"openai": OpenAISTTProvider}
+    provider = (getattr(config, "stt_provider", None) or "openai").strip().lower()
+    klass = _dispatch.get(provider)
+    if klass is None:
+        raise ValueError(f"Unknown stt_provider: {provider!r}")
+    return klass(openai_client, config)
 
 
 class AI:
