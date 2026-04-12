@@ -227,15 +227,15 @@ class AI:
         return cls(llm, tts, stt, config)
 
     def generate_response(self, user_input, extra_info=None, model=None):
-        # Pass a snapshot of current history (prior turns) to the provider so that
-        # subsequent mutations to conversation_history don't affect the recorded call.
-        # The provider appends user_input as the final message via _build_messages.
-        result = self._llm.generate_response(
-            user_input, list(self.conversation_history), extra_info=extra_info, model=model
-        )
+        # Append user turn first so history is consistent even if the call fails.
+        # Pass history[:-1] to the provider — provider appends user_input via
+        # _build_messages, avoiding a duplicate if history already ends with this turn.
         user_message = "User: " + user_input
         if not self.conversation_history or self.conversation_history[-1] != user_message:
             self.conversation_history.append(user_message)
+        result = self._llm.generate_response(
+            user_input, self.conversation_history[:-1], extra_info=extra_info, model=model
+        )
         self.conversation_history.append(f"{self.config.botname}: " + result.content)
         return result
 
