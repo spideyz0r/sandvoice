@@ -41,15 +41,32 @@ def one_shot(self, prompt, model=None):
 
 ### `OpenAILLMProvider` (`common/providers/openai_llm.py`)
 
-Implement by delegating to the existing `generate_response` with an empty history:
+Implement as a direct, minimal API call — **do not** delegate to `generate_response`.
+`generate_response` injects the full SandVoice system role (including the
+`"answer in {config.language}"` instruction) and wraps the user prompt as
+`"User: {prompt}"`. These are the wrong semantics for a raw single-turn call: callers
+like `voice_filler` supply a self-contained prompt that must not be overridden by the
+SandVoice persona.
 
 ```python
-def one_shot(self, prompt, model=None):
-    return self.generate_response(prompt, [], model=model)
-```
+@retry_with_backoff(max_attempts=3, initial_delay=1)
+def _call_one_shot(self, prompt, model=None):
+    if not model:
+        model = self.config.gpt_response_model
+    completion = self._client.chat.completions.create(
+        model=model,
+        messages=[{"role": "user", "content": prompt}],
+    )
+    return completion.choices[0].message
 
-`generate_response` already handles an empty history correctly — it builds a messages
-list with no prior turns and returns an `ErrorMessage`-compatible result on failure.
+def one_shot(self, prompt, model=None):
+    try:
+        return self._call_one_shot(prompt, model=model)
+    except Exception as e:
+        error_msg = handle_api_error(e, service_name="OpenAI GPT")
+        logger.error("one_shot error: %s", e)
+        return ErrorMessage(error_msg)
+```
 
 ### `AI` facade (`common/ai.py`)
 
@@ -64,7 +81,7 @@ No history reads or writes. Return value is passed straight through to the calle
 ## Acceptance Criteria
 
 - [ ] `LLMProvider.one_shot(prompt, model=None)` abstract method added
-- [ ] `OpenAILLMProvider.one_shot` implemented; delegates to `generate_response(prompt, [])`
+- [ ] `OpenAILLMProvider.one_shot` implemented as a direct, system-role-free API call (via `_call_one_shot` with `retry_with_backoff`); does **not** delegate to `generate_response`
 - [ ] `AI.one_shot(prompt, model=None)` delegates to `self._llm.one_shot`
 - [ ] Unit tests cover: successful call, API failure returns `ErrorMessage`-like result
 - [ ] Coverage >80% for changed files
