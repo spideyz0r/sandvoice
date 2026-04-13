@@ -96,12 +96,12 @@ part of the public AI interface.
 
 - Update `tests/test_ai.py`: remove `test_openai_client_accessible_after_from_config`
   and `test_openai_client_raises_when_not_set` (the property no longer exists).
-- Update `tests/test_tts_chunking.py` and any other test that passes `openai_client=`
-  to `AI(...)`.
-- Add / update `tests/test_voice_filler.py` to mock `ai.one_shot` instead of
-  `ai.openai_client.chat.completions.create`.
-- Add / update `tests/plugins/test_realtime_websearch.py` to mock `s.ai.web_search`
-  instead of `s.ai.openai_client.responses.create`.
+- Update any tests that directly access or mock `ai.openai_client` to use the
+  provider-backed interface instead: `tests/test_ai.py` (remove the two
+  `openai_client` property tests), `tests/test_voice_filler.py` (mock `ai.one_shot`
+  instead of `ai.openai_client.chat.completions.create`).
+- Update `tests/test_realtime_websearch_plugin.py` to mock `s.ai.web_search`
+  instead of `sv.ai.openai_client.responses.create`.
 
 ## Acceptance Criteria
 
