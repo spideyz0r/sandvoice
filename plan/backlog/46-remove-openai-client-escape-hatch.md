@@ -105,7 +105,8 @@ part of the public AI interface.
 - [ ] `AI.openai_client` property removed
 - [ ] `AI._openai_client` attribute removed
 - [ ] No `openai_client` keyword in `AI.__init__` or `AI.from_config`
-- [ ] No import of `openai` SDK outside `common/providers/` in production code
+- [ ] No plugin or `AI` instance method imports or references the `openai` SDK directly;
+      `AI.from_config` (the provider wiring point) may retain `from openai import OpenAI`
 - [ ] All tests pass; removed tests replaced with ones targeting the new interface
 - [ ] Coverage >80% for changed files
 
