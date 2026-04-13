@@ -8,7 +8,12 @@ interface entirely:
 ```python
 @property
 def openai_client(self):
-    return self._openai_client  # raises AttributeError if not from_config
+    if self._openai_client is None:
+        raise AttributeError(
+            "openai_client is not available: AI was not constructed via "
+            "from_config, or the configured provider does not use an OpenAI client."
+        )
+    return self._openai_client
 ```
 
 Two callers depend on it:

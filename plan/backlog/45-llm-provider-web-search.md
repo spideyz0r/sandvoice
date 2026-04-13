@@ -74,12 +74,19 @@ def web_search(self, query, instructions, model=None, include=None):
         logger.error("Web search error: %s", e)
         print(error_msg)
         return _WebSearchErrorResult(
-            "I encountered an error while searching the web. Please try again."
+            output_text="I encountered an error while searching the web. Please try again."
         )
 ```
 
-A minimal `_WebSearchErrorResult` namedtuple (or dataclass) with an `output_text`
-attribute keeps the return type consistent whether the call succeeds or fails.
+`_WebSearchErrorResult` is a namedtuple defined at module level in `openai_llm.py`:
+
+```python
+from collections import namedtuple
+_WebSearchErrorResult = namedtuple("_WebSearchErrorResult", ["output_text"])
+```
+
+Using the named field (`output_text=...`) in the constructor makes the `.output_text`
+contract explicit and avoids positional-argument ambiguity.
 
 ### `AI` facade (`common/ai.py`)
 
