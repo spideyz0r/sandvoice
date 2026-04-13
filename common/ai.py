@@ -1,8 +1,6 @@
 from openai import OpenAI
-from jinja2 import Template
-import datetime, json, yaml, warnings, os, logging, re, uuid, threading
-from types import SimpleNamespace
-from common.error_handling import retry_with_backoff, setup_error_logging, handle_api_error, handle_file_error
+import os, logging, re
+from common.error_handling import setup_error_logging
 
 logger = logging.getLogger(__name__)
 
@@ -182,414 +180,165 @@ class ErrorMessage:
         self.content = content
 
 
+_SUPPORTED_PROVIDERS = {"openai"}
+
+
+def _validate_provider_names(config):
+    """Raise ValueError for any unsupported provider name.
+
+    Normalises each value (strip, lower, None/empty → "openai") before
+    checking against _SUPPORTED_PROVIDERS.  Called by from_config before the
+    API-key check so a misconfigured provider gives an actionable error rather
+    than a misleading missing-key message.
+
+    _build_*_provider helpers use dispatch dicts whose keys correspond to
+    _SUPPORTED_PROVIDERS.  Update _SUPPORTED_PROVIDERS and each dispatch dict
+    together when adding a new provider.
+    """
+    for field in ("llm_provider", "tts_provider", "stt_provider"):
+        raw = getattr(config, field, None)
+        name = (str(raw).strip().lower() if raw is not None else "") or "openai"
+        if name not in _SUPPORTED_PROVIDERS:
+            error_msg = f"Unknown {field}: {name!r}"
+            print(f"Error: {error_msg}")
+            raise ValueError(error_msg)
+
+
+def _build_llm_provider(config, openai_client):
+    # Deferred import to avoid circular dependency: openai_llm imports from common.ai
+    from common.providers import OpenAILLMProvider
+    # Dispatch dict keys must match _SUPPORTED_PROVIDERS.
+    _dispatch = {"openai": OpenAILLMProvider}
+    raw = getattr(config, "llm_provider", None)
+    provider = (str(raw).strip().lower() if raw is not None else "") or "openai"
+    klass = _dispatch.get(provider)
+    if klass is None:
+        raise ValueError(f"Unknown llm_provider: {provider!r}")
+    return klass(openai_client, config)
+
+
+def _build_tts_provider(config, openai_client):
+    from common.providers import OpenAITTSProvider
+    _dispatch = {"openai": OpenAITTSProvider}
+    raw = getattr(config, "tts_provider", None)
+    provider = (str(raw).strip().lower() if raw is not None else "") or "openai"
+    klass = _dispatch.get(provider)
+    if klass is None:
+        raise ValueError(f"Unknown tts_provider: {provider!r}")
+    return klass(openai_client, config)
+
+
+def _build_stt_provider(config, openai_client):
+    from common.providers import OpenAISTTProvider
+    _dispatch = {"openai": OpenAISTTProvider}
+    raw = getattr(config, "stt_provider", None)
+    provider = (str(raw).strip().lower() if raw is not None else "") or "openai"
+    klass = _dispatch.get(provider)
+    if klass is None:
+        raise ValueError(f"Unknown stt_provider: {provider!r}")
+    return klass(openai_client, config)
+
+
 class AI:
-    def __init__(self, config):
+    def __init__(self, llm, tts, stt, config, *, openai_client=None):
         self.config = config
+        self._llm = llm
+        self._tts = tts
+        self._stt = stt
+        self._openai_client = openai_client
+        self.conversation_history = []
 
-        # Set up error logging
+    @property
+    def openai_client(self):
+        """Return the underlying OpenAI client for plugins that use the API directly.
+
+        Raises AttributeError if the AI was not constructed via from_config or the
+        configured provider does not expose an OpenAI client.
+        """
+        if self._openai_client is None:
+            raise AttributeError(
+                "openai_client is not available: AI was not constructed via "
+                "from_config, or the configured provider does not use an OpenAI client."
+            )
+        return self._openai_client
+
+    @classmethod
+    def from_config(cls, config):
         setup_error_logging(config)
-
-        # Check for required API key
+        # Validate provider names before checking the API key so a misconfigured
+        # provider gives an actionable error rather than "Missing OPENAI_API_KEY".
+        _validate_provider_names(config)
         if not os.environ.get('OPENAI_API_KEY'):
             error_msg = "Missing OPENAI_API_KEY environment variable. Please set it and try again."
             print(f"Error: {error_msg}")
             raise ValueError(error_msg)
+        openai_client = OpenAI(timeout=config.api_timeout)
+        llm = _build_llm_provider(config, openai_client)
+        tts = _build_tts_provider(config, openai_client)
+        stt = _build_stt_provider(config, openai_client)
+        return cls(llm, tts, stt, config, openai_client=openai_client)
 
-        self.openai_client = OpenAI(timeout=self.config.api_timeout)
-        self.conversation_history = []
-
-    @retry_with_backoff(max_attempts=3, initial_delay=1)
-    def transcribe_and_translate(self, model = None, audio_file_path = None):
-        if not model:
-            model = self.config.speech_to_text_model
-
-        # Use custom file path if provided, otherwise use default tmp_recording
-        file_path = audio_file_path if audio_file_path else (self.config.tmp_recording + ".mp3")
-
-        try:
-            task = getattr(self.config, 'speech_to_text_task', 'translate')
-            language_hint = getattr(self.config, 'speech_to_text_language', '')
-            translate_provider = getattr(self.config, 'speech_to_text_translate_provider', 'whisper')
-            translate_model = getattr(self.config, 'speech_to_text_translate_model', 'gpt-5-mini')
-
-            with open(file_path, "rb") as file:
-                if task == 'transcribe':
-                    kwargs = {"model": model, "file": file}
-                    if language_hint:
-                        kwargs["language"] = language_hint
-                    transcript = self.openai_client.audio.transcriptions.create(**kwargs)
-                    return transcript.text
-
-                if translate_provider == 'whisper':
-                    transcript = self.openai_client.audio.translations.create(
-                        model = model,
-                        file = file
-                    )
-                    return transcript.text
-
-                kwargs = {"model": model, "file": file}
-                if language_hint:
-                    kwargs["language"] = language_hint
-                transcript = self.openai_client.audio.transcriptions.create(**kwargs)
-
-            source_text = transcript.text or ""
-            if not source_text.strip():
-                return ""
-
-            try:
-                completion = self.openai_client.chat.completions.create(
-                    model=translate_model,
-                    messages=[
-                        {
-                            "role": "system",
-                            "content": "Translate the user's text to English. Return only the translated text.",
-                        },
-                        {"role": "user", "content": source_text},
-                    ],
-                )
-                return (completion.choices[0].message.content or "").strip()
-            except Exception as e:
-                error_msg = handle_api_error(e, service_name="OpenAI Chat Completions")
-                logger.error("Translation error (chat completions): %s", e)
-                print(error_msg)
-                raise
-        except FileNotFoundError as e:
-            error_msg = handle_file_error(e, operation="read", filename=os.path.basename(file_path))
-            logger.error("Transcription file error: %s", e)
-            print(error_msg)
-            raise
-        except Exception as e:
-            error_msg = handle_api_error(e, service_name="OpenAI Whisper")
-            logger.error("Transcription error: %s", e)
-            print(error_msg)
-            raise
-
-    @retry_with_backoff(max_attempts=3, initial_delay=1)
-    def generate_response(self, user_input, extra_info = None, model = None):
-        try:
-            if not model:
-                model = self.config.gpt_response_model
-
-            # Add to conversation history only if not already present (prevents duplicates during retries)
-            user_message = "User: " + user_input
-            if not self.conversation_history or self.conversation_history[-1] != user_message:
-                self.conversation_history.append(user_message)
-
-            now = datetime.datetime.now()
-
-            verbosity = getattr(self.config, "verbosity", "brief")
-            if verbosity == "detailed":
-                verbosity_instruction = (
-                    "Verbosity: detailed. Provide thorough, structured answers by default. "
-                    "Include steps/examples when helpful. If the user asks for a short answer, comply."
-                )
-            elif verbosity == "normal":
-                verbosity_instruction = (
-                    "Verbosity: normal. Be concise but complete. "
-                    "Expand when the user explicitly asks for more detail."
-                )
-            else:
-                verbosity_instruction = (
-                    "Verbosity: brief. Keep answers short by default (1-3 sentences). "
-                    "Avoid long lists and excessive detail unless the user explicitly asks to expand, "
-                    "asks for details, or says they want a longer answer."
-                )
-
-            system_role = f"""
-            Your name is {self.config.botname}.
-            You are an assistant written in Python by Breno Brand.
-            You must answer in {self.config.language}.
-            The person that is talking to you is in the {self.config.timezone} time zone.
-            The person that is talking to you is located in {self.config.location}.
-            Current date and time to be considered when answering the message: {now}.
-            Never answer as a chat, for example reading your name in a conversation.
-            DO NOT reply to messages with the format "{self.config.botname}": <message here>.
-            Reply in a natural and human way.
-            {verbosity_instruction}
-            """
-            if extra_info is not None:
-                system_role = system_role + "Consider the following to answer your question: " + extra_info
-            if self.config.debug:
-                print (f"System role: {system_role}")
-            # Be very sympathetic, helpful and don't be rude or have short answers"
-
-            # Only treat explicit boolean True as enabled.
-            # This avoids accidental truthiness with Mock() in tests/callers.
-            stream_responses = (getattr(self.config, "stream_responses", False) is True)
-
-            messages = [
-                {"role": "system", "content": system_role},
-            ] + [{"role": "user", "content": message} for message in self.conversation_history]
-
-            if not stream_responses:
-                completion = self.openai_client.chat.completions.create(
-                    model=model,
-                    messages=messages,
-                )
-                assistant_content = completion.choices[0].message.content
-                self.conversation_history.append(f"{self.config.botname}: " + assistant_content)
-                return completion.choices[0].message
-
-            stream = self.openai_client.chat.completions.create(
-                model=model,
-                messages=messages,
-                stream=True,
-            )
-
-            # Deltas are not printed here — callers always print the assembled response,
-            # so printing deltas too would cause duplicate output (deltas + full response).
-            # For per-delta debug visibility, use stream_response_deltas() instead; its
-            # callers suppress the final assembled-response print in debug mode to avoid
-            # duplication (that gating is in the caller, not inside stream_response_deltas).
-            collected = []
-            for event in stream:
-                try:
-                    delta = event.choices[0].delta
-                    piece = getattr(delta, "content", None)
-                except Exception:
-                    piece = None
-
-                if piece:
-                    collected.append(piece)
-
-            assistant_content = "".join(collected)
-            self.conversation_history.append(f"{self.config.botname}: " + assistant_content)
-            return SimpleNamespace(content=assistant_content)
-        except Exception as e:
-            error_msg = handle_api_error(e, service_name="OpenAI GPT")
-            logger.error("Response generation error: %s", e)
-            print(error_msg)
-            return ErrorMessage("Sorry, I'm having trouble right now. Please try again in a moment.")
+    def generate_response(self, user_input, extra_info=None, model=None):
+        # Append user turn first so history is consistent even if the call fails.
+        # Pass history[:-1] to the provider — provider appends user_input via
+        # _build_messages, avoiding a duplicate if history already ends with this turn.
+        user_message = "User: " + user_input
+        if not self.conversation_history or self.conversation_history[-1] != user_message:
+            self.conversation_history.append(user_message)
+        result = self._llm.generate_response(
+            user_input, self.conversation_history[:-1], extra_info=extra_info, model=model
+        )
+        self.conversation_history.append(f"{self.config.botname}: " + result.content)
+        return result
 
     def stream_response_deltas(self, user_input, extra_info=None, model=None):
         """Yield response text deltas from the LLM stream.
 
-        This is used by Plan 08 Phase 2 to begin TTS before the full response is complete.
-        It also updates conversation history after the stream completes.
+        Appends the user turn to conversation_history immediately, then yields
+        deltas from the provider. The assistant turn is only appended on successful
+        stream completion — partial output is discarded on failure.
 
-        Note: this method updates self.conversation_history with the user input and the
-        final assistant response (assembled from deltas).
+        The provider receives history without the current user turn; it appends
+        user_input via _build_messages.
 
-        Retries are intentionally not applied here because streaming retry semantics are
-        ambiguous (partial output may already have been emitted).
+        Retries are intentionally not applied — streaming retry semantics are
+        ambiguous when partial output has already been emitted.
         """
-        if not model:
-            model = self.config.gpt_response_model
-
-        # Add to conversation history only if not already present.
         user_message = "User: " + user_input
         if not self.conversation_history or self.conversation_history[-1] != user_message:
             self.conversation_history.append(user_message)
 
-        now = datetime.datetime.now()
-        verbosity = getattr(self.config, "verbosity", "brief")
-        if verbosity == "detailed":
-            verbosity_instruction = (
-                "Verbosity: detailed. Provide thorough, structured answers by default. "
-                "Include steps/examples when helpful. If the user asks for a short answer, comply."
-            )
-        elif verbosity == "normal":
-            verbosity_instruction = (
-                "Verbosity: normal. Be concise but complete. "
-                "Expand when the user explicitly asks for more detail."
-            )
-        else:
-            verbosity_instruction = (
-                "Verbosity: brief. Keep answers short by default (1-3 sentences). "
-                "Avoid long lists and excessive detail unless the user explicitly asks to expand, "
-                "asks for details, or says they want a longer answer."
-            )
-
-        system_role = f"""
-            Your name is {self.config.botname}.
-            You are an assistant written in Python by Breno Brand.
-            You must answer in {self.config.language}.
-            The person that is talking to you is in the {self.config.timezone} time zone.
-            The person that is talking to you is located in {self.config.location}.
-            Current date and time to be considered when answering the message: {now}.
-            Never answer as a chat, for example reading your name in a conversation.
-            DO NOT reply to messages with the format "{self.config.botname}": <message here>.
-            Reply in a natural and human way.
-            {verbosity_instruction}
-            """
-
-        if extra_info is not None:
-            system_role = system_role + "Consider the following to answer your question: " + extra_info
-
-        messages = [
-            {"role": "system", "content": system_role},
-        ] + [{"role": "user", "content": message} for message in self.conversation_history]
+        # provider_history excludes the just-appended user turn — provider adds it
+        provider_history = self.conversation_history[:-1]
 
         collected = []
         stream_completed = False
 
         try:
-            stream = self.openai_client.chat.completions.create(
-                model=model,
-                messages=messages,
-                stream=True,
-            )
-
-            for event in stream:
-                piece = None
-                try:
-                    delta = event.choices[0].delta
-                    piece = getattr(delta, "content", None)
-                except Exception:
-                    piece = None
-
-                if piece:
-                    collected.append(piece)
-                    if self.config.debug:
-                        print(piece, end="", flush=True)
-                    yield piece
-
+            for piece in self._llm.stream_response_deltas(
+                user_input, provider_history, extra_info=extra_info, model=model
+            ):
+                collected.append(piece)
+                if self.config.debug:
+                    print(piece, end="", flush=True)
+                yield piece
             stream_completed = True
         finally:
             if self.config.debug:
                 print("", flush=True)
-
-            # Only persist the assistant turn if the stream completed without raising.
-            # This avoids polluting the next prompt with partial output.
             if stream_completed:
-                assistant_content = "".join(collected)
-                self.conversation_history.append(f"{self.config.botname}: " + assistant_content)
+                self.conversation_history.append(
+                    f"{self.config.botname}: " + "".join(collected)
+                )
 
-    @retry_with_backoff(max_attempts=3, initial_delay=1)
+    def transcribe_and_translate(self, model=None, audio_file_path=None):
+        return self._stt.transcribe(audio_file_path=audio_file_path, model=model)
+
     def define_route(self, user_input, model=None, extra_routes=None):
-        try:
-            if not model:
-                model = self.config.gpt_route_model
-            with open(f"{self.config.sandvoice_path}/routes.yaml", 'r') as f:
-                template_str = f.read()
-            template = Template(template_str)
-            rendered_config = template.render(location=self.config.location)
-            system_role = yaml.safe_load(rendered_config)
-            route_role_text = system_role['route_role']
-            if extra_routes:
-                route_role_text = route_role_text.rstrip() + extra_routes
-
-            logger.info("Routing: %r", user_input)
-            completion = self.openai_client.chat.completions.create(
-                model=model,
-                messages=[
-                    {"role": "system", "content": route_role_text},
-                    {"role": "user", "content": user_input},
-                ]
-            )
-            route = json.loads(completion.choices[0].message.content)
-            result = _normalize_route_response(route)
-            logger.info("Route chosen: %s", result)
-            return result
-        except FileNotFoundError as e:
-            error_msg = handle_file_error(e, operation="read", filename="routes.yaml")
-            logger.error("Routes file error: %s", e)
-            print(error_msg)
-            # Return default route as fallback
-            return {"route": DEFAULT_ROUTE_NAME, "reason": "Error loading routes"}
-        except json.JSONDecodeError as e:
-            error_msg = "Error parsing route response from AI. Using default route."
-            logger.error("Route JSON parse error: %s", e)
-            print(error_msg)
-            return {"route": DEFAULT_ROUTE_NAME, "reason": "Parse error"}
-        except Exception as e:
-            error_msg = handle_api_error(e, service_name="OpenAI GPT")
-            logger.error("Route definition error: %s", e)
-            print(error_msg)
-            return {"route": DEFAULT_ROUTE_NAME, "reason": "API error"}
-
-    @retry_with_backoff(max_attempts=3, initial_delay=1)
-    def text_summary(self, user_input, extra_info = None, words = "100", model = None):
-        try:
-            if not model:
-                model = self.config.gpt_summary_model
-            if self.config.debug:
-                print("Summary words: " + words)
-                print("Before: " + user_input)
-            system_role = f"""
-            You're a bot summaries texts in {words} words.
-            If there is a date of the text you are reading, mention the date in the summary.
-            The summary must content the most important information of the text.
-            Your answer will be in json format: {{"title": "some title", "text": "the summary here"}}.
-            The text must be translated to {self.config.language} if required.
-            If one of the texts has no content or has an error, figure something out from the title.
-            You will receive a text and you need to summarize it in {words} words and return the title and the summary.
-            You must be able to answer the user's question with the summary. For example, if the user is asking for a recipe, your answer must have the recipe.
-            The only condition that will allow you bypass the limite of {words} words is if that amount of words is not enough to summarize the text.
-            Do your best to be as close to the limit  of {words} words as possible.
-            """
-
-            if self.config.debug:
-                print(system_role)
-            if extra_info != None:
-                system_role = "Consider that this is the question of the user: {extra_info}" + system_role
-
-            completion = self.openai_client.chat.completions.create(
-            model = model,
-            messages = [
-                {"role": "system", "content": system_role},
-                {"role": "user", "content": user_input}
-            ])
-            if self.config.debug:
-                print("After: " +completion.choices[0].message.content + "\n")
-            return json.loads(completion.choices[0].message.content)
-        except json.JSONDecodeError as e:
-            error_msg = "Error parsing summary response from AI."
-            logger.error("Summary JSON parse error: %s", e)
-            print(error_msg)
-            return {"title": "Error", "text": "Unable to generate summary"}
-        except Exception as e:
-            error_msg = handle_api_error(e, service_name="OpenAI GPT")
-            logger.error("Text summary error: %s", e)
-            print(error_msg)
-            return {"title": "Error", "text": "Unable to generate summary"}
-
-    @retry_with_backoff(max_attempts=3, initial_delay=1)
-    def _generate_tts_files(self, text, model, voice):
-        """Generate TTS audio files. Raises on failure so @retry_with_backoff can retry."""
-        warnings.filterwarnings("ignore", category=DeprecationWarning)
-        chunks = split_text_for_tts(text)
-        if not chunks:
-            return []
-
-        response_id = uuid.uuid4().hex
-        output_files = []
-
-        try:
-            for i, chunk in enumerate(chunks, start=1):
-                speech_file_path = os.path.join(
-                    self.config.tmp_files_path,
-                    f"tts-response-{response_id}-chunk-{i:03d}.mp3",
-                )
-                response = self.openai_client.audio.speech.create(
-                    model=model,
-                    voice=voice,
-                    input=chunk
-                )
-                output_files.append(speech_file_path)
-                response.stream_to_file(speech_file_path)
-                logger.debug(">>> TTS FILE CREATED: thread=%s, file=%s",
-                             threading.current_thread().name, os.path.basename(speech_file_path))
-        except Exception:
-            for f in output_files:
-                try:
-                    if os.path.exists(f):
-                        os.remove(f)
-                except Exception:
-                    pass  # best-effort cleanup
-            raise
-
-        return output_files
+        return self._llm.define_route(user_input, model=model, extra_routes=extra_routes)
 
     def text_to_speech(self, text, model=None, voice=None):
-        logger.debug(">>> TTS GENERATION CALLED from thread %s: text=%s...",
-                     threading.current_thread().name, text[:50] if text else "empty")
-        logger.debug(">>> TTS GENERATION full text length: %d chars", len(text) if text else 0)
-        model = model or self.config.text_to_speech_model
-        voice = voice or self.config.bot_voice_model
-        try:
-            return self._generate_tts_files(text, model, voice)
-        except Exception as e:
-            logger.error("Text-to-speech failed: %s", handle_api_error(e, service_name="OpenAI TTS"))
-            logger.debug("Text-to-speech exception details:", exc_info=True)
-            return []
+        return self._tts.text_to_speech(text, model=model, voice=voice)
+
+    def text_summary(self, user_input, extra_info=None, words="100", model=None):
+        return self._llm.text_summary(user_input, extra_info=extra_info, words=words, model=model)

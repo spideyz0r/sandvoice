@@ -1,616 +1,402 @@
-import unittest
-import tempfile
 import os
-import json
-from unittest.mock import Mock, patch, mock_open
-from common.ai import AI, ErrorMessage, pop_streaming_chunk
+import unittest
+from unittest.mock import Mock, patch, MagicMock
 
+from common.ai import (
+    AI, ErrorMessage, pop_streaming_chunk,
+    _build_llm_provider, _build_tts_provider, _build_stt_provider,
+)
+from common.providers import OpenAILLMProvider, OpenAITTSProvider, OpenAISTTProvider
+from common.providers.base import LLMProvider, TTSProvider, STTProvider
+
+
+def _make_config(**kwargs):
+    config = Mock()
+    config.botname = "TestBot"
+    config.api_timeout = 10
+    config.api_retry_attempts = 3
+    config.llm_provider = "openai"
+    config.tts_provider = "openai"
+    config.stt_provider = "openai"
+    config.debug = False
+    config.enable_error_logging = False
+    config.error_log_path = "/tmp/test-error.log"
+    for k, v in kwargs.items():
+        setattr(config, k, v)
+    return config
+
+
+def _make_providers():
+    llm = MagicMock(spec=LLMProvider)
+    tts = MagicMock(spec=TTSProvider)
+    stt = MagicMock(spec=STTProvider)
+    return llm, tts, stt
+
+
+# ---------------------------------------------------------------------------
+# ErrorMessage
+# ---------------------------------------------------------------------------
 
 class TestErrorMessage(unittest.TestCase):
-    def test_error_message_creation(self):
-        """Test ErrorMessage object creation"""
+    def test_content_stored(self):
         msg = ErrorMessage("Test error")
         self.assertEqual(msg.content, "Test error")
 
 
-class TestAIInitialization(unittest.TestCase):
-    def setUp(self):
-        """Set up test environment"""
-        self.temp_dir = tempfile.mkdtemp()
-        self.original_home = os.environ.get('HOME')
-        self.original_api_key = os.environ.get('OPENAI_API_KEY')
-        os.environ['HOME'] = self.temp_dir
-        os.environ['OPENAI_API_KEY'] = 'test-api-key'
-        os.makedirs(os.path.join(self.temp_dir, ".sandvoice"), exist_ok=True)
+# ---------------------------------------------------------------------------
+# AI.__init__
+# ---------------------------------------------------------------------------
 
-    def tearDown(self):
-        """Clean up test environment"""
-        if self.original_home is not None:
-            os.environ['HOME'] = self.original_home
-        else:
-            os.environ.pop('HOME', None)
+class TestAIInit(unittest.TestCase):
+    def test_stores_providers_and_config(self):
+        llm, tts, stt = _make_providers()
+        config = _make_config()
+        ai = AI(llm, tts, stt, config)
+        self.assertIs(ai._llm, llm)
+        self.assertIs(ai._tts, tts)
+        self.assertIs(ai._stt, stt)
+        self.assertIs(ai.config, config)
 
-        if self.original_api_key is not None:
-            os.environ['OPENAI_API_KEY'] = self.original_api_key
-        else:
-            os.environ.pop('OPENAI_API_KEY', None)
-
-        import shutil
-        shutil.rmtree(self.temp_dir, ignore_errors=True)
-
-    @patch('common.ai.OpenAI')
-    @patch('common.ai.setup_error_logging')
-    def test_init_success(self, mock_setup_logging, mock_openai):
-        """Test successful AI initialization"""
-        mock_config = Mock()
-        mock_config.api_timeout = 10
-        mock_config.api_retry_attempts = 3
-
-        ai = AI(mock_config)
-
-        self.assertIsNotNone(ai.openai_client)
+    def test_conversation_history_starts_empty(self):
+        ai = AI(*_make_providers(), _make_config())
         self.assertEqual(ai.conversation_history, [])
-        mock_setup_logging.assert_called_once_with(ai.config)
-        mock_openai.assert_called_once_with(timeout=10)
-
-    @patch('common.ai.OpenAI')
-    @patch('common.ai.setup_error_logging')
-    def test_init_missing_api_key(self, mock_setup_logging, mock_openai):
-        """Test initialization fails without API key"""
-        del os.environ['OPENAI_API_KEY']
-        mock_config = Mock()
-        mock_config.enable_error_logging = False
-        mock_config.error_log_path = '/tmp/error.log'
-
-        with self.assertRaises(ValueError) as context:
-            AI(mock_config)
-
-        self.assertIn("OPENAI_API_KEY", str(context.exception))
 
 
-class TestTranscribeAndTranslate(unittest.TestCase):
+# ---------------------------------------------------------------------------
+# AI.from_config
+# ---------------------------------------------------------------------------
+
+class TestAIFromConfig(unittest.TestCase):
     def setUp(self):
-        """Set up test environment"""
-        self.temp_dir = tempfile.mkdtemp()
-        self.original_home = os.environ.get('HOME')
-        self.original_api_key = os.environ.get('OPENAI_API_KEY')
-        os.environ['HOME'] = self.temp_dir
+        self.orig_key = os.environ.get('OPENAI_API_KEY')
         os.environ['OPENAI_API_KEY'] = 'test-key'
 
     def tearDown(self):
-        """Clean up"""
-        import shutil
-        # Restore original environment variables
-        if self.original_home is not None:
-            os.environ['HOME'] = self.original_home
-        elif 'HOME' in os.environ:
-            del os.environ['HOME']
-
-        if self.original_api_key is not None:
-            os.environ['OPENAI_API_KEY'] = self.original_api_key
-        elif 'OPENAI_API_KEY' in os.environ:
-            del os.environ['OPENAI_API_KEY']
-
-        shutil.rmtree(self.temp_dir, ignore_errors=True)
-
-    @patch('common.ai.OpenAI')
-    @patch('common.ai.setup_error_logging')
-    @patch('builtins.open', new_callable=mock_open, read_data=b'fake audio data')
-    def test_transcribe_success(self, mock_file, mock_setup, mock_openai_class):
-        """Test successful transcription"""
-        mock_config = Mock()
-        mock_config.api_timeout = 10
-        mock_config.api_retry_attempts = 3
-        mock_config.speech_to_text_model = 'whisper-1'
-        mock_config.speech_to_text_task = 'translate'
-        mock_config.speech_to_text_language = ''
-        mock_config.speech_to_text_translate_provider = 'whisper'
-        mock_config.speech_to_text_translate_model = 'gpt-5-mini'
-        mock_config.tmp_recording = '/tmp/recording'
-        mock_config.debug = False
-
-        mock_client = Mock()
-        mock_openai_class.return_value = mock_client
-
-        mock_transcript = Mock()
-        mock_transcript.text = "Hello world"
-        mock_client.audio.translations.create.return_value = mock_transcript
-
-        ai = AI(mock_config)
-        result = ai.transcribe_and_translate()
-
-        self.assertEqual(result, "Hello world")
-        mock_file.assert_called_once_with('/tmp/recording.mp3', 'rb')
-        mock_client.audio.translations.create.assert_called_once()
-
-    @patch('common.ai.OpenAI')
-    @patch('common.ai.setup_error_logging')
-    @patch('builtins.open', new_callable=mock_open, read_data=b'fake audio data')
-    def test_transcribe_task_transcribe_with_language_hint(self, mock_file, mock_setup, mock_openai_class):
-        """Test transcribe task keeps original language"""
-        mock_config = Mock()
-        mock_config.api_timeout = 10
-        mock_config.api_retry_attempts = 3
-        mock_config.speech_to_text_model = 'whisper-1'
-        mock_config.speech_to_text_task = 'transcribe'
-        mock_config.speech_to_text_language = 'pt'
-        mock_config.tmp_recording = '/tmp/recording'
-        mock_config.debug = False
-
-        mock_client = Mock()
-        mock_openai_class.return_value = mock_client
-
-        mock_transcript = Mock()
-        mock_transcript.text = "O que e uma lombriga?"
-        mock_client.audio.transcriptions.create.return_value = mock_transcript
-
-        ai = AI(mock_config)
-        result = ai.transcribe_and_translate()
-
-        self.assertEqual(result, "O que e uma lombriga?")
-        mock_file.assert_called_once_with('/tmp/recording.mp3', 'rb')
-        mock_client.audio.transcriptions.create.assert_called_once()
-        _args, kwargs = mock_client.audio.transcriptions.create.call_args
-        self.assertEqual(kwargs.get('language'), 'pt')
-
-    @patch('common.ai.OpenAI')
-    @patch('common.ai.setup_error_logging')
-    @patch('builtins.open', new_callable=mock_open, read_data=b'fake audio data')
-    def test_transcribe_task_transcribe_without_language_hint(self, mock_file, mock_setup, mock_openai_class):
-        """Test transcribe task omits language when not provided"""
-        mock_config = Mock()
-        mock_config.api_timeout = 10
-        mock_config.api_retry_attempts = 3
-        mock_config.speech_to_text_model = 'whisper-1'
-        mock_config.speech_to_text_task = 'transcribe'
-        mock_config.speech_to_text_language = ''
-        mock_config.tmp_recording = '/tmp/recording'
-        mock_config.debug = False
-
-        mock_client = Mock()
-        mock_openai_class.return_value = mock_client
-
-        mock_transcript = Mock()
-        mock_transcript.text = "Hello"
-        mock_client.audio.transcriptions.create.return_value = mock_transcript
-
-        ai = AI(mock_config)
-        result = ai.transcribe_and_translate()
-
-        self.assertEqual(result, "Hello")
-        _args, kwargs = mock_client.audio.transcriptions.create.call_args
-        self.assertNotIn('language', kwargs)
-
-    @patch('common.ai.OpenAI')
-    @patch('common.ai.setup_error_logging')
-    @patch('builtins.open', new_callable=mock_open, read_data=b'fake audio data')
-    def test_translate_provider_gpt_transcribe_then_translate(self, mock_file, mock_setup, mock_openai_class):
-        """Test translate via GPT uses transcribe then chat translate"""
-        mock_config = Mock()
-        mock_config.api_timeout = 10
-        mock_config.api_retry_attempts = 3
-        mock_config.speech_to_text_model = 'whisper-1'
-        mock_config.speech_to_text_task = 'translate'
-        mock_config.speech_to_text_language = 'pt'
-        mock_config.speech_to_text_translate_provider = 'gpt'
-        mock_config.speech_to_text_translate_model = 'gpt-5-mini'
-        mock_config.tmp_recording = '/tmp/recording'
-        mock_config.debug = False
-
-        mock_client = Mock()
-        mock_openai_class.return_value = mock_client
-
-        mock_transcript = Mock()
-        mock_transcript.text = "O que e uma lombriga?"
-        mock_client.audio.transcriptions.create.return_value = mock_transcript
-
-        mock_message = Mock()
-        mock_message.content = "What is a worm?"
-        mock_completion = Mock()
-        mock_completion.choices = [Mock(message=mock_message)]
-        mock_client.chat.completions.create.return_value = mock_completion
-
-        ai = AI(mock_config)
-        result = ai.transcribe_and_translate()
-
-        self.assertEqual(result, "What is a worm?")
-        mock_file.assert_called_once_with('/tmp/recording.mp3', 'rb')
-        mock_client.audio.transcriptions.create.assert_called_once()
-        mock_client.chat.completions.create.assert_called_once()
-        mock_client.audio.translations.create.assert_not_called()
-
-    @patch('common.ai.OpenAI')
-    @patch('common.ai.setup_error_logging')
-    @patch('builtins.open', new_callable=mock_open, read_data=b'fake audio data')
-    def test_translate_provider_gpt_skips_chat_on_empty_transcript(self, mock_file, mock_setup, mock_openai_class):
-        """Test translate via GPT returns empty and skips chat on empty transcript"""
-        mock_config = Mock()
-        mock_config.api_timeout = 10
-        mock_config.api_retry_attempts = 3
-        mock_config.speech_to_text_model = 'whisper-1'
-        mock_config.speech_to_text_task = 'translate'
-        mock_config.speech_to_text_language = 'pt'
-        mock_config.speech_to_text_translate_provider = 'gpt'
-        mock_config.speech_to_text_translate_model = 'gpt-5-mini'
-        mock_config.tmp_recording = '/tmp/recording'
-        mock_config.debug = False
-
-        mock_client = Mock()
-        mock_openai_class.return_value = mock_client
-
-        mock_transcript = Mock()
-        mock_transcript.text = "   "
-        mock_client.audio.transcriptions.create.return_value = mock_transcript
-
-        ai = AI(mock_config)
-        result = ai.transcribe_and_translate()
-
-        self.assertEqual(result, "")
-        mock_client.chat.completions.create.assert_not_called()
-
-    @patch('common.ai.OpenAI')
-    @patch('common.ai.setup_error_logging')
-    def test_transcribe_file_not_found(self, mock_setup, mock_openai_class):
-        """Test transcription with missing file"""
-        mock_config = Mock()
-        mock_config.api_timeout = 10
-        mock_config.api_retry_attempts = 3
-        mock_config.tmp_recording = '/nonexistent/recording'
-        mock_config.debug = False
-
-        mock_client = Mock()
-        mock_openai_class.return_value = mock_client
-
-        ai = AI(mock_config)
-
-        with self.assertRaises(FileNotFoundError):
-            ai.transcribe_and_translate()
-
-    @patch('common.ai.OpenAI')
-    @patch('common.ai.setup_error_logging')
-    @patch('builtins.open', new_callable=mock_open, read_data=b'fake audio data')
-    def test_transcribe_generic_exception(self, mock_file, mock_setup, mock_openai_class):
-        """Test transcription with generic API exception"""
-        mock_config = Mock()
-        mock_config.api_timeout = 10
-        mock_config.api_retry_attempts = 3
-        mock_config.speech_to_text_model = 'whisper-1'
-        mock_config.speech_to_text_task = 'translate'
-        mock_config.speech_to_text_language = ''
-        mock_config.speech_to_text_translate_provider = 'whisper'
-        mock_config.speech_to_text_translate_model = 'gpt-5-mini'
-        mock_config.tmp_recording = '/tmp/recording'
-        mock_config.debug = False
-
-        mock_client = Mock()
-        mock_openai_class.return_value = mock_client
-        mock_client.audio.translations.create.side_effect = Exception("API Error")
-
-        ai = AI(mock_config)
-
-        with self.assertRaises(Exception) as context:
-            ai.transcribe_and_translate()
-
-        self.assertIn("API Error", str(context.exception))
-        self.assertEqual(mock_client.audio.translations.create.call_count, 3)
-
-
-class TestGenerateResponse(unittest.TestCase):
-    def setUp(self):
-        """Set up test environment"""
-        self.original_api_key = os.environ.get('OPENAI_API_KEY')
-        os.environ['OPENAI_API_KEY'] = 'test-key'
-
-    def tearDown(self):
-        """Restore environment"""
-        if self.original_api_key is not None:
-            os.environ['OPENAI_API_KEY'] = self.original_api_key
+        if self.orig_key is not None:
+            os.environ['OPENAI_API_KEY'] = self.orig_key
         else:
             os.environ.pop('OPENAI_API_KEY', None)
 
     @patch('common.ai.OpenAI')
     @patch('common.ai.setup_error_logging')
-    def test_generate_response_success(self, mock_setup, mock_openai_class):
-        """Test successful response generation"""
-        mock_config = Mock()
-        mock_config.api_timeout = 10
-        mock_config.api_retry_attempts = 3
-        mock_config.gpt_response_model = 'gpt-3.5-turbo'
-        mock_config.botname = 'TestBot'
-        mock_config.language = 'English'
-        mock_config.timezone = 'EST'
-        mock_config.location = 'Test City'
-        mock_config.debug = False
-
-        mock_client = Mock()
-        mock_openai_class.return_value = mock_client
-
-        mock_message = Mock()
-        mock_message.content = "Hello! How can I help?"
-        mock_completion = Mock()
-        mock_completion.choices = [Mock(message=mock_message)]
-        mock_client.chat.completions.create.return_value = mock_completion
-
-        ai = AI(mock_config)
-        result = ai.generate_response("Hello")
-
-        self.assertEqual(result.content, "Hello! How can I help?")
-        self.assertEqual(len(ai.conversation_history), 2)
-        self.assertIn("User: Hello", ai.conversation_history[0])
-        self.assertIn("TestBot: Hello! How can I help?", ai.conversation_history[1])
+    def test_returns_ai_instance(self, mock_setup, mock_openai):
+        config = _make_config()
+        ai = AI.from_config(config)
+        self.assertIsInstance(ai, AI)
+        self.assertEqual(ai.conversation_history, [])
 
     @patch('common.ai.OpenAI')
     @patch('common.ai.setup_error_logging')
-    def test_generate_response_streaming_success(self, mock_setup, mock_openai_class):
-        """Test streaming response assembly produces final content."""
-        mock_config = Mock()
-        mock_config.api_timeout = 10
-        mock_config.api_retry_attempts = 3
-        mock_config.gpt_response_model = 'gpt-3.5-turbo'
-        mock_config.botname = 'TestBot'
-        mock_config.language = 'English'
-        mock_config.timezone = 'EST'
-        mock_config.location = 'Test City'
-        mock_config.debug = False
-        mock_config.stream_responses = True
-
-        mock_client = Mock()
-        mock_openai_class.return_value = mock_client
-
-        e1 = Mock()
-        e1.choices = [Mock(delta=Mock(content="Hello"))]
-        e2 = Mock()
-        e2.choices = [Mock(delta=Mock(content=" world"))]
-        e3 = Mock()
-        e3.choices = [Mock(delta=Mock(content="!"))]
-
-        mock_client.chat.completions.create.return_value = iter([e1, e2, e3])
-
-        ai = AI(mock_config)
-        result = ai.generate_response("Hello")
-
-        self.assertEqual(result.content, "Hello world!")
-        self.assertEqual(len(ai.conversation_history), 2)
-        self.assertIn("User: Hello", ai.conversation_history[0])
-        self.assertIn("TestBot: Hello world!", ai.conversation_history[1])
-
-        _args, kwargs = mock_client.chat.completions.create.call_args
-        self.assertTrue(kwargs.get('stream'))
+    def test_calls_setup_error_logging(self, mock_setup, mock_openai):
+        config = _make_config()
+        AI.from_config(config)
+        mock_setup.assert_called_once_with(config)
 
     @patch('common.ai.OpenAI')
     @patch('common.ai.setup_error_logging')
-    def test_generate_response_with_extra_info(self, mock_setup, mock_openai_class):
-        """Test response generation with extra context"""
-        mock_config = Mock()
-        mock_config.api_timeout = 10
-        mock_config.api_retry_attempts = 3
-        mock_config.gpt_response_model = 'gpt-3.5-turbo'
-        mock_config.botname = 'TestBot'
-        mock_config.language = 'English'
-        mock_config.timezone = 'EST'
-        mock_config.location = 'Test City'
-        mock_config.debug = False
+    def test_creates_openai_client_with_timeout(self, mock_setup, mock_openai):
+        config = _make_config(api_timeout=15)
+        AI.from_config(config)
+        mock_openai.assert_called_once_with(timeout=15)
 
-        mock_client = Mock()
-        mock_openai_class.return_value = mock_client
+    def test_raises_on_missing_api_key(self):
+        del os.environ['OPENAI_API_KEY']
+        config = _make_config()
+        with self.assertRaises(ValueError) as ctx:
+            AI.from_config(config)
+        self.assertIn("OPENAI_API_KEY", str(ctx.exception))
 
-        mock_message = Mock()
-        mock_message.content = "The weather is sunny"
-        mock_completion = Mock()
-        mock_completion.choices = [Mock(message=mock_message)]
-        mock_client.chat.completions.create.return_value = mock_completion
-
-        ai = AI(mock_config)
-        result = ai.generate_response("What's the weather?", extra_info="Temperature: 72F")
-
-        self.assertEqual(result.content, "The weather is sunny")
+    def test_unknown_provider_raises_before_api_key_check(self):
+        # Provider validation must happen before the API key check so a
+        # misconfigured provider name gives the actionable error, not a
+        # misleading "Missing OPENAI_API_KEY" message.
+        del os.environ['OPENAI_API_KEY']
+        config = _make_config(llm_provider="mistral")
+        with self.assertRaises(ValueError) as ctx:
+            AI.from_config(config)
+        self.assertIn("llm_provider", str(ctx.exception))
+        self.assertNotIn("OPENAI_API_KEY", str(ctx.exception))
 
     @patch('common.ai.OpenAI')
     @patch('common.ai.setup_error_logging')
-    def test_generate_response_api_error(self, mock_setup, mock_openai_class):
-        """Test response generation with API error returns ErrorMessage"""
-        mock_config = Mock()
-        mock_config.api_timeout = 10
-        mock_config.api_retry_attempts = 3
-        mock_config.gpt_response_model = 'gpt-3.5-turbo'
-        mock_config.botname = 'TestBot'
-        mock_config.language = 'English'
-        mock_config.timezone = 'EST'
-        mock_config.location = 'Test City'
-        mock_config.debug = False
+    def test_whitespace_only_provider_defaults_to_openai(self, mock_setup, mock_openai):
+        # Whitespace-only provider values must normalize to "openai", not raise
+        # Unknown provider: '' — same as None/empty.
+        config = _make_config(llm_provider="   ", tts_provider="   ", stt_provider="   ")
+        ai = AI.from_config(config)
+        self.assertIsInstance(ai, AI)
 
-        mock_client = Mock()
-        mock_openai_class.return_value = mock_client
-        mock_client.chat.completions.create.side_effect = Exception("API Error")
+    @patch('common.ai.OpenAI')
+    @patch('common.ai.setup_error_logging')
+    def test_openai_client_accessible_after_from_config(self, mock_setup, mock_openai):
+        config = _make_config()
+        ai = AI.from_config(config)
+        # from_config stores the client; the property must return it.
+        self.assertIs(ai.openai_client, mock_openai.return_value)
 
-        ai = AI(mock_config)
-        result = ai.generate_response("Hello")
+    def test_openai_client_raises_when_not_set(self):
+        llm, tts, stt = _make_providers()
+        ai = AI(llm, tts, stt, _make_config())
+        with self.assertRaises(AttributeError) as ctx:
+            _ = ai.openai_client
+        self.assertIn("from_config", str(ctx.exception))
 
-        self.assertIsInstance(result, ErrorMessage)
-        self.assertIn("trouble", result.content)
 
+# ---------------------------------------------------------------------------
+# Provider factory helpers
+# ---------------------------------------------------------------------------
 
-class TestDefineRoute(unittest.TestCase):
+class TestProviderFactories(unittest.TestCase):
     def setUp(self):
-        """Set up test environment"""
-        self.original_api_key = os.environ.get('OPENAI_API_KEY')
-        os.environ['OPENAI_API_KEY'] = 'test-key'
-        self.routes_yaml = """
-route_role: |
-  You are a routing bot.
-"""
+        self.client = Mock()
 
-    def tearDown(self):
-        """Restore original OPENAI_API_KEY environment variable"""
-        if self.original_api_key is not None:
-            os.environ['OPENAI_API_KEY'] = self.original_api_key
-        elif 'OPENAI_API_KEY' in os.environ:
-            del os.environ['OPENAI_API_KEY']
+    def test_build_llm_openai(self):
+        config = _make_config(llm_provider="openai")
+        provider = _build_llm_provider(config, self.client)
+        self.assertIsInstance(provider, OpenAILLMProvider)
 
-    @patch('common.ai.OpenAI')
-    @patch('common.ai.setup_error_logging')
-    @patch('builtins.open', new_callable=mock_open)
-    def test_define_route_success(self, mock_file, mock_setup, mock_openai_class):
-        """Test successful route definition"""
-        mock_file.return_value.read.return_value = self.routes_yaml
+    def test_build_tts_openai(self):
+        config = _make_config(tts_provider="openai")
+        provider = _build_tts_provider(config, self.client)
+        self.assertIsInstance(provider, OpenAITTSProvider)
 
-        mock_config = Mock()
-        mock_config.api_timeout = 10
-        mock_config.api_retry_attempts = 3
-        mock_config.gpt_route_model = 'gpt-3.5-turbo'
-        mock_config.location = 'Test City'
-        mock_config.sandvoice_path = '/test/path'
-        mock_config.debug = False
+    def test_build_stt_openai(self):
+        config = _make_config(stt_provider="openai")
+        provider = _build_stt_provider(config, self.client)
+        self.assertIsInstance(provider, OpenAISTTProvider)
 
-        mock_client = Mock()
-        mock_openai_class.return_value = mock_client
+    def test_unknown_llm_provider_raises(self):
+        config = _make_config(llm_provider="unknown")
+        with self.assertRaises(ValueError) as ctx:
+            _build_llm_provider(config, self.client)
+        self.assertIn("unknown", str(ctx.exception))
 
-        mock_message = Mock()
-        mock_message.content = '{"route": "weather", "reason": "User asked about weather"}'
-        mock_completion = Mock()
-        mock_completion.choices = [Mock(message=mock_message)]
-        mock_client.chat.completions.create.return_value = mock_completion
+    def test_unknown_tts_provider_raises(self):
+        config = _make_config(tts_provider="unknown")
+        with self.assertRaises(ValueError) as ctx:
+            _build_tts_provider(config, self.client)
+        self.assertIn("unknown", str(ctx.exception))
 
-        ai = AI(mock_config)
-        result = ai.define_route("What's the weather?")
+    def test_unknown_stt_provider_raises(self):
+        config = _make_config(stt_provider="unknown")
+        with self.assertRaises(ValueError) as ctx:
+            _build_stt_provider(config, self.client)
+        self.assertIn("unknown", str(ctx.exception))
 
+
+# ---------------------------------------------------------------------------
+# AI.generate_response — history management
+# ---------------------------------------------------------------------------
+
+class TestAIGenerateResponse(unittest.TestCase):
+    def setUp(self):
+        self.llm, self.tts, self.stt = _make_providers()
+        self.config = _make_config()
+        self.ai = AI(self.llm, self.tts, self.stt, self.config)
+
+    def _mock_result(self, content):
+        msg = Mock()
+        msg.content = content
+        self.llm.generate_response.return_value = msg
+        return msg
+
+    def test_delegates_to_llm(self):
+        self._mock_result("Hello!")
+        result = self.ai.generate_response("hi")
+        self.llm.generate_response.assert_called_once_with(
+            "hi", [], extra_info=None, model=None
+        )
+        self.assertEqual(result.content, "Hello!")
+
+    def test_appends_user_and_assistant_to_history(self):
+        self._mock_result("Hello!")
+        self.ai.generate_response("hi")
+        self.assertEqual(len(self.ai.conversation_history), 2)
+        self.assertEqual(self.ai.conversation_history[0], "User: hi")
+        self.assertEqual(self.ai.conversation_history[1], "TestBot: Hello!")
+
+    def test_passes_prior_history_to_provider(self):
+        self.ai.conversation_history = ["User: prev", "TestBot: ok"]
+        self._mock_result("Good")
+        self.ai.generate_response("next")
+        call_args = self.llm.generate_response.call_args
+        history_passed = call_args[0][1]
+        self.assertEqual(history_passed, ["User: prev", "TestBot: ok"])
+
+    def test_does_not_duplicate_user_turn_on_retry(self):
+        self.ai.conversation_history = ["User: hi"]
+        self._mock_result("Hi again")
+        self.ai.generate_response("hi")
+        user_turns = [m for m in self.ai.conversation_history if m == "User: hi"]
+        self.assertEqual(len(user_turns), 1)
+
+    def test_extra_info_forwarded(self):
+        self._mock_result("Sunny")
+        self.ai.generate_response("weather?", extra_info="72F")
+        call_kwargs = self.llm.generate_response.call_args[1]
+        self.assertEqual(call_kwargs["extra_info"], "72F")
+
+    def test_model_forwarded(self):
+        self._mock_result("ok")
+        self.ai.generate_response("hi", model="gpt-4")
+        call_kwargs = self.llm.generate_response.call_args[1]
+        self.assertEqual(call_kwargs["model"], "gpt-4")
+
+    def test_error_message_still_updates_history(self):
+        error = ErrorMessage("Sorry, having trouble.")
+        self.llm.generate_response.return_value = error
+        result = self.ai.generate_response("hi")
+        self.assertIsInstance(result, ErrorMessage)
+        self.assertEqual(len(self.ai.conversation_history), 2)
+
+
+# ---------------------------------------------------------------------------
+# AI.stream_response_deltas — history management
+# ---------------------------------------------------------------------------
+
+class TestAIStreamResponseDeltas(unittest.TestCase):
+    def setUp(self):
+        self.llm, self.tts, self.stt = _make_providers()
+        self.config = _make_config()
+        self.ai = AI(self.llm, self.tts, self.stt, self.config)
+
+    def test_yields_deltas(self):
+        self.llm.stream_response_deltas.return_value = iter(["Hello", " there", "!"])
+        pieces = list(self.ai.stream_response_deltas("hi"))
+        self.assertEqual(pieces, ["Hello", " there", "!"])
+
+    def test_appends_user_and_assistant_to_history_on_success(self):
+        self.llm.stream_response_deltas.return_value = iter(["Hello", " there"])
+        list(self.ai.stream_response_deltas("hi"))
+        self.assertEqual(len(self.ai.conversation_history), 2)
+        self.assertEqual(self.ai.conversation_history[0], "User: hi")
+        self.assertEqual(self.ai.conversation_history[1], "TestBot: Hello there")
+
+    def test_user_turn_in_history_on_stream_failure(self):
+        def _broken():
+            yield "Hello"
+            raise RuntimeError("boom")
+
+        self.llm.stream_response_deltas.return_value = _broken()
+        gen = self.ai.stream_response_deltas("hi")
+        self.assertEqual(next(gen), "Hello")
+        with self.assertRaises(RuntimeError):
+            list(gen)
+        # User turn present; assistant turn absent.
+        self.assertEqual(len(self.ai.conversation_history), 1)
+        self.assertEqual(self.ai.conversation_history[0], "User: hi")
+
+    def test_provider_receives_history_without_current_user_turn(self):
+        self.ai.conversation_history = ["User: prev", "TestBot: ok"]
+        self.llm.stream_response_deltas.return_value = iter(["hi"])
+        list(self.ai.stream_response_deltas("next"))
+        call_args = self.llm.stream_response_deltas.call_args
+        history_passed = call_args[0][1]
+        # Should be prior turns only — not include "User: next"
+        self.assertEqual(history_passed, ["User: prev", "TestBot: ok"])
+
+    def test_does_not_duplicate_user_turn(self):
+        self.ai.conversation_history = ["User: hi"]
+        self.llm.stream_response_deltas.return_value = iter(["ok"])
+        list(self.ai.stream_response_deltas("hi"))
+        user_turns = [m for m in self.ai.conversation_history if m == "User: hi"]
+        self.assertEqual(len(user_turns), 1)
+
+
+# ---------------------------------------------------------------------------
+# AI.transcribe_and_translate
+# ---------------------------------------------------------------------------
+
+class TestAITranscribeAndTranslate(unittest.TestCase):
+    def test_delegates_to_stt(self):
+        llm, tts, stt = _make_providers()
+        stt.transcribe.return_value = "hello"
+        ai = AI(llm, tts, stt, _make_config())
+        result = ai.transcribe_and_translate(audio_file_path="/tmp/test.mp3")
+        stt.transcribe.assert_called_once_with(audio_file_path="/tmp/test.mp3", model=None)
+        self.assertEqual(result, "hello")
+
+    def test_forwards_model(self):
+        llm, tts, stt = _make_providers()
+        stt.transcribe.return_value = "hello"
+        ai = AI(llm, tts, stt, _make_config())
+        ai.transcribe_and_translate(model="whisper-1", audio_file_path="/tmp/test.mp3")
+        stt.transcribe.assert_called_once_with(audio_file_path="/tmp/test.mp3", model="whisper-1")
+
+
+# ---------------------------------------------------------------------------
+# AI.define_route
+# ---------------------------------------------------------------------------
+
+class TestAIDefineRoute(unittest.TestCase):
+    def test_delegates_to_llm(self):
+        llm, tts, stt = _make_providers()
+        llm.define_route.return_value = {"route": "weather", "reason": "weather query"}
+        ai = AI(llm, tts, stt, _make_config())
+        result = ai.define_route("what is the weather?")
+        llm.define_route.assert_called_once_with(
+            "what is the weather?", model=None, extra_routes=None
+        )
         self.assertEqual(result["route"], "weather")
-        self.assertIn("reason", result)
 
-    @patch('common.ai.OpenAI')
-    @patch('common.ai.setup_error_logging')
-    @patch('builtins.open', new_callable=mock_open)
-    def test_define_route_normalizes_legacy_default_route_name(self, mock_file, mock_setup, mock_openai_class):
-        """Legacy default-rote output must normalize to default-route."""
-        mock_file.return_value.read.return_value = self.routes_yaml
+    def test_forwards_extra_routes(self):
+        llm, tts, stt = _make_providers()
+        llm.define_route.return_value = {"route": "default-route", "reason": "fallback"}
+        ai = AI(llm, tts, stt, _make_config())
+        ai.define_route("hi", extra_routes="\n- custom-route: do stuff")
+        call_kwargs = llm.define_route.call_args[1]
+        self.assertIn("custom-route", call_kwargs["extra_routes"])
 
-        mock_config = Mock()
-        mock_config.api_timeout = 10
-        mock_config.api_retry_attempts = 3
-        mock_config.gpt_route_model = 'gpt-3.5-turbo'
-        mock_config.location = 'Test City'
-        mock_config.sandvoice_path = '/test/path'
-        mock_config.debug = False
 
-        mock_client = Mock()
-        mock_openai_class.return_value = mock_client
+# ---------------------------------------------------------------------------
+# AI.text_to_speech
+# ---------------------------------------------------------------------------
 
-        mock_message = Mock()
-        mock_message.content = '{"route": "default-rote", "reason": "fallback"}'
-        mock_completion = Mock()
-        mock_completion.choices = [Mock(message=mock_message)]
-        mock_client.chat.completions.create.return_value = mock_completion
+class TestAITextToSpeech(unittest.TestCase):
+    def test_delegates_to_tts(self):
+        llm, tts, stt = _make_providers()
+        tts.text_to_speech.return_value = ["/tmp/tts-001.mp3"]
+        ai = AI(llm, tts, stt, _make_config())
+        result = ai.text_to_speech("hello")
+        tts.text_to_speech.assert_called_once_with("hello", model=None, voice=None)
+        self.assertEqual(result, ["/tmp/tts-001.mp3"])
 
-        ai = AI(mock_config)
-        result = ai.define_route("Hello")
+    def test_forwards_model_and_voice(self):
+        llm, tts, stt = _make_providers()
+        tts.text_to_speech.return_value = []
+        ai = AI(llm, tts, stt, _make_config())
+        ai.text_to_speech("hi", model="tts-1-hd", voice="nova")
+        tts.text_to_speech.assert_called_once_with("hi", model="tts-1-hd", voice="nova")
 
-        self.assertEqual(result["route"], "default-route")
-        self.assertEqual(result["reason"], "fallback")
 
-    @patch('common.ai.OpenAI')
-    @patch('common.ai.setup_error_logging')
-    @patch('builtins.open', new_callable=mock_open)
-    def test_define_route_invalid_shape_falls_back_to_default_route(self, mock_file, mock_setup, mock_openai_class):
-        """Non-dict JSON route output must fail closed to the default route."""
-        mock_file.return_value.read.return_value = self.routes_yaml
+# ---------------------------------------------------------------------------
+# AI.text_summary
+# ---------------------------------------------------------------------------
 
-        mock_config = Mock()
-        mock_config.api_timeout = 10
-        mock_config.api_retry_attempts = 3
-        mock_config.gpt_route_model = 'gpt-3.5-turbo'
-        mock_config.location = 'Test City'
-        mock_config.sandvoice_path = '/test/path'
-        mock_config.debug = False
+class TestAITextSummary(unittest.TestCase):
+    def test_delegates_to_llm(self):
+        llm, tts, stt = _make_providers()
+        llm.text_summary.return_value = {"title": "T", "text": "S"}
+        ai = AI(llm, tts, stt, _make_config())
+        result = ai.text_summary("long article")
+        llm.text_summary.assert_called_once_with(
+            "long article", extra_info=None, words="100", model=None
+        )
+        self.assertEqual(result["title"], "T")
 
-        mock_client = Mock()
-        mock_openai_class.return_value = mock_client
+    def test_forwards_words_and_extra_info(self):
+        llm, tts, stt = _make_providers()
+        llm.text_summary.return_value = {"title": "T", "text": "S"}
+        ai = AI(llm, tts, stt, _make_config())
+        ai.text_summary("article", extra_info="recipe", words="50")
+        call_kwargs = llm.text_summary.call_args[1]
+        self.assertEqual(call_kwargs["words"], "50")
+        self.assertEqual(call_kwargs["extra_info"], "recipe")
 
-        mock_message = Mock()
-        mock_message.content = '["default-rote", "fallback"]'
-        mock_completion = Mock()
-        mock_completion.choices = [Mock(message=mock_message)]
-        mock_client.chat.completions.create.return_value = mock_completion
 
-        ai = AI(mock_config)
-        result = ai.define_route("Hello")
-
-        self.assertEqual(result["route"], "default-route")
-        self.assertEqual(result["reason"], "Invalid route response")
-
-    @patch('common.ai.OpenAI')
-    @patch('common.ai.setup_error_logging')
-    def test_define_route_file_not_found(self, mock_setup, mock_openai_class):
-        """Test route definition with missing routes file"""
-        mock_config = Mock()
-        mock_config.api_timeout = 10
-        mock_config.api_retry_attempts = 3
-        mock_config.sandvoice_path = '/nonexistent'
-        mock_config.debug = False
-
-        mock_client = Mock()
-        mock_openai_class.return_value = mock_client
-
-        ai = AI(mock_config)
-        result = ai.define_route("Hello")
-
-        self.assertEqual(result["route"], "default-route")
-        self.assertIn("Error", result["reason"])
-
-    @patch('common.ai.OpenAI')
-    @patch('common.ai.setup_error_logging')
-    @patch('builtins.open', new_callable=mock_open)
-    def test_define_route_json_parse_error(self, mock_file, mock_setup, mock_openai_class):
-        """Test route definition with invalid JSON response"""
-        mock_file.return_value.read.return_value = self.routes_yaml
-
-        mock_config = Mock()
-        mock_config.api_timeout = 10
-        mock_config.api_retry_attempts = 3
-        mock_config.gpt_route_model = 'gpt-3.5-turbo'
-        mock_config.location = 'Test City'
-        mock_config.sandvoice_path = '/test/path'
-        mock_config.debug = False
-
-        mock_client = Mock()
-        mock_openai_class.return_value = mock_client
-
-        mock_message = Mock()
-        mock_message.content = 'invalid json'
-        mock_completion = Mock()
-        mock_completion.choices = [Mock(message=mock_message)]
-        mock_client.chat.completions.create.return_value = mock_completion
-
-        ai = AI(mock_config)
-        result = ai.define_route("Hello")
-
-        self.assertEqual(result["route"], "default-route")
-        self.assertIn("Parse error", result["reason"])
-
-    @patch('common.ai.OpenAI')
-    @patch('common.ai.setup_error_logging')
-    @patch('builtins.open', new_callable=mock_open)
-    def test_define_route_api_exception(self, mock_file, mock_setup, mock_openai_class):
-        """Test route definition with API exception"""
-        mock_file.return_value.read.return_value = self.routes_yaml
-
-        mock_config = Mock()
-        mock_config.api_timeout = 10
-        mock_config.api_retry_attempts = 3
-        mock_config.gpt_route_model = 'gpt-3.5-turbo'
-        mock_config.location = 'Test City'
-        mock_config.sandvoice_path = '/test/path'
-        mock_config.debug = False
-
-        mock_client = Mock()
-        mock_openai_class.return_value = mock_client
-        mock_client.chat.completions.create.side_effect = Exception("API Error")
-
-        ai = AI(mock_config)
-        result = ai.define_route("Hello")
-
-        self.assertEqual(result["route"], "default-route")
-        self.assertIn("API error", result["reason"])
-
+# ---------------------------------------------------------------------------
+# pop_streaming_chunk (unchanged utility)
+# ---------------------------------------------------------------------------
 
 class TestStreamingHelpers(unittest.TestCase):
     def test_pop_streaming_chunk_sentence_boundary(self):
@@ -650,170 +436,6 @@ class TestStreamingHelpers(unittest.TestCase):
         chunk = chunk or ""
         self.assertLessEqual(len(chunk), max_chars)
         self.assertEqual((chunk + rest), buf)
-
-
-class TestStreamResponseDeltas(unittest.TestCase):
-    def setUp(self):
-        self.original_api_key = os.environ.get('OPENAI_API_KEY')
-        os.environ['OPENAI_API_KEY'] = 'test-key'
-
-    def tearDown(self):
-        if self.original_api_key is not None:
-            os.environ['OPENAI_API_KEY'] = self.original_api_key
-        else:
-            os.environ.pop('OPENAI_API_KEY', None)
-
-    @patch('common.ai.OpenAI')
-    @patch('common.ai.setup_error_logging')
-    def test_stream_response_deltas_assembles_and_updates_history(self, mock_setup, mock_openai_class):
-        mock_config = Mock()
-        mock_config.api_timeout = 10
-        mock_config.api_retry_attempts = 3
-        mock_config.gpt_response_model = 'gpt-3.5-turbo'
-        mock_config.botname = 'TestBot'
-        mock_config.language = 'English'
-        mock_config.timezone = 'EST'
-        mock_config.location = 'Test City'
-        mock_config.debug = False
-
-        mock_client = Mock()
-        mock_openai_class.return_value = mock_client
-
-        e1 = Mock()
-        e1.choices = [Mock(delta=Mock(content="Hello"))]
-        e2 = Mock()
-        e2.choices = [Mock(delta=Mock(content=" there"))]
-        e3 = Mock()
-        e3.choices = [Mock(delta=Mock(content="!"))]
-        mock_client.chat.completions.create.return_value = iter([e1, e2, e3])
-
-        ai = AI(mock_config)
-        pieces = list(ai.stream_response_deltas("Hi"))
-        self.assertEqual("".join(pieces), "Hello there!")
-        self.assertEqual(len(ai.conversation_history), 2)
-        self.assertIn("User: Hi", ai.conversation_history[0])
-        self.assertIn("TestBot: Hello there!", ai.conversation_history[1])
-
-    @patch('common.ai.OpenAI')
-    @patch('common.ai.setup_error_logging')
-    def test_stream_response_deltas_does_not_append_partial_assistant_on_failure(self, mock_setup, mock_openai_class):
-        mock_config = Mock()
-        mock_config.api_timeout = 10
-        mock_config.api_retry_attempts = 3
-        mock_config.gpt_response_model = 'gpt-3.5-turbo'
-        mock_config.botname = 'TestBot'
-        mock_config.language = 'English'
-        mock_config.timezone = 'EST'
-        mock_config.location = 'Test City'
-        mock_config.debug = False
-
-        mock_client = Mock()
-        mock_openai_class.return_value = mock_client
-
-        def _broken_stream():
-            e1 = Mock()
-            e1.choices = [Mock(delta=Mock(content="Hello"))]
-            yield e1
-            raise RuntimeError("boom")
-
-        mock_client.chat.completions.create.return_value = _broken_stream()
-
-        ai = AI(mock_config)
-        gen = ai.stream_response_deltas("Hi")
-        self.assertEqual(next(gen), "Hello")
-        with self.assertRaises(RuntimeError):
-            list(gen)
-
-        # Only the user turn should be present; assistant turn should not be persisted.
-        self.assertEqual(len(ai.conversation_history), 1)
-        self.assertIn("User: Hi", ai.conversation_history[0])
-
-
-class TestTextSummary(unittest.TestCase):
-    def setUp(self):
-        """Set up test environment"""
-        self.original_api_key = os.environ.get('OPENAI_API_KEY')
-        os.environ['OPENAI_API_KEY'] = 'test-key'
-
-    def tearDown(self):
-        """Restore environment"""
-        if self.original_api_key is not None:
-            os.environ['OPENAI_API_KEY'] = self.original_api_key
-        else:
-            os.environ.pop('OPENAI_API_KEY', None)
-
-    @patch('common.ai.OpenAI')
-    @patch('common.ai.setup_error_logging')
-    def test_text_summary_success(self, mock_setup, mock_openai_class):
-        """Test successful text summarization"""
-        mock_config = Mock()
-        mock_config.api_timeout = 10
-        mock_config.api_retry_attempts = 3
-        mock_config.gpt_summary_model = 'gpt-3.5-turbo'
-        mock_config.language = 'English'
-        mock_config.debug = False
-
-        mock_client = Mock()
-        mock_openai_class.return_value = mock_client
-
-        mock_message = Mock()
-        mock_message.content = '{"title": "Test Article", "text": "This is a summary"}'
-        mock_completion = Mock()
-        mock_completion.choices = [Mock(message=mock_message)]
-        mock_client.chat.completions.create.return_value = mock_completion
-
-        ai = AI(mock_config)
-        result = ai.text_summary("Long text to summarize", words="50")
-
-        self.assertEqual(result["title"], "Test Article")
-        self.assertEqual(result["text"], "This is a summary")
-
-    @patch('common.ai.OpenAI')
-    @patch('common.ai.setup_error_logging')
-    def test_text_summary_json_error(self, mock_setup, mock_openai_class):
-        """Test summary with JSON parse error"""
-        mock_config = Mock()
-        mock_config.api_timeout = 10
-        mock_config.api_retry_attempts = 3
-        mock_config.gpt_summary_model = 'gpt-3.5-turbo'
-        mock_config.language = 'English'
-        mock_config.debug = False
-
-        mock_client = Mock()
-        mock_openai_class.return_value = mock_client
-
-        mock_message = Mock()
-        mock_message.content = 'invalid json'
-        mock_completion = Mock()
-        mock_completion.choices = [Mock(message=mock_message)]
-        mock_client.chat.completions.create.return_value = mock_completion
-
-        ai = AI(mock_config)
-        result = ai.text_summary("Long text")
-
-        self.assertEqual(result["title"], "Error")
-        self.assertIn("Unable", result["text"])
-
-    @patch('common.ai.OpenAI')
-    @patch('common.ai.setup_error_logging')
-    def test_text_summary_api_exception(self, mock_setup, mock_openai_class):
-        """Test summary with API exception"""
-        mock_config = Mock()
-        mock_config.api_timeout = 10
-        mock_config.api_retry_attempts = 3
-        mock_config.gpt_summary_model = 'gpt-3.5-turbo'
-        mock_config.language = 'English'
-        mock_config.debug = False
-
-        mock_client = Mock()
-        mock_openai_class.return_value = mock_client
-        mock_client.chat.completions.create.side_effect = Exception("API Error")
-
-        ai = AI(mock_config)
-        result = ai.text_summary("Long text")
-
-        self.assertEqual(result["title"], "Error")
-        self.assertIn("Unable", result["text"])
 
 
 if __name__ == '__main__':

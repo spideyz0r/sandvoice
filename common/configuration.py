@@ -137,6 +137,11 @@ class Config:
             "cache_warmup_retries": 3,       # max attempts per plugin before giving up
             "cache_warmup_retry_delay_s": 2, # seconds between retry attempts
 
+            # Provider selection (Plan 43) — only "openai" is supported for now
+            "llm_provider": "openai",
+            "tts_provider": "openai",
+            "stt_provider": "openai",
+
             # Task Scheduler (Plan 21)
             "scheduler_enabled": "disabled",
             "scheduler_poll_interval": 30,
@@ -207,6 +212,9 @@ class Config:
         self.api_retry_attempts = self.get("api_retry_attempts")
         self.enable_error_logging = self.get("enable_error_logging").lower() == "enabled"
         self.error_log_path = self.get("error_log_path")
+        self.llm_provider = str(self.get("llm_provider") or "openai").strip().lower()
+        self.tts_provider = str(self.get("tts_provider") or "openai").strip().lower()
+        self.stt_provider = str(self.get("stt_provider") or "openai").strip().lower()
 
         # Streaming
         self.stream_responses = self.get("stream_responses").lower() == "enabled"

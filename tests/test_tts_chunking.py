@@ -1,11 +1,8 @@
-import os
-import shutil
-import logging
 import unittest
-import tempfile
-from unittest.mock import Mock, patch
+from unittest.mock import MagicMock
 
 from common.ai import AI, split_text_for_tts
+from common.providers.base import LLMProvider, TTSProvider, STTProvider
 
 
 class TestSplitTextForTTS(unittest.TestCase):
@@ -53,126 +50,39 @@ class TestSplitTextForTTS(unittest.TestCase):
         self.assertTrue(chunks[0].endswith("."))
 
 
-class TestTextToSpeechChunking(unittest.TestCase):
-    def setUp(self):
-        self.temp_dir = tempfile.mkdtemp()
-        self.original_api_key = os.environ.get('OPENAI_API_KEY')
-        os.environ['OPENAI_API_KEY'] = 'test-key'
+class TestTextToSpeechDelegation(unittest.TestCase):
+    """Tests that AI.text_to_speech delegates correctly to the TTS provider.
 
-        # Keep unit test output clean (text_to_speech logs errors on failure paths).
-        logging.disable(logging.CRITICAL)
+    Detailed chunking, file naming, and cleanup behaviour is tested in
+    tests/test_openai_providers.py::TestOpenAITTSProviderTextToSpeech.
+    """
 
-    def tearDown(self):
-        logging.disable(logging.NOTSET)
+    def _make_ai(self, tts_return_value):
+        config = MagicMock()
+        config.debug = False
+        llm = MagicMock(spec=LLMProvider)
+        tts = MagicMock(spec=TTSProvider)
+        stt = MagicMock(spec=STTProvider)
+        tts.text_to_speech.return_value = tts_return_value
+        return AI(llm, tts, stt, config), tts
 
-        if self.original_api_key is not None:
-            os.environ['OPENAI_API_KEY'] = self.original_api_key
-        else:
-            del os.environ['OPENAI_API_KEY']
-
-        shutil.rmtree(self.temp_dir, ignore_errors=True)
-
-    @patch('common.ai.OpenAI')
-    @patch('common.ai.setup_error_logging')
-    @patch('common.ai.uuid.uuid4')
-    def test_text_to_speech_returns_file_list(self, mock_uuid4, mock_setup, mock_openai_class):
-        mock_uuid4.return_value = Mock(hex='abc123')
-
-        mock_config = Mock()
-        mock_config.api_timeout = 10
-        mock_config.api_retry_attempts = 1
-        mock_config.text_to_speech_model = 'tts-1'
-        mock_config.bot_voice_model = 'nova'
-        mock_config.tmp_files_path = self.temp_dir
-        mock_config.debug = False
-
-        mock_client = Mock()
-        mock_openai_class.return_value = mock_client
-
-        mock_response = Mock()
-        mock_response.stream_to_file = Mock()
-        mock_client.audio.speech.create.return_value = mock_response
-
-        ai = AI(mock_config)
+    def test_text_to_speech_returns_file_list(self):
+        ai, tts = self._make_ai(["/tmp/tts-001.mp3"])
         files = ai.text_to_speech("Hello world")
+        self.assertEqual(files, ["/tmp/tts-001.mp3"])
+        tts.text_to_speech.assert_called_once_with("Hello world", model=None, voice=None)
 
-        self.assertEqual(len(files), 1)
-        expected_path = os.path.join(self.temp_dir, 'tts-response-abc123-chunk-001.mp3')
-        self.assertEqual(files[0], expected_path)
-        mock_response.stream_to_file.assert_called_once_with(expected_path)
+    def test_text_to_speech_multi_chunk(self):
+        ai, tts = self._make_ai(["/tmp/chunk-001.mp3", "/tmp/chunk-002.mp3"])
+        files = ai.text_to_speech("long text")
+        self.assertEqual(len(files), 2)
+        tts.text_to_speech.assert_called_once_with("long text", model=None, voice=None)
 
-    @patch('common.ai.OpenAI')
-    @patch('common.ai.setup_error_logging')
-    @patch('common.ai.uuid.uuid4')
-    @patch('common.ai.split_text_for_tts')
-    def test_text_to_speech_multi_chunk(self, mock_split, mock_uuid4, mock_setup, mock_openai_class):
-        mock_split.return_value = ["chunk1", "chunk2"]
-        mock_uuid4.return_value = Mock(hex='abc123')
-
-        mock_config = Mock()
-        mock_config.api_timeout = 10
-        mock_config.api_retry_attempts = 1
-        mock_config.text_to_speech_model = 'tts-1'
-        mock_config.bot_voice_model = 'nova'
-        mock_config.tmp_files_path = self.temp_dir
-        mock_config.debug = False
-
-        mock_client = Mock()
-        mock_openai_class.return_value = mock_client
-
-        mock_response = Mock()
-        mock_response.stream_to_file = Mock()
-        mock_client.audio.speech.create.return_value = mock_response
-
-        ai = AI(mock_config)
-        files = ai.text_to_speech("ignored")
-
-        mock_split.assert_called_once_with("ignored")
-
-        self.assertEqual(files, [
-            os.path.join(self.temp_dir, 'tts-response-abc123-chunk-001.mp3'),
-            os.path.join(self.temp_dir, 'tts-response-abc123-chunk-002.mp3'),
-        ])
-        self.assertEqual(mock_client.audio.speech.create.call_count, 2)
-        self.assertEqual(mock_response.stream_to_file.call_count, 2)
-
-    @patch('common.ai.OpenAI')
-    @patch('common.ai.setup_error_logging')
-    @patch('common.ai.uuid.uuid4')
-    @patch('common.ai.split_text_for_tts')
-    def test_text_to_speech_cleanup_on_chunk_failure(self, mock_split, mock_uuid4, mock_setup, mock_openai_class):
-        mock_split.return_value = ["chunk1", "chunk2"]
-        mock_uuid4.return_value = Mock(hex='abc123')
-
-        mock_config = Mock()
-        mock_config.api_timeout = 10
-        mock_config.api_retry_attempts = 1
-        mock_config.text_to_speech_model = 'tts-1'
-        mock_config.bot_voice_model = 'nova'
-        mock_config.tmp_files_path = self.temp_dir
-        mock_config.debug = False
-
-        mock_client = Mock()
-        mock_openai_class.return_value = mock_client
-
-        speech_response = Mock()
-
-        def write_file(path):
-            with open(path, 'wb') as f:
-                f.write(b'fake mp3')
-
-        speech_response.stream_to_file.side_effect = write_file
-
-        # First chunk succeeds, second chunk raises before writing.
-        mock_client.audio.speech.create.side_effect = [speech_response, Exception("boom")]
-
-        ai = AI(mock_config)
-        result = ai.text_to_speech("ignored")
-
+    def test_text_to_speech_returns_empty_on_failure(self):
+        ai, tts = self._make_ai([])
+        result = ai.text_to_speech("hello")
         self.assertEqual(result, [])
-
-        first_path = os.path.join(self.temp_dir, 'tts-response-abc123-chunk-001.mp3')
-        self.assertFalse(os.path.exists(first_path))
+        tts.text_to_speech.assert_called_once_with("hello", model=None, voice=None)
 
 
 

@@ -1600,9 +1600,8 @@ class TestWarmupCache(unittest.TestCase):
              patch("sandvoice._SchedulerContext"), \
              patch("sandvoice.threading.Thread", side_effect=real_thread):
             sv._warmup_cache()
-
-        for t in threads:
-            t.join(timeout=5)
+            for t in threads:
+                t.join(timeout=5)
 
         self.assertEqual(len(call_count), 2)
 
