@@ -71,7 +71,6 @@ With:
 resp = s.ai.web_search(
     query,
     instructions=system_instructions,
-    model=getattr(s.config, 'gpt_response_model', None) or "gpt-5-mini",
     include=include_params,
 )
 text = resp.output_text or "..."

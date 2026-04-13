@@ -101,7 +101,7 @@ def web_search(self, query, instructions, model=None, include=None):
 ## Acceptance Criteria
 
 - [ ] `LLMProvider.web_search(query, instructions, model=None, include=None)` abstract method added
-- [ ] `OpenAILLMProvider.web_search` implemented with `retry_with_backoff`, error handling, and consistent return type
+- [ ] `OpenAILLMProvider.web_search` implemented with `retry_with_backoff`, error handling, and consistent return interface (both success and failure paths expose `.output_text`)
 - [ ] `_WebSearchErrorResult` (or equivalent) returns a user-friendly `.output_text` on failure
 - [ ] `AI.web_search(...)` delegates to `self._llm.web_search`
 - [ ] Unit tests cover: successful call, API failure returns error result with `.output_text`
