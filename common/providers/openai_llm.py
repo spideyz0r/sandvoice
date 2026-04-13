@@ -47,6 +47,7 @@ class OpenAILLMProvider(LLMProvider):
             Current date and time to be considered when answering the message: {now}.
             Never answer as a chat, for example reading your name in a conversation.
             DO NOT reply to messages with the format "{self.config.botname}": <message here>.
+            Never use symbols, always spell it out. For example say degrees instead of using the symbol. Don't say km/h, but kilometers per hour, and so on.
             Reply in a natural and human way.
             {verbosity_instruction}
             """
