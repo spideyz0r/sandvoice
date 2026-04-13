@@ -204,7 +204,7 @@ plan/
 
 ### Priority 44: LLMProvider one_shot Method
 **Document**: [backlog/44-llm-provider-one-shot.md](./backlog/44-llm-provider-one-shot.md)
-**Description**: Add `one_shot(prompt, model=None)` to `LLMProvider` ABC, implement in `OpenAILLMProvider` (delegates to `generate_response` with empty history), and expose on `AI`. Enables single-turn LLM calls that do not affect conversation history. Foundation for Plan 46.
+**Description**: Add `one_shot(prompt, model=None)` to `LLMProvider` ABC, implement in `OpenAILLMProvider` as a direct single-turn, system-role-free call (not delegated to `generate_response`), and expose on `AI`. Enables single-turn LLM calls that do not affect conversation history. Foundation for Plan 46.
 
 ### Priority 45: LLMProvider web_search Method
 **Document**: [backlog/45-llm-provider-web-search.md](./backlog/45-llm-provider-web-search.md)
