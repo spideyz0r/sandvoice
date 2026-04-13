@@ -3,25 +3,16 @@
 ## Problem
 
 `OpenAILLMProvider._build_system_role()` contains the core SandVoice persona and
-conversation instructions:
-
-```python
-system_role = f"""
-    Your name is {self.config.botname}.
-    You are an assistant written in Python by Breno Brand.
-    You must answer in {self.config.language}.
-    The person that is talking to you is in the {self.config.timezone} time zone.
-    ...
-    Never use symbols, always spell it out...
-    Reply in a natural and human way.
-    {verbosity_instruction}
-"""
-```
+conversation instructions assembled from configuration values (bot identity, language,
+timezone/location, verbosity, and a formatting constraint not to reply as a chat).
 
 None of this is OpenAI-specific. It is the application-level identity of SandVoice —
-persona, language, timezone, TTS formatting rules, verbosity. Any future provider
-(Gemini, Anthropic, etc.) would need the identical prompt, forcing either duplication
-or inheritance from `OpenAILLMProvider`.
+persona, language, timezone, verbosity. Any future provider (Gemini, Anthropic, etc.)
+would need the identical prompt, forcing either duplication or inheritance from
+`OpenAILLMProvider`.
+
+The implementation in `common/providers/openai_llm.py` is the source of truth for the
+exact prompt text. This plan must preserve it exactly.
 
 ## Goal
 
@@ -32,6 +23,9 @@ role calls this shared function. `OpenAILLMProvider` becomes a thin caller.
 ## Approach
 
 ### New file: `common/prompt.py`
+
+Copy the body of `OpenAILLMProvider._build_system_role()` verbatim into a module-level
+function, replacing `self.config` with `config`:
 
 ```python
 import datetime
@@ -71,8 +65,6 @@ def build_system_role(config, extra_info=None):
         Current date and time to be considered when answering the message: {now}.
         Never answer as a chat, for example reading your name in a conversation.
         DO NOT reply to messages with the format "{config.botname}": <message here>.
-        Never use symbols, always spell it out. For example say degrees instead of
-        using the symbol. Don't say km/h, but kilometers per hour, and so on.
         Reply in a natural and human way.
         {verbosity_instruction}
         """
@@ -82,6 +74,9 @@ def build_system_role(config, extra_info=None):
 
     return system_role
 ```
+
+The prompt text must match `openai_llm.py` exactly at the time of implementation —
+check for any instructions added by later PRs (e.g. PR #127) and include them.
 
 ### `OpenAILLMProvider` (`common/providers/openai_llm.py`)
 
@@ -96,8 +91,8 @@ class OpenAILLMProvider(LLMProvider):
 ```
 
 The private method is kept as a thin wrapper so the call sites inside
-`OpenAILLMProvider` (`generate_response`, `stream_response_deltas`,
-`text_summary`) don't need to change.
+`OpenAILLMProvider` (`generate_response`, `stream_response_deltas`) don't need to
+change.
 
 ### Future providers
 
