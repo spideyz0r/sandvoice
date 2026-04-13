@@ -121,8 +121,9 @@ part of the public AI interface.
 
 ## Notes
 
-- `from openai import OpenAI` remains in `common/ai.py` inside `from_config` — this
-  is the intentional provider wiring point. The constraint is that no *instance method*
-  of `AI` and no *plugin* touches the SDK directly.
+- `from openai import OpenAI` remains in `common/ai.py` at module scope (the provider
+  wiring point). The constraint is that no *instance method* of `AI` and no *plugin*
+  touches the SDK directly. Whether the import stays at module scope or moves inside
+  `from_config` is an implementation detail outside the scope of this plan.
 - After this plan, adding a non-OpenAI provider requires only implementing the
   `LLMProvider` ABC — no plugins or `voice_filler.py` need changes.
