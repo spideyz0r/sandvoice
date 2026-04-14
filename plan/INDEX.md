@@ -214,6 +214,10 @@ plan/
 **Document**: [backlog/46-remove-openai-client-escape-hatch.md](./backlog/46-remove-openai-client-escape-hatch.md)
 **Description**: Migrate `voice_filler.py` to `ai.one_shot()` and `realtime_websearch/plugin.py` to `ai.web_search()`, then remove the `openai_client` property and `_openai_client` attribute from `AI` entirely. After this plan, no plugin or instance method touches the OpenAI SDK directly. Requires Plans 44 and 45.
 
+### Priority 47: Extract System Prompt to common/prompt.py
+**Document**: [backlog/47-system-prompt-extraction.md](./backlog/47-system-prompt-extraction.md)
+**Description**: Move `OpenAILLMProvider._build_system_role()` logic into a standalone `build_system_role(config, extra_info=None)` function in `common/prompt.py`. The SandVoice bot identity, language, timezone/location context, verbosity instructions, and the formatting constraint not to reply as a chat are application-level concerns — not OpenAI-specific. Any future provider imports and calls the shared function directly.
+
 ### Future Enhancements
 **Document**: [backlog/FUTURE.md](./backlog/FUTURE.md)
 **Description**: Long-term feature ideas including API Cost Management, Conversation History Management, Code Deduplication, Timers & Reminders, Music Control, Smart Home Integration, Calendar Integration, Todo List Management, Multi-User Support, and Conversation Memory.
