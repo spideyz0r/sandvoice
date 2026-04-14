@@ -38,7 +38,7 @@ class TestRealtimeWebsearchProcess(unittest.TestCase):
     def _make_sv(self):
         sv = MagicMock()
         sv.config.debug = False
-        sv.config.gpt_response_model = "gpt-5-mini"
+        sv.config.llm_response_model = "gpt-5-mini"
         return sv
 
     def test_returns_output_text(self):

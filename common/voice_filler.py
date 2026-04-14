@@ -216,7 +216,7 @@ class VoiceFillerCache:
         )
         try:
             completion = self._ai.openai_client.chat.completions.create(
-                model=self._config.gpt_response_model,
+                model=self._config.llm_response_model,
                 messages=[{"role": "user", "content": prompt}],
             )
             raw = completion.choices[0].message.content.strip()

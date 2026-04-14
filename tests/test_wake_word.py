@@ -1288,7 +1288,7 @@ class TestRequestTimingSummary(unittest.TestCase):
         self.mock_config = Mock()
         self.mock_config.debug = False
         self.mock_config.visual_state_indicator = False
-        self.mock_config.gpt_route_model = "gpt-4.1-nano"
+        self.mock_config.llm_route_model = "gpt-4.1-nano"
 
         self.mock_ai = Mock()
         self.mock_audio = Mock()

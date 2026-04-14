@@ -459,7 +459,7 @@ class TestAI(unittest.TestCase):
         self.mock_config = MagicMock()
         self.mock_config.debug = False
         self.mock_config.api_retry_attempts = 1
-        self.mock_config.gpt_response_model = "gpt-3.5-turbo"
+        self.mock_config.llm_response_model = "gpt-3.5-turbo"
 
     def test_something(self):
         with patch("common.ai.OpenAI") as mock_openai:
