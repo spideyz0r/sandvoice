@@ -54,7 +54,7 @@ Move the `responses.create` call from the plugin into the provider:
 @retry_with_backoff(max_attempts=3, initial_delay=1)
 def _call_web_search(self, query, instructions, model=None, include=None):
     if not model:
-        model = self.config.gpt_response_model
+        model = self.config.llm_response_model
     return self._client.responses.create(
         model=model,
         instructions=instructions,

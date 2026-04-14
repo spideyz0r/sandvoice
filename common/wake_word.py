@@ -752,7 +752,7 @@ class WakeWordMode:
             parts.append(f"transcribe={self._req_transcribe_s:.2f}s")
 
         if self._req_route_s is not None:
-            route_model = getattr(self.config, "gpt_route_model", "?")
+            route_model = getattr(self.config, "llm_route_model", "?")
             route_name = self._req_route_name or "?"
             parts.append(f"route={self._req_route_s:.2f}s({route_model}→{route_name})")
 

@@ -94,9 +94,9 @@ enable_error_logging: disabled
 error_log_path: /home/user/.sandvoice/error.log
 
 # Models
-gpt_summary_model: gpt-5-mini
-gpt_route_model: gpt-4.1-nano
-gpt_response_model: gpt-5-mini
+llm_summary_model: gpt-5-mini
+llm_route_model: gpt-4.1-nano
+llm_response_model: gpt-5-mini
 speech_to_text_model: whisper-1
 speech_to_text_task: translate      # translate (→English) or transcribe
 speech_to_text_language: ""         # ISO-639-1 hint, e.g. "pt"; empty = auto

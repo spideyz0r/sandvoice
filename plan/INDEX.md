@@ -159,6 +159,10 @@ plan/
 **Document**: [completed/43-ai-facade-migration.md](./completed/43-ai-facade-migration.md)
 **Description**: Refactor `AI` into a thin facade: owns `conversation_history`, delegates capabilities to provider instances, and exposes `AI.from_config(config)` factory. Adds `llm_provider`, `tts_provider`, `stt_provider` config keys (all default to `openai`). Runtime method call sites (`generate_response`, `text_to_speech`, etc.) remain unchanged; only construction changes to `AI.from_config(config)`. Requires Plans 41 and 42.
 
+### Priority 48: Rename gpt_*_model Config Keys
+**Document**: [completed/48-rename-gpt-model-config-keys.md](./completed/48-rename-gpt-model-config-keys.md)
+**Description**: Rename `gpt_response_model`, `gpt_route_model`, and `gpt_summary_model` config keys to `llm_response_model`, `llm_route_model`, and `llm_summary_model`. Removes vendor-specific naming from user-facing configuration now that the provider facade makes the LLM layer provider-agnostic.
+
 ---
 
 ## In Progress 🚧

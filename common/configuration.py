@@ -63,9 +63,9 @@ class Config:
             "push_to_talk": "disabled",
             "rss_news": "https://feeds.bbci.co.uk/news/rss.xml",
             "rss_news_max_items": "5",
-            "gpt_summary_model" : "gpt-5-mini",
-            "gpt_route_model" : "gpt-4.1-nano",
-            "gpt_response_model" : "gpt-5-mini",
+            "llm_summary_model" : "gpt-5-mini",
+            "llm_route_model" : "gpt-4.1-nano",
+            "llm_response_model" : "gpt-5-mini",
             "speech_to_text_model" : "whisper-1",
             # Speech-to-text behavior
             # - translate: translate speech to English (Whisper translations endpoint)
@@ -195,9 +195,9 @@ class Config:
         self.push_to_talk = self.get("push_to_talk").lower() == "enabled"
         self.sandvoice_path = f"{os.path.dirname(os.path.realpath(__file__))}/../"
         self.plugin_path = f"{self.sandvoice_path}plugins/"
-        self.gpt_summary_model = self.get("gpt_summary_model")
-        self.gpt_route_model = self.get("gpt_route_model")
-        self.gpt_response_model = self.get("gpt_response_model")
+        self.llm_summary_model = self.get("llm_summary_model")
+        self.llm_route_model = self.get("llm_route_model")
+        self.llm_response_model = self.get("llm_response_model")
         self.speech_to_text_model = self.get("speech_to_text_model")
         self.speech_to_text_task = str(self.get("speech_to_text_task") or "translate").strip().lower()
         self.speech_to_text_language = str(self.get("speech_to_text_language") or "").strip().lower()

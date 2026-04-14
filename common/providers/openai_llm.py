@@ -71,7 +71,7 @@ class OpenAILLMProvider(LLMProvider):
     def _call_generate_response(self, user_input, conversation_history, extra_info=None, model=None):
         """Make the API call. Raises on failure so retry_with_backoff can retry."""
         if not model:
-            model = self.config.gpt_response_model
+            model = self.config.llm_response_model
 
         system_role = self._build_system_role(extra_info)
         logger.debug(
@@ -133,7 +133,7 @@ class OpenAILLMProvider(LLMProvider):
         ambiguous when partial output has already been emitted.
         """
         if not model:
-            model = self.config.gpt_response_model
+            model = self.config.llm_response_model
 
         system_role = self._build_system_role(extra_info)
         messages = self._build_messages(user_input, conversation_history, system_role)
@@ -164,7 +164,7 @@ class OpenAILLMProvider(LLMProvider):
     def _call_define_route(self, user_input, model=None, extra_routes=None):
         """Make the routing API call. Raises on failure so retry_with_backoff can retry."""
         if not model:
-            model = self.config.gpt_route_model
+            model = self.config.llm_route_model
         with open(f"{self.config.sandvoice_path}/routes.yaml", 'r') as f:
             template_str = f.read()
         template = Template(template_str)
@@ -210,7 +210,7 @@ class OpenAILLMProvider(LLMProvider):
     def _call_text_summary(self, user_input, extra_info=None, words="100", model=None):
         """Make the summary API call. Raises on failure so retry_with_backoff can retry."""
         if not model:
-            model = self.config.gpt_summary_model
+            model = self.config.llm_summary_model
         system_role = f"""
             You are a bot that summarizes texts in {words} words.
             If the text includes a date, mention it in the summary.

@@ -20,7 +20,7 @@ def process(user_input, route, s):
     Answer real-time questions using OpenAI `web_search` (Responses API).
 
     Configuration:
-      - gpt_response_model: Model to use for web search (default: gpt-5-mini)
+      - llm_response_model: Model to use for web search (default: gpt-5-mini)
         Options: gpt-5-mini (cheapest), gpt-5, gpt-4.1, gpt-4.1-mini, o4-mini
       - debug: When enabled, prints web search sources consulted
 
@@ -40,7 +40,7 @@ def process(user_input, route, s):
         )
 
         resp = s.ai.openai_client.responses.create(
-            model=getattr(s.config, 'gpt_response_model', None) or "gpt-5-mini",
+            model=getattr(s.config, 'llm_response_model', None) or "gpt-5-mini",
             instructions=system_instructions,
             tools=[{"type": "web_search"}],
             tool_choice="auto",

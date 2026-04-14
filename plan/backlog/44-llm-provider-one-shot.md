@@ -7,7 +7,7 @@ touch `AI.conversation_history`. Currently it bypasses the provider interface en
 
 ```python
 completion = self._ai.openai_client.chat.completions.create(
-    model=self._config.gpt_response_model,
+    model=self._config.llm_response_model,
     messages=[{"role": "user", "content": prompt}],
 )
 ```
@@ -52,7 +52,7 @@ SandVoice persona.
 @retry_with_backoff(max_attempts=3, initial_delay=1)
 def _call_one_shot(self, prompt, model=None):
     if not model:
-        model = self.config.gpt_response_model
+        model = self.config.llm_response_model
     completion = self._client.chat.completions.create(
         model=model,
         messages=[{"role": "user", "content": prompt}],

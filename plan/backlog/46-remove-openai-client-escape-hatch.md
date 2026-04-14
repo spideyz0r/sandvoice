@@ -39,7 +39,7 @@ SDK directly outside of `common/providers/`.
 Replace:
 ```python
 completion = self._ai.openai_client.chat.completions.create(
-    model=self._config.gpt_response_model,
+    model=self._config.llm_response_model,
     messages=[{"role": "user", "content": prompt}],
 )
 raw = completion.choices[0].message.content.strip()
@@ -47,7 +47,7 @@ raw = completion.choices[0].message.content.strip()
 
 With:
 ```python
-result = self._ai.one_shot(prompt, model=self._config.gpt_response_model)
+result = self._ai.one_shot(prompt, model=self._config.llm_response_model)
 raw = result.content.strip()
 ```
 

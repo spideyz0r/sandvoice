@@ -76,7 +76,7 @@ class TestVoiceFillerCacheBase(unittest.TestCase):
         ]
         self.config.speech_to_text_task = "translate"
         self.config.speech_to_text_language = ""
-        self.config.gpt_response_model = "gpt-3.5-turbo"
+        self.config.llm_response_model = "gpt-3.5-turbo"
 
         self.ai = Mock()
 
