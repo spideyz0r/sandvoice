@@ -24,8 +24,12 @@ role calls this shared function. `OpenAILLMProvider` becomes a thin caller.
 
 ### New file: `common/prompt.py`
 
-Copy the body of `OpenAILLMProvider._build_system_role()` verbatim into a module-level
-function, replacing `self.config` with `config`:
+Copy the body of `OpenAILLMProvider._build_system_role()` into a module-level
+function with only the minimal `self.config` → `config` substitution needed for
+the extraction; otherwise preserve the logic and prompt text exactly — including
+the leading/trailing whitespace inside the triple-quoted `system_role` f-string,
+which is part of the prompt text and must not be "cleaned up" during the move.
+Tests must assert exact string equality to catch any accidental whitespace changes.
 
 ```python
 import datetime
@@ -105,9 +109,11 @@ from `OpenAILLMProvider` required.
 - [ ] `common/prompt.py` created with `build_system_role(config, extra_info=None)`
 - [ ] `OpenAILLMProvider._build_system_role` delegates to `build_system_role`; no
       prompt logic remains in `openai_llm.py`
-- [ ] All existing tests pass unchanged (the output of `_build_system_role` is identical)
+- [ ] All existing tests pass unchanged (the output of `_build_system_role` is identical,
+      including leading/trailing whitespace in the f-string)
 - [ ] `tests/test_prompt.py` added: covers verbosity variants (brief/normal/detailed),
-      `extra_info` appended correctly, `None` extra_info omitted
+      `extra_info` appended correctly, `None` extra_info omitted; assertions use exact
+      string equality (not `assertIn`) to catch accidental whitespace changes
 - [ ] Coverage >80% for `common/prompt.py`
 
 ## Dependencies
