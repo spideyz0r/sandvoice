@@ -202,6 +202,18 @@ plan/
 **Document**: [backlog/37-context-aware-routing.md](./backlog/37-context-aware-routing.md)
 **Description**: Pass the last N conversation turns to `define_route` so the routing LLM can correctly resolve follow-up utterances. Fixes misrouting of clarifications (e.g. "I mean the FIFA World Cup" after a realtime_websearch query routing to `news`).
 
+### Priority 44: LLMProvider one_shot Method
+**Document**: [backlog/44-llm-provider-one-shot.md](./backlog/44-llm-provider-one-shot.md)
+**Description**: Add `one_shot(prompt, model=None)` to `LLMProvider` ABC, implement in `OpenAILLMProvider` as a direct single-turn, system-role-free call (not delegated to `generate_response`), and expose on `AI`. Enables single-turn LLM calls that do not affect conversation history. Foundation for Plan 46.
+
+### Priority 45: LLMProvider web_search Method
+**Document**: [backlog/45-llm-provider-web-search.md](./backlog/45-llm-provider-web-search.md)
+**Description**: Add `web_search(query, instructions, model=None, include=None)` to `LLMProvider` ABC, implement in `OpenAILLMProvider` using the Responses API with `retry_with_backoff` and consistent error result, and expose on `AI`. Foundation for Plan 46.
+
+### Priority 46: Remove openai_client Escape Hatch
+**Document**: [backlog/46-remove-openai-client-escape-hatch.md](./backlog/46-remove-openai-client-escape-hatch.md)
+**Description**: Migrate `voice_filler.py` to `ai.one_shot()` and `realtime_websearch/plugin.py` to `ai.web_search()`, then remove the `openai_client` property and `_openai_client` attribute from `AI` entirely. After this plan, no plugin or instance method touches the OpenAI SDK directly. Requires Plans 44 and 45.
+
 ### Future Enhancements
 **Document**: [backlog/FUTURE.md](./backlog/FUTURE.md)
 **Description**: Long-term feature ideas including API Cost Management, Conversation History Management, Code Deduplication, Timers & Reminders, Music Control, Smart Home Integration, Calendar Integration, Todo List Management, Multi-User Support, and Conversation Memory.
