@@ -29,55 +29,10 @@ function with only the minimal `self.config` → `config` substitution needed fo
 the extraction; otherwise preserve the logic and prompt text exactly — including
 the leading/trailing whitespace inside the triple-quoted `system_role` f-string,
 which is part of the prompt text and must not be "cleaned up" during the move.
-Tests must assert exact string equality to catch any accidental whitespace changes.
 
-```python
-import datetime
-
-def build_system_role(config, extra_info=None):
-    """Build the SandVoice system prompt from config.
-
-    Returns a string suitable for use as the system role in any LLM API call.
-    Provider-agnostic — contains only application-level instructions.
-    """
-    now = datetime.datetime.now()
-    verbosity = getattr(config, "verbosity", "brief")
-
-    if verbosity == "detailed":
-        verbosity_instruction = (
-            "Verbosity: detailed. Provide thorough, structured answers by default. "
-            "Include steps/examples when helpful. If the user asks for a short answer, comply."
-        )
-    elif verbosity == "normal":
-        verbosity_instruction = (
-            "Verbosity: normal. Be concise but complete. "
-            "Expand when the user explicitly asks for more detail."
-        )
-    else:
-        verbosity_instruction = (
-            "Verbosity: brief. Keep answers short by default (1-3 sentences). "
-            "Avoid long lists and excessive detail unless the user explicitly asks to expand, "
-            "asks for details, or says they want a longer answer."
-        )
-
-    system_role = f"""
-        Your name is {config.botname}.
-        You are an assistant written in Python by Breno Brand.
-        You must answer in {config.language}.
-        The person that is talking to you is in the {config.timezone} time zone.
-        The person that is talking to you is located in {config.location}.
-        Current date and time to be considered when answering the message: {now}.
-        Never answer as a chat, for example reading your name in a conversation.
-        DO NOT reply to messages with the format "{config.botname}": <message here>.
-        Reply in a natural and human way.
-        {verbosity_instruction}
-        """
-
-    if extra_info is not None:
-        system_role = system_role + "Consider the following to answer your question: " + extra_info
-
-    return system_role
-```
+**Do not rely on the snippet below for exact indentation or content.** The snippet
+is illustrative only. The source of truth is `common/providers/openai_llm.py` at
+implementation time — copy/paste the f-string directly from that file.
 
 The prompt text must match `openai_llm.py` exactly at the time of implementation —
 check for any instructions added by later PRs (e.g. PR #127) and include them.
@@ -113,7 +68,8 @@ from `OpenAILLMProvider` required.
       including leading/trailing whitespace in the f-string)
 - [ ] `tests/test_prompt.py` added: covers verbosity variants (brief/normal/detailed),
       `extra_info` appended correctly, `None` extra_info omitted; assertions use exact
-      string equality (not `assertIn`) to catch accidental whitespace changes
+      string equality (not `assertIn`) to catch accidental whitespace changes; patch
+      `datetime.datetime.now` to a fixed value so assertions are deterministic
 - [ ] Coverage >80% for `common/prompt.py`
 
 ## Dependencies
@@ -122,8 +78,10 @@ from `OpenAILLMProvider` required.
 
 ## Notes
 
-- `build_system_role` is a pure function — it reads config values and returns a string.
-  No side effects, easy to test in isolation.
+- `build_system_role` reads config values and returns a string. It calls
+  `datetime.datetime.now()` internally, so it is time-dependent (not strictly pure),
+  but it has no other side effects. Tests must patch `datetime.datetime.now` to a
+  fixed value to get deterministic output.
 - The `text_summary` system role in `OpenAILLMProvider` ("You are a bot that summarizes
   texts in N words.") is intentionally NOT moved — it is a task-specific prompt, not
   the SandVoice persona.
