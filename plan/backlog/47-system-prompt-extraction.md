@@ -4,9 +4,8 @@
 
 `OpenAILLMProvider._build_system_role()` contains the core SandVoice persona and
 conversation instructions assembled from configuration values (bot identity, language,
-timezone/location, current date/time, verbosity, a formatting constraint not to reply
-as a chat, and a TTS formatting instruction to spell out symbols rather than emit them
-directly).
+timezone/location, current date/time, verbosity, and output constraints such as never
+answering as a chat).
 
 None of this is OpenAI-specific. It is the application-level identity of SandVoice —
 persona, language, timezone, verbosity, output style. Any future provider (Gemini,
