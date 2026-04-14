@@ -4,12 +4,14 @@
 
 `OpenAILLMProvider._build_system_role()` contains the core SandVoice persona and
 conversation instructions assembled from configuration values (bot identity, language,
-timezone/location, verbosity, and a formatting constraint not to reply as a chat).
+timezone/location, current date/time, verbosity, a formatting constraint not to reply
+as a chat, and a TTS formatting instruction to spell out symbols rather than emit them
+directly).
 
 None of this is OpenAI-specific. It is the application-level identity of SandVoice —
-persona, language, timezone, verbosity. Any future provider (Gemini, Anthropic, etc.)
-would need the identical prompt, forcing either duplication or inheritance from
-`OpenAILLMProvider`.
+persona, language, timezone, verbosity, output style. Any future provider (Gemini,
+Anthropic, etc.) would need the identical prompt, forcing either duplication or
+inheritance from `OpenAILLMProvider`.
 
 The implementation in `common/providers/openai_llm.py` is the source of truth for the
 exact prompt text. This plan must preserve it exactly.
