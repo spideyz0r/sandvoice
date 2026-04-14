@@ -17,6 +17,10 @@ class TestLLMProviderABC(unittest.TestCase):
                 pass
             def text_summary(self, user_input, extra_info=None, words="100", model=None):
                 pass
+            def one_shot(self, prompt, model=None):
+                pass
+            def web_search(self, query, instructions, model=None, include=None):
+                pass
 
         with self.assertRaises(TypeError):
             Incomplete()
@@ -28,6 +32,10 @@ class TestLLMProviderABC(unittest.TestCase):
             def define_route(self, user_input, model=None, extra_routes=None):
                 pass
             def text_summary(self, user_input, extra_info=None, words="100", model=None):
+                pass
+            def one_shot(self, prompt, model=None):
+                pass
+            def web_search(self, query, instructions, model=None, include=None):
                 pass
 
         with self.assertRaises(TypeError):
@@ -41,6 +49,10 @@ class TestLLMProviderABC(unittest.TestCase):
                 pass
             def text_summary(self, user_input, extra_info=None, words="100", model=None):
                 pass
+            def one_shot(self, prompt, model=None):
+                pass
+            def web_search(self, query, instructions, model=None, include=None):
+                pass
 
         with self.assertRaises(TypeError):
             Incomplete()
@@ -52,6 +64,42 @@ class TestLLMProviderABC(unittest.TestCase):
             def stream_response_deltas(self, user_input, conversation_history, extra_info=None, model=None):
                 pass
             def define_route(self, user_input, model=None, extra_routes=None):
+                pass
+            def one_shot(self, prompt, model=None):
+                pass
+            def web_search(self, query, instructions, model=None, include=None):
+                pass
+
+        with self.assertRaises(TypeError):
+            Incomplete()
+
+    def test_missing_one_shot_raises(self):
+        class Incomplete(LLMProvider):
+            def generate_response(self, user_input, conversation_history, extra_info=None, model=None):
+                pass
+            def stream_response_deltas(self, user_input, conversation_history, extra_info=None, model=None):
+                pass
+            def define_route(self, user_input, model=None, extra_routes=None):
+                pass
+            def text_summary(self, user_input, extra_info=None, words="100", model=None):
+                pass
+            def web_search(self, query, instructions, model=None, include=None):
+                pass
+
+        with self.assertRaises(TypeError):
+            Incomplete()
+
+    def test_missing_web_search_raises(self):
+        class Incomplete(LLMProvider):
+            def generate_response(self, user_input, conversation_history, extra_info=None, model=None):
+                pass
+            def stream_response_deltas(self, user_input, conversation_history, extra_info=None, model=None):
+                pass
+            def define_route(self, user_input, model=None, extra_routes=None):
+                pass
+            def text_summary(self, user_input, extra_info=None, words="100", model=None):
+                pass
+            def one_shot(self, prompt, model=None):
                 pass
 
         with self.assertRaises(TypeError):
@@ -67,6 +115,10 @@ class TestLLMProviderABC(unittest.TestCase):
                 return {"route": "default-route", "reason": "test"}
             def text_summary(self, user_input, extra_info=None, words="100", model=None):
                 return {"title": "t", "text": "s"}
+            def one_shot(self, prompt, model=None):
+                return SimpleNamespace(content="ok")
+            def web_search(self, query, instructions, model=None, include=None):
+                return SimpleNamespace(output_text="ok")
 
         provider = ConcreteLLM()
         self.assertIsInstance(provider, LLMProvider)
@@ -81,6 +133,10 @@ class TestLLMProviderABC(unittest.TestCase):
                 return {"route": "default-route", "reason": "test"}
             def text_summary(self, user_input, extra_info=None, words="100", model=None):
                 return {"title": "t", "text": "s"}
+            def one_shot(self, prompt, model=None):
+                return SimpleNamespace(content="ok")
+            def web_search(self, query, instructions, model=None, include=None):
+                return SimpleNamespace(output_text="ok")
 
         provider = ConcreteLLM()
         result = provider.generate_response("hi", [])
@@ -97,6 +153,10 @@ class TestLLMProviderABC(unittest.TestCase):
                 return {"route": "default-route", "reason": "test"}
             def text_summary(self, user_input, extra_info=None, words="100", model=None):
                 return {"title": "t", "text": "s"}
+            def one_shot(self, prompt, model=None):
+                return SimpleNamespace(content="ok")
+            def web_search(self, query, instructions, model=None, include=None):
+                return SimpleNamespace(output_text="ok")
 
         provider = ConcreteLLM()
         chunks = list(provider.stream_response_deltas("hi", []))
