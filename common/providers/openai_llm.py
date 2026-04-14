@@ -266,8 +266,8 @@ class OpenAILLMProvider(LLMProvider):
             return self._call_one_shot(prompt, model=model)
         except Exception as e:
             error_msg = handle_api_error(e, service_name="OpenAI GPT")
-            logger.error("one_shot error: %s", e)
-            return ErrorMessage(error_msg)
+            logger.error("one_shot error: %s", error_msg)
+            return ErrorMessage("Sorry, I'm having trouble right now. Please try again in a moment.")
 
     @retry_with_backoff(max_attempts=3, initial_delay=1)
     def _call_web_search(self, query, instructions, model=None, include=None):

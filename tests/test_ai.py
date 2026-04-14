@@ -1,5 +1,6 @@
 import os
 import unittest
+from types import SimpleNamespace
 from unittest.mock import Mock, patch, MagicMock
 
 from common.ai import (
@@ -382,6 +383,68 @@ class TestAITextSummary(unittest.TestCase):
         call_kwargs = llm.text_summary.call_args[1]
         self.assertEqual(call_kwargs["words"], "50")
         self.assertEqual(call_kwargs["extra_info"], "recipe")
+
+
+# ---------------------------------------------------------------------------
+# AI.one_shot
+# ---------------------------------------------------------------------------
+
+class TestAIOneShot(unittest.TestCase):
+    def test_delegates_to_llm(self):
+        llm, tts, stt = _make_providers()
+        llm.one_shot.return_value = SimpleNamespace(content="Paris")
+        ai = AI(llm, tts, stt, _make_config())
+        result = ai.one_shot("What is the capital of France?")
+        llm.one_shot.assert_called_once_with("What is the capital of France?", model=None)
+        self.assertEqual(result.content, "Paris")
+
+    def test_forwards_model(self):
+        llm, tts, stt = _make_providers()
+        llm.one_shot.return_value = SimpleNamespace(content="ok")
+        ai = AI(llm, tts, stt, _make_config())
+        ai.one_shot("prompt", model="gpt-4")
+        llm.one_shot.assert_called_once_with("prompt", model="gpt-4")
+
+    def test_does_not_mutate_conversation_history(self):
+        llm, tts, stt = _make_providers()
+        llm.one_shot.return_value = SimpleNamespace(content="ok")
+        ai = AI(llm, tts, stt, _make_config())
+        ai.conversation_history = ["User: hi", "Bot: hello"]
+        ai.one_shot("standalone prompt")
+        self.assertEqual(ai.conversation_history, ["User: hi", "Bot: hello"])
+
+
+# ---------------------------------------------------------------------------
+# AI.web_search
+# ---------------------------------------------------------------------------
+
+class TestAIWebSearch(unittest.TestCase):
+    def test_delegates_to_llm(self):
+        llm, tts, stt = _make_providers()
+        llm.web_search.return_value = SimpleNamespace(output_text="The answer is 42.")
+        ai = AI(llm, tts, stt, _make_config())
+        result = ai.web_search("What is the answer?", "Be brief.")
+        llm.web_search.assert_called_once_with(
+            "What is the answer?", "Be brief.", model=None, include=None
+        )
+        self.assertEqual(result.output_text, "The answer is 42.")
+
+    def test_forwards_model_and_include(self):
+        llm, tts, stt = _make_providers()
+        llm.web_search.return_value = SimpleNamespace(output_text="ok")
+        ai = AI(llm, tts, stt, _make_config())
+        ai.web_search("query", "instr", model="gpt-4", include=["sources"])
+        llm.web_search.assert_called_once_with(
+            "query", "instr", model="gpt-4", include=["sources"]
+        )
+
+    def test_does_not_mutate_conversation_history(self):
+        llm, tts, stt = _make_providers()
+        llm.web_search.return_value = SimpleNamespace(output_text="ok")
+        ai = AI(llm, tts, stt, _make_config())
+        ai.conversation_history = ["User: hi", "Bot: hello"]
+        ai.web_search("query", instructions="instr")
+        self.assertEqual(ai.conversation_history, ["User: hi", "Bot: hello"])
 
 
 # ---------------------------------------------------------------------------
