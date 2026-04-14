@@ -126,20 +126,10 @@ class TestAIFromConfig(unittest.TestCase):
         ai = AI.from_config(config)
         self.assertIsInstance(ai, AI)
 
-    @patch('common.ai.OpenAI')
-    @patch('common.ai.setup_error_logging')
-    def test_openai_client_accessible_after_from_config(self, mock_setup, mock_openai):
-        config = _make_config()
-        ai = AI.from_config(config)
-        # from_config stores the client; the property must return it.
-        self.assertIs(ai.openai_client, mock_openai.return_value)
-
-    def test_openai_client_raises_when_not_set(self):
+    def test_ai_has_no_openai_client_property(self):
         llm, tts, stt = _make_providers()
         ai = AI(llm, tts, stt, _make_config())
-        with self.assertRaises(AttributeError) as ctx:
-            _ = ai.openai_client
-        self.assertIn("from_config", str(ctx.exception))
+        self.assertFalse(hasattr(ai, 'openai_client'))
 
 
 # ---------------------------------------------------------------------------

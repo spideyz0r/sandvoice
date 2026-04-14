@@ -215,11 +215,8 @@ class VoiceFillerCache:
             + numbered
         )
         try:
-            completion = self._ai.openai_client.chat.completions.create(
-                model=self._config.llm_response_model,
-                messages=[{"role": "user", "content": prompt}],
-            )
-            raw = completion.choices[0].message.content.strip()
+            result = self._ai.one_shot(prompt, model=self._config.llm_response_model)
+            raw = result.content.strip()
             translated = []
             for line in raw.splitlines():
                 line = line.strip()

@@ -39,12 +39,9 @@ def process(user_input, route, s):
             f"Always respond in the same language as the user's question: {user_input}"
         )
 
-        resp = s.ai.openai_client.responses.create(
-            model=getattr(s.config, 'llm_response_model', None) or "gpt-5-mini",
+        resp = s.ai.web_search(
+            query,
             instructions=system_instructions,
-            tools=[{"type": "web_search"}],
-            tool_choice="auto",
-            input=query,
             include=include_params,
         )
 

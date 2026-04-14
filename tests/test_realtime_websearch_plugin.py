@@ -43,18 +43,14 @@ class TestRealtimeWebsearchProcess(unittest.TestCase):
 
     def test_returns_output_text(self):
         sv = self._make_sv()
-        sv.ai.openai_client.responses.create.return_value = MagicMock(
-            output_text="Brazil plays on June 13.",
-            output=[],
-        )
+        sv.ai.web_search.return_value = MagicMock(output_text="Brazil plays on June 13.")
         result = process("Quando é o primeiro jogo?", {"query": "Brazil first game 2026"}, sv)
         self.assertEqual(result, "Brazil plays on June 13.")
 
     def test_strips_urls_from_output(self):
         sv = self._make_sv()
-        sv.ai.openai_client.responses.create.return_value = MagicMock(
-            output_text="Brazil plays June 13. ([fifa.com](https://fifa.com/schedule))",
-            output=[],
+        sv.ai.web_search.return_value = MagicMock(
+            output_text="Brazil plays June 13. ([fifa.com](https://fifa.com/schedule))"
         )
         result = process("Quando?", {"query": "Brazil first game"}, sv)
         self.assertNotIn("https://", result)
@@ -62,46 +58,34 @@ class TestRealtimeWebsearchProcess(unittest.TestCase):
 
     def test_falls_back_to_user_input_when_no_query(self):
         sv = self._make_sv()
-        sv.ai.openai_client.responses.create.return_value = MagicMock(
-            output_text="Some answer.",
-            output=[],
-        )
+        sv.ai.web_search.return_value = MagicMock(output_text="Some answer.")
         process("When is the game?", {}, sv)
-        call_input = sv.ai.openai_client.responses.create.call_args[1]["input"]
-        self.assertIn("When is the game?", call_input)
+        call_query = sv.ai.web_search.call_args[0][0]
+        self.assertIn("When is the game?", call_query)
 
     def test_instructions_include_language_hint(self):
         sv = self._make_sv()
-        sv.ai.openai_client.responses.create.return_value = MagicMock(
-            output_text="Resposta.",
-            output=[],
-        )
+        sv.ai.web_search.return_value = MagicMock(output_text="Resposta.")
         process("Quando é o jogo?", {"query": "Brazil game date"}, sv)
-        instructions = sv.ai.openai_client.responses.create.call_args[1]["instructions"]
+        instructions = sv.ai.web_search.call_args[1]["instructions"]
         self.assertIn("Quando é o jogo?", instructions)
 
     def test_instructions_prohibit_urls(self):
         sv = self._make_sv()
-        sv.ai.openai_client.responses.create.return_value = MagicMock(
-            output_text="Answer.",
-            output=[],
-        )
+        sv.ai.web_search.return_value = MagicMock(output_text="Answer.")
         process("query", {"query": "q"}, sv)
-        instructions = sv.ai.openai_client.responses.create.call_args[1]["instructions"]
+        instructions = sv.ai.web_search.call_args[1]["instructions"]
         self.assertIn("URL", instructions)
 
     def test_returns_fallback_on_empty_output(self):
         sv = self._make_sv()
-        sv.ai.openai_client.responses.create.return_value = MagicMock(
-            output_text="",
-            output=[],
-        )
+        sv.ai.web_search.return_value = MagicMock(output_text="")
         result = process("query", {"query": "q"}, sv)
         self.assertIn("couldn't find", result)
 
     def test_returns_error_message_on_exception(self):
         sv = self._make_sv()
-        sv.ai.openai_client.responses.create.side_effect = Exception("network error")
+        sv.ai.web_search.side_effect = Exception("network error")
         result = process("query", {}, sv)
         self.assertIn("error", result.lower())
 
