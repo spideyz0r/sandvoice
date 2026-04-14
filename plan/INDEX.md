@@ -190,10 +190,6 @@ plan/
 **Document**: [backlog/14-energy-based-speech-detection.md](./backlog/14-energy-based-speech-detection.md)
 **Description**: Add ambient noise calibration and energy thresholding to reduce false positives from constant background audio.
 
-### Priority 17: Voice Lead Sentence
-**Document**: [backlog/17-voice-lead-sentence-early-ack.md](./backlog/17-voice-lead-sentence-early-ack.md)
-**Description**: Speak a one-sentence acknowledgement when processing takes long, then speak the final answer when ready. Lead audio files pre-generated at startup and cached in ~/.sandvoice/voice_lead/.
-
 ### Priority 18: TTS Micro-Pauses and Pacing
 **Document**: [backlog/18-tts-micro-pauses-and-pacing.md](./backlog/18-tts-micro-pauses-and-pacing.md)
 **Description**: Add configurable pauses between TTS chunks to make speech feel less rushed.
@@ -229,6 +225,10 @@ plan/
 ### Priority 13: VAD Robustness - Timeout and Tuning
 **Document**: [dropped/13-vad-robustness-timeout-tuning.md](./dropped/13-vad-robustness-timeout-tuning.md)
 **Reason**: VadRecorder extraction (Plan 35) supersedes the internal complexity this addressed. Current VAD behavior is acceptable.
+
+### Priority 17: Voice Lead Sentence
+**Document**: [dropped/17-voice-lead-sentence-early-ack.md](./dropped/17-voice-lead-sentence-early-ack.md)
+**Reason**: Superseded by the voice filler (Plan 25 boot warm phase + `voice_filler_delay_ms`). Pre-generated phrases already handle time-to-first-audio with lower latency than any real-time TTS lead could achieve.
 
 ### Priority 15: Speech Classification (ML)
 **Reason**: Silero VAD and similar models are not viable on Pi 3B in real-time. Dropped without a plan document.
