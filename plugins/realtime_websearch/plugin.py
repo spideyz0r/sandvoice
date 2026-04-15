@@ -17,14 +17,14 @@ def _strip_urls(text):
 
 def process(user_input, route, s):
     """
-    Answer real-time questions using OpenAI `web_search` (Responses API).
+    Answer real-time questions using the AI facade web_search() method.
 
     Configuration:
-      - llm_response_model: Model to use for web search (default: gpt-5-mini)
-        Options: gpt-5-mini (cheapest), gpt-5, gpt-4.1, gpt-4.1-mini, o4-mini
+      - llm_response_model: Model passed to the LLM provider for web search
       - debug: When enabled, prints web search sources consulted
 
-    Cost per query with gpt-5-mini: ~$0.013 (tool call + tokens)
+    The web search implementation is provider-specific; model options and
+    cost depend on the configured LLM provider.
     """
 
     try:

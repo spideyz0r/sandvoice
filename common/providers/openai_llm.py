@@ -288,7 +288,7 @@ class OpenAILLMProvider(LLMProvider):
             return self._call_web_search(query, instructions, model=model, include=include)
         except Exception as e:
             error_msg = handle_api_error(e, service_name="OpenAI web search")
-            logger.error("Web search error: %s", e)
+            logger.exception("Web search error: %s", error_msg)
             print(error_msg)
             return _WebSearchErrorResult(
                 output_text="I encountered an error while searching the web. Please try again."
