@@ -251,13 +251,11 @@ class TestVoiceFillerTranslation(TestVoiceFillerCacheBase):
         tmp.close()
         return [tmp.name]
 
-    def _make_completion(self, text):
-        """Build a minimal mock that looks like an OpenAI chat completion."""
-        choice = Mock()
-        choice.message.content = text
-        completion = Mock()
-        completion.choices = [choice]
-        return completion
+    def _make_one_shot_result(self, text):
+        """Build a minimal mock that looks like a one_shot() result (message with .content)."""
+        result = Mock()
+        result.content = text
+        return result
 
     def test_no_translation_when_task_is_translate(self):
         """Default task=translate should not call the AI for translation."""
@@ -268,7 +266,7 @@ class TestVoiceFillerTranslation(TestVoiceFillerCacheBase):
         cache = self._make_cache()
         cache.warm()
 
-        self.ai.openai_client.chat.completions.create.assert_not_called()
+        self.ai.one_shot.assert_not_called()
 
     def test_no_translation_when_language_empty(self):
         """task=transcribe but no language set — no translation call."""
@@ -279,21 +277,21 @@ class TestVoiceFillerTranslation(TestVoiceFillerCacheBase):
         cache = self._make_cache()
         cache.warm()
 
-        self.ai.openai_client.chat.completions.create.assert_not_called()
+        self.ai.one_shot.assert_not_called()
 
     def test_translation_called_when_transcribe_and_language_set(self):
         """task=transcribe + language triggers a single translation AI call."""
         self.config.speech_to_text_task = "transcribe"
         self.config.speech_to_text_language = "pt"
         self.ai.text_to_speech.side_effect = self._fake_tts
-        self.ai.openai_client.chat.completions.create.return_value = self._make_completion(
+        self.ai.one_shot.return_value = self._make_one_shot_result(
             "1. Um segundo.\n2. Entendido, verificando agora."
         )
 
         cache = self._make_cache()
         cache.warm()
 
-        self.ai.openai_client.chat.completions.create.assert_called_once()
+        self.ai.one_shot.assert_called_once()
         # TTS should be called with the translated phrases, not the originals
         tts_calls = [call.args[0] for call in self.ai.text_to_speech.call_args_list]
         self.assertIn("Um segundo.", tts_calls)
@@ -304,7 +302,7 @@ class TestVoiceFillerTranslation(TestVoiceFillerCacheBase):
         self.config.speech_to_text_task = "transcribe"
         self.config.speech_to_text_language = "pt"
         self.ai.text_to_speech.side_effect = self._fake_tts
-        self.ai.openai_client.chat.completions.create.return_value = self._make_completion(
+        self.ai.one_shot.return_value = self._make_one_shot_result(
             "1. Um segundo.\n2. Entendido, verificando agora."
         )
 
@@ -320,7 +318,7 @@ class TestVoiceFillerTranslation(TestVoiceFillerCacheBase):
         self.config.speech_to_text_task = "transcribe"
         self.config.speech_to_text_language = "pt"
         self.ai.text_to_speech.side_effect = self._fake_tts
-        self.ai.openai_client.chat.completions.create.side_effect = RuntimeError("API error")
+        self.ai.one_shot.side_effect = RuntimeError("API error")
 
         cache = self._make_cache()
         cache.warm()  # must not raise
@@ -335,7 +333,7 @@ class TestVoiceFillerTranslation(TestVoiceFillerCacheBase):
         self.config.speech_to_text_language = "pt"
         self.ai.text_to_speech.side_effect = self._fake_tts
         # Only 1 translation returned for 2 phrases
-        self.ai.openai_client.chat.completions.create.return_value = self._make_completion(
+        self.ai.one_shot.return_value = self._make_one_shot_result(
             "1. Um segundo."
         )
 
@@ -351,19 +349,19 @@ class TestVoiceFillerTranslation(TestVoiceFillerCacheBase):
         self.config.speech_to_text_task = "transcribe"
         self.config.speech_to_text_language = "pt"
         self.ai.text_to_speech.side_effect = self._fake_tts
-        self.ai.openai_client.chat.completions.create.return_value = self._make_completion(
+        self.ai.one_shot.return_value = self._make_one_shot_result(
             "1. Um segundo.\n2. Entendido, verificando agora."
         )
 
         cache = self._make_cache()
         cache.warm()  # first warm — translates and generates files
-        translate_calls_first = self.ai.openai_client.chat.completions.create.call_count
+        translate_calls_first = self.ai.one_shot.call_count
 
         # Second warm — all files cached; translation should not be called
         cache2 = self._make_cache()
         cache2.warm()
         self.assertEqual(
-            self.ai.openai_client.chat.completions.create.call_count,
+            self.ai.one_shot.call_count,
             translate_calls_first,
         )
 
@@ -380,7 +378,7 @@ class TestVoiceFillerTranslation(TestVoiceFillerCacheBase):
 
         # Now switch to Portuguese — hash changes, must regenerate
         self.config.speech_to_text_language = "pt"
-        self.ai.openai_client.chat.completions.create.return_value = self._make_completion(
+        self.ai.one_shot.return_value = self._make_one_shot_result(
             "1. Um segundo.\n2. Entendido, verificando agora."
         )
         cache2 = self._make_cache()

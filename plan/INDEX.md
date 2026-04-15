@@ -159,6 +159,18 @@ plan/
 **Document**: [completed/43-ai-facade-migration.md](./completed/43-ai-facade-migration.md)
 **Description**: Refactor `AI` into a thin facade: owns `conversation_history`, delegates capabilities to provider instances, and exposes `AI.from_config(config)` factory. Adds `llm_provider`, `tts_provider`, `stt_provider` config keys (all default to `openai`). Runtime method call sites (`generate_response`, `text_to_speech`, etc.) remain unchanged; only construction changes to `AI.from_config(config)`. Requires Plans 41 and 42.
 
+### Priority 44: LLMProvider one_shot Method
+**Document**: [completed/44-llm-provider-one-shot.md](./completed/44-llm-provider-one-shot.md)
+**Description**: Add `one_shot(prompt, model=None)` to `LLMProvider` ABC, implement in `OpenAILLMProvider` as a direct single-turn, system-role-free call (not delegated to `generate_response`), and expose on `AI`. Enables single-turn LLM calls that do not affect conversation history. Foundation for Plan 46.
+
+### Priority 45: LLMProvider web_search Method
+**Document**: [completed/45-llm-provider-web-search.md](./completed/45-llm-provider-web-search.md)
+**Description**: Add `web_search(query, instructions, model=None, include=None)` to `LLMProvider` ABC, implement in `OpenAILLMProvider` using the Responses API with `retry_with_backoff` and consistent error result, and expose on `AI`. Foundation for Plan 46.
+
+### Priority 46: Remove openai_client Escape Hatch
+**Document**: [completed/46-remove-openai-client-escape-hatch.md](./completed/46-remove-openai-client-escape-hatch.md)
+**Description**: Migrate `voice_filler.py` to `ai.one_shot()` and `realtime_websearch/plugin.py` to `ai.web_search()`, then remove the `openai_client` property and `_openai_client` attribute from `AI` entirely. After this plan, no plugin or instance method touches the OpenAI SDK directly. Requires Plans 44 and 45.
+
 ### Priority 48: Rename gpt_*_model Config Keys
 **Document**: [completed/48-rename-gpt-model-config-keys.md](./completed/48-rename-gpt-model-config-keys.md)
 **Description**: Rename `gpt_response_model`, `gpt_route_model`, and `gpt_summary_model` config keys to `llm_response_model`, `llm_route_model`, and `llm_summary_model`. Removes vendor-specific naming from user-facing configuration now that the provider facade makes the LLM layer provider-agnostic.
@@ -201,18 +213,6 @@ plan/
 ### Priority 37: Context-Aware Routing
 **Document**: [backlog/37-context-aware-routing.md](./backlog/37-context-aware-routing.md)
 **Description**: Pass the last N conversation turns to `define_route` so the routing LLM can correctly resolve follow-up utterances. Fixes misrouting of clarifications (e.g. "I mean the FIFA World Cup" after a realtime_websearch query routing to `news`).
-
-### Priority 44: LLMProvider one_shot Method
-**Document**: [backlog/44-llm-provider-one-shot.md](./backlog/44-llm-provider-one-shot.md)
-**Description**: Add `one_shot(prompt, model=None)` to `LLMProvider` ABC, implement in `OpenAILLMProvider` as a direct single-turn, system-role-free call (not delegated to `generate_response`), and expose on `AI`. Enables single-turn LLM calls that do not affect conversation history. Foundation for Plan 46.
-
-### Priority 45: LLMProvider web_search Method
-**Document**: [backlog/45-llm-provider-web-search.md](./backlog/45-llm-provider-web-search.md)
-**Description**: Add `web_search(query, instructions, model=None, include=None)` to `LLMProvider` ABC, implement in `OpenAILLMProvider` using the Responses API with `retry_with_backoff` and consistent error result, and expose on `AI`. Foundation for Plan 46.
-
-### Priority 46: Remove openai_client Escape Hatch
-**Document**: [backlog/46-remove-openai-client-escape-hatch.md](./backlog/46-remove-openai-client-escape-hatch.md)
-**Description**: Migrate `voice_filler.py` to `ai.one_shot()` and `realtime_websearch/plugin.py` to `ai.web_search()`, then remove the `openai_client` property and `_openai_client` attribute from `AI` entirely. After this plan, no plugin or instance method touches the OpenAI SDK directly. Requires Plans 44 and 45.
 
 ### Priority 47: Extract System Prompt to common/prompt.py
 **Document**: [backlog/47-system-prompt-extraction.md](./backlog/47-system-prompt-extraction.md)

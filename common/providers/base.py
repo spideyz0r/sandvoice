@@ -18,6 +18,22 @@ class LLMProvider(ABC):
     def text_summary(self, user_input, extra_info=None, words="100", model=None):
         """Return a summary dict: {"title": str, "text": str}."""
 
+    @abstractmethod
+    def one_shot(self, prompt, model=None):
+        """Single-turn LLM call with no conversation history or system role.
+
+        Returns a response object with a `.content` attribute (str).
+        Does not read or mutate any conversation state.
+        """
+
+    @abstractmethod
+    def web_search(self, query, instructions, model=None, include=None):
+        """Answer a query using a web-search-augmented LLM call.
+
+        Returns a result object with an `.output_text` attribute (str).
+        Returns a fallback result with a user-friendly error message on failure.
+        """
+
 
 class TTSProvider(ABC):
     @abstractmethod

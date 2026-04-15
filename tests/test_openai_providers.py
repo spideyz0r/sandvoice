@@ -282,6 +282,97 @@ class TestOpenAILLMProviderTextSummary(unittest.TestCase):
         self.assertEqual(result["title"], "Error")
 
 
+class TestOpenAILLMProviderOneShot(unittest.TestCase):
+    def setUp(self):
+        self.client = MagicMock()
+        self.config = _make_config()
+        self.provider = OpenAILLMProvider(self.client, self.config)
+
+    def _mock_completion(self, content):
+        msg = Mock()
+        msg.content = content
+        choice = Mock()
+        choice.message = msg
+        completion = Mock()
+        completion.choices = [choice]
+        return completion
+
+    def test_returns_message_with_content(self):
+        self.client.chat.completions.create.return_value = self._mock_completion("Paris")
+        result = self.provider.one_shot("What is the capital of France?")
+        self.assertEqual(result.content, "Paris")
+
+    def test_uses_config_model_when_not_specified(self):
+        self.client.chat.completions.create.return_value = self._mock_completion("ok")
+        self.provider.one_shot("prompt")
+        call_args = self.client.chat.completions.create.call_args
+        self.assertEqual(call_args[1]["model"], "gpt-5-mini")
+
+    def test_uses_explicit_model_when_provided(self):
+        self.client.chat.completions.create.return_value = self._mock_completion("ok")
+        self.provider.one_shot("prompt", model="gpt-4")
+        call_args = self.client.chat.completions.create.call_args
+        self.assertEqual(call_args[1]["model"], "gpt-4")
+
+    def test_sends_user_role_only(self):
+        """one_shot must not inject a system role."""
+        self.client.chat.completions.create.return_value = self._mock_completion("ok")
+        self.provider.one_shot("hello")
+        call_args = self.client.chat.completions.create.call_args
+        messages = call_args[1]["messages"]
+        self.assertEqual(len(messages), 1)
+        self.assertEqual(messages[0]["role"], "user")
+        self.assertEqual(messages[0]["content"], "hello")
+
+    def test_returns_error_message_on_api_failure(self):
+        self.client.chat.completions.create.side_effect = Exception("API error")
+        result = self.provider.one_shot("prompt")
+        self.assertIsNotNone(result.content)
+        self.assertIsInstance(result.content, str)
+
+
+class TestOpenAILLMProviderWebSearch(unittest.TestCase):
+    def setUp(self):
+        self.client = MagicMock()
+        self.config = _make_config()
+        self.provider = OpenAILLMProvider(self.client, self.config)
+
+    def _mock_response(self, output_text):
+        resp = Mock()
+        resp.output_text = output_text
+        return resp
+
+    def test_returns_result_with_output_text(self):
+        self.client.responses.create.return_value = self._mock_response("The answer is 42.")
+        result = self.provider.web_search("What is the answer?", "Answer briefly.")
+        self.assertEqual(result.output_text, "The answer is 42.")
+
+    def test_passes_query_and_instructions(self):
+        self.client.responses.create.return_value = self._mock_response("ok")
+        self.provider.web_search("my query", instructions="be brief")
+        call_args = self.client.responses.create.call_args
+        self.assertEqual(call_args[1]["input"], "my query")
+        self.assertEqual(call_args[1]["instructions"], "be brief")
+
+    def test_uses_config_model_when_not_specified(self):
+        self.client.responses.create.return_value = self._mock_response("ok")
+        self.provider.web_search("query", "instructions")
+        call_args = self.client.responses.create.call_args
+        self.assertEqual(call_args[1]["model"], "gpt-5-mini")
+
+    def test_uses_explicit_model_when_provided(self):
+        self.client.responses.create.return_value = self._mock_response("ok")
+        self.provider.web_search("query", "instructions", model="gpt-4")
+        call_args = self.client.responses.create.call_args
+        self.assertEqual(call_args[1]["model"], "gpt-4")
+
+    def test_returns_error_result_on_api_failure(self):
+        self.client.responses.create.side_effect = Exception("network error")
+        result = self.provider.web_search("query", "instructions")
+        self.assertIsNotNone(result.output_text)
+        self.assertIn("error", result.output_text.lower())
+
+
 # ---------------------------------------------------------------------------
 # OpenAITTSProvider
 # ---------------------------------------------------------------------------

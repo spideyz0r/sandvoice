@@ -240,27 +240,12 @@ def _build_stt_provider(config, openai_client):
 
 
 class AI:
-    def __init__(self, llm, tts, stt, config, *, openai_client=None):
+    def __init__(self, llm, tts, stt, config):
         self.config = config
         self._llm = llm
         self._tts = tts
         self._stt = stt
-        self._openai_client = openai_client
         self.conversation_history = []
-
-    @property
-    def openai_client(self):
-        """Return the underlying OpenAI client for plugins that use the API directly.
-
-        Raises AttributeError if the AI was not constructed via from_config or the
-        configured provider does not expose an OpenAI client.
-        """
-        if self._openai_client is None:
-            raise AttributeError(
-                "openai_client is not available: AI was not constructed via "
-                "from_config, or the configured provider does not use an OpenAI client."
-            )
-        return self._openai_client
 
     @classmethod
     def from_config(cls, config):
@@ -276,7 +261,7 @@ class AI:
         llm = _build_llm_provider(config, openai_client)
         tts = _build_tts_provider(config, openai_client)
         stt = _build_stt_provider(config, openai_client)
-        return cls(llm, tts, stt, config, openai_client=openai_client)
+        return cls(llm, tts, stt, config)
 
     def generate_response(self, user_input, extra_info=None, model=None):
         # Append user turn first so history is consistent even if the call fails.
@@ -342,3 +327,11 @@ class AI:
 
     def text_summary(self, user_input, extra_info=None, words="100", model=None):
         return self._llm.text_summary(user_input, extra_info=extra_info, words=words, model=model)
+
+    def one_shot(self, prompt, model=None):
+        """Single-turn LLM call that does not affect conversation history."""
+        return self._llm.one_shot(prompt, model=model)
+
+    def web_search(self, query, instructions, model=None, include=None):
+        """Web-search-augmented LLM call. Does not affect conversation history."""
+        return self._llm.web_search(query, instructions, model=model, include=include)

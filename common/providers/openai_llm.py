@@ -1,6 +1,7 @@
 import datetime
 import json
 import logging
+from collections import namedtuple
 
 import yaml
 from jinja2 import Template
@@ -9,6 +10,8 @@ from types import SimpleNamespace
 from common.error_handling import retry_with_backoff, handle_api_error, handle_file_error
 from common.ai import _normalize_route_response, DEFAULT_ROUTE_NAME, ErrorMessage
 from common.providers.base import LLMProvider
+
+_WebSearchErrorResult = namedtuple("_WebSearchErrorResult", ["output_text"])
 
 logger = logging.getLogger(__name__)
 
@@ -246,3 +249,47 @@ class OpenAILLMProvider(LLMProvider):
             logger.error("Text summary error: %s", e)
             print(error_msg)
             return {"title": "Error", "text": "Unable to generate summary"}
+
+    @retry_with_backoff(max_attempts=3, initial_delay=1)
+    def _call_one_shot(self, prompt, model=None):
+        """Make the API call. Raises on failure so retry_with_backoff can retry."""
+        if not model:
+            model = self.config.llm_response_model
+        completion = self._client.chat.completions.create(
+            model=model,
+            messages=[{"role": "user", "content": prompt}],
+        )
+        return completion.choices[0].message
+
+    def one_shot(self, prompt, model=None):
+        try:
+            return self._call_one_shot(prompt, model=model)
+        except Exception as e:
+            error_msg = handle_api_error(e, service_name="OpenAI GPT")
+            logger.error("one_shot error: %s", error_msg)
+            return ErrorMessage("Sorry, I'm having trouble right now. Please try again in a moment.")
+
+    @retry_with_backoff(max_attempts=3, initial_delay=1)
+    def _call_web_search(self, query, instructions, model=None, include=None):
+        """Make the Responses API call. Raises on failure so retry_with_backoff can retry."""
+        if not model:
+            model = self.config.llm_response_model
+        return self._client.responses.create(
+            model=model,
+            instructions=instructions,
+            tools=[{"type": "web_search"}],
+            tool_choice="auto",
+            input=query,
+            include=include or [],
+        )
+
+    def web_search(self, query, instructions, model=None, include=None):
+        try:
+            return self._call_web_search(query, instructions, model=model, include=include)
+        except Exception as e:
+            error_msg = handle_api_error(e, service_name="OpenAI web search")
+            logger.exception("Web search error: %s", error_msg)
+            print(error_msg)
+            return _WebSearchErrorResult(
+                output_text="I encountered an error while searching the web. Please try again."
+            )
