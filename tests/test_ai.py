@@ -128,9 +128,7 @@ class TestAIFromConfig(unittest.TestCase):
         self.assertIsInstance(ai, AI)
 
     def test_ai_has_no_openai_client_property(self):
-        llm, tts, stt = _make_providers()
-        ai = AI(llm, tts, stt, _make_config())
-        self.assertFalse(hasattr(ai, 'openai_client'))
+        self.assertNotIn('openai_client', AI.__dict__)
 
 
 # ---------------------------------------------------------------------------
