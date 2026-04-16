@@ -36,7 +36,7 @@ The Task Scheduler (Plan 21) handles cron/interval/once scheduled tasks defined 
 
 ## Conversation Memory (Cross-Session)
 
-Persistent memory of facts across sessions: "My favourite coffee shop is Starbucks on Main Street" → later: "directions to my favourite coffee shop." Likely implemented as a dedicated SQLite table with semantic search or simple keyword lookup via `ai.one_shot()`. Privacy controls for what gets stored.
+Persistent memory of facts across sessions: "My favorite coffee shop is Starbucks on Main Street" → later: "directions to my favorite coffee shop." Likely implemented as a dedicated SQLite table with semantic search or simple keyword lookup via `ai.one_shot()`. Privacy controls for what gets stored.
 
 ---
 
@@ -94,10 +94,10 @@ Manage lists by voice:
 
 ## Multi-User Support
 
-Recognise different users by voice fingerprint and provide personalised responses (calendar, preferences, todo lists). Privacy-first design for shared devices.
+Recognize different users by voice fingerprint and provide personalized responses (calendar, preferences, todo lists). Privacy-first design for shared devices.
 
 ---
 
 ## Notes
 
-When any item above is prioritised for development, it gets its own detailed planning document following the standard format in `plan/backlog/`.
+When any item above is prioritized for development, it gets its own detailed planning document following the standard format in `plan/backlog/`.

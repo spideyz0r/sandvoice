@@ -54,7 +54,7 @@ if refresh_only and cache is not None:
         entry = cache.get(cache_key)
         if entry is not None and cache.is_fresh(entry) and not _is_legacy_cache_entry(entry.value):
             logger.debug("Weather cache warmup skip (fresh): key=%r", cache_key)
-            return entry.value
+            return None  # warmup callers ignore return values
     except Exception as e:
         logger.debug("Weather cache check failed during warmup, proceeding with fetch: %s", e)
 
