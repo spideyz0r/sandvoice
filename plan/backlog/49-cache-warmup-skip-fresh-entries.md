@@ -64,9 +64,10 @@ if not refresh_only and cache is not None:
 
 ### Other cache-aware plugins
 
-Apply the same pattern to any other plugin that checks `refresh_only` and uses
-`VoiceCache`. At time of writing, only `weather` is affected, but the pattern
-should be documented in `docs/PATTERNS.md` for future plugins.
+Apply the same pattern to `plugins/greeting/plugin.py`, which has the identical
+`if not refresh_only` guard and is equally affected. The pattern should be
+documented in `docs/PATTERNS.md` for any current or future plugins that use
+this warmup flow.
 
 ### `docs/PATTERNS.md`
 
@@ -81,13 +82,11 @@ cache check (skip-if-fresh for warmup, serve-if-can-serve for user requests).
 - [ ] User-facing weather queries are unaffected
 - [ ] `cache_auto_refresh` warmup completes immediately when all entries are fresh
 - [ ] Tests cover: warmup skip when fresh, warmup fetch when stale, warmup fetch
-      when missing
+      when missing (both weather and greeting plugins)
 - [ ] Pattern documented in `docs/PATTERNS.md`
 
 ## Notes
 
-- The greeting plugin uses the same `refresh_only` flag; check whether it has
-  the same issue and apply the fix there too.
 - The `VoiceFillerCache` is a separate system (audio files + hash DB) and is
   already skip-on-hit — no changes needed there.
 - No config changes required.

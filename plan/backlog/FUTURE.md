@@ -6,13 +6,13 @@ This document tracks features planned for future iterations. These are not curre
 
 ## Alternative LLM/TTS/STT Providers
 
-The provider facade (Plans 41–46) is in place. Adding new provider implementations is now purely additive — no changes to `AI` or callers needed. Candidates:
+The provider facade (Plans 41–46) is in place. Adding new provider implementations keeps callers unchanged, but `common/ai.py` still needs to be extended to register/select the new provider (updating `_SUPPORTED_PROVIDERS` and the `_build_*_provider` dispatch dicts), and config validation may also need updates. Candidates:
 
 - **LLM**: Anthropic Claude, Google Gemini, local Ollama (for Pi deployments)
 - **TTS**: ElevenLabs (higher quality voices), Piper / Coqui (offline, Pi-friendly)
 - **STT**: faster-whisper or whisper.cpp (offline, lower latency on Pi)
 
-Each new provider is a single class implementing the relevant ABC.
+Each new provider is a class implementing the relevant ABC plus the required factory wiring in `common/ai.py`.
 
 ---
 
@@ -48,7 +48,7 @@ Save the current session's conversation history to a file (Markdown or plain tex
 
 ## Plugin Hot-Reload
 
-Reload the plugin registry (and optionally routes.yaml) without restarting the process. Useful during development and for config-only plugin changes. Could be triggered via a voice command or a signal.
+Reload the plugin registry (and optionally `routes.yaml`) without restarting the process. Useful during development and for config-only plugin changes. Could be triggered via a voice command or a signal.
 
 ---
 
