@@ -4,6 +4,12 @@ This document tracks features planned for future iterations. These are not curre
 
 ---
 
+## Shared PyAudio Session in Wake-Word Mode
+
+Currently `_state_idle` (Porcupine), the barge-in thread (`BargeInDetector`), and `VadRecorder` each create their own `pyaudio.PyAudio()` instance. PortAudio is not safe to initialize/terminate from multiple threads concurrently; a `_cleanup_barge_in` timeout that is too short can leave a `Pa_Terminate()` call in flight while a new `Pa_Initialize()` is already running, causing a C-level deadlock that is unresponsive to Ctrl+C (observed once after a 52-second TTS response). The timeout was bumped to 3 s as a hotfix. A more robust fix is to hold a single shared PortAudio/PyAudio session for the lifetime of wake-word mode and pass stream handles down, eliminating the race entirely. Touches `wake_word.py`, `vad_recorder.py`, and `barge_in.py`.
+
+---
+
 ## Alternative LLM/TTS/STT Providers
 
 The provider facade (Plans 41–46) is in place. Adding new provider implementations keeps callers unchanged, but `common/ai.py` still needs to be extended to register/select the new provider (updating `_SUPPORTED_PROVIDERS` and the `_build_*_provider` dispatch dicts), and config validation may also need updates. Candidates:
