@@ -223,6 +223,14 @@ plan/
 **Description**: Move `OpenAILLMProvider._build_system_role()` logic into a standalone `build_system_role(config, extra_info=None)` function in `common/prompt.py`. The SandVoice bot identity, language, timezone/location context, verbosity instructions, and the formatting constraint not to reply as a chat are application-level concerns — not OpenAI-specific. Any future provider imports and calls the shared function directly.
 
 
+### Priority 50: system_prompt_extra — User-Defined Standing Instructions
+**Document**: [backlog/50-system-prompt-extra.md](./backlog/50-system-prompt-extra.md)
+**Description**: Add optional `system_prompt_extra` config key (YAML block scalar string) that appends user-defined standing instructions to the system prompt on every request. Appended between the core persona and per-request `extra_info`. Implemented in `common/prompt.py` and `common/configuration.py`.
+
+### Priority 51: Greeting Plugin — Extra Instructions
+**Document**: [backlog/51-greeting-extra-instructions.md](./backlog/51-greeting-extra-instructions.md)
+**Description**: Add optional `greeting_extra` config key that appends user-defined instructions to the greeting plugin's generation prompt (e.g. "end the greeting with a short proverb"). Separate from `system_prompt_extra` — affects only the greeting plugin's live generation.
+
 ### Future Enhancements
 **Document**: [backlog/FUTURE.md](./backlog/FUTURE.md)
 **Description**: Long-term feature ideas: alternative providers (Anthropic, Ollama, Piper), local offline mode, conversation history truncation, user-triggered timers, conversation memory, export, plugin hot-reload, API cost tracking, music control, smart home, calendar, todo lists, multi-user support.
