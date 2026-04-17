@@ -225,7 +225,7 @@ plan/
 
 ### Priority 50: system_prompt_extra — User-Defined Standing Instructions
 **Document**: [backlog/50-system-prompt-extra.md](./backlog/50-system-prompt-extra.md)
-**Description**: Add optional `system_prompt_extra` config key (YAML block scalar string) that appends user-defined standing instructions to the system prompt on every request. Appended between the core persona and per-request `extra_info`. Implemented in `common/prompt.py` and `common/configuration.py`.
+**Description**: Add optional `system_prompt_extra` config key (YAML block scalar string) that appends user-defined standing instructions to the shared system prompt used by response generation/streaming. Appended between the core persona and per-request `extra_info`. Implemented in `common/prompt.py` and `common/configuration.py`.
 
 ### Priority 51: Greeting Plugin — Extra Instructions
 **Document**: [backlog/51-greeting-extra-instructions.md](./backlog/51-greeting-extra-instructions.md)

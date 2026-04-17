@@ -10,8 +10,12 @@ editing source code.
 ## Goal
 
 Add an optional `system_prompt_extra` config key that appends a block of
-user-defined text to the system prompt on every request. The existing persona is
-never replaced — the extra text is purely additive.
+user-defined text to the system prompt used for response generation and streaming.
+The existing persona is never replaced — the extra text is purely additive.
+
+Note: `build_system_role()` is used for response generation and streaming only.
+Routing (`define_route`) and summarization (`text_summary`) build their own
+system roles and are not affected by this setting.
 
 ## Config
 
@@ -30,10 +34,11 @@ Default: absent / `None` (no injection).
 
 ### `common/configuration.py`
 
-Add `system_prompt_extra` to the defaults dict (`None`) and expose it as a
-config property. Validate: if present, must be a non-empty string after
-stripping whitespace; log a warning and treat as absent if the value is
-blank or not a string.
+Add `system_prompt_extra` to the defaults dict (`None`) and parse it in
+`load_config()` following the existing `Config` pattern (read raw value, set
+attribute). Validate: if present, must be a non-empty string after stripping
+whitespace; log a warning and normalise to `None` if the value is blank or not
+a string. `validate_config()` should not hard-fail on an invalid optional value.
 
 ### `common/prompt.py` — `build_system_role`
 

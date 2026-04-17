@@ -10,8 +10,9 @@ without editing the plugin source.
 ## Goal
 
 Add an optional `greeting_extra` config key that appends user-defined instructions
-to the greeting generation prompt. The existing greeting structure is unchanged;
-the extra text is purely additive.
+to the greeting generation prompt. The base greeting structure instructions remain
+in the prompt, but `greeting_extra` may influence the generated content or
+formatting.
 
 ## Config
 
@@ -29,9 +30,12 @@ Default: absent / `None` (no injection).
 
 ### `common/configuration.py`
 
-Add `greeting_extra` to the defaults dict (`None`) and expose it as a config
-property. Same validation as `system_prompt_extra`: non-empty string after strip,
-otherwise log a warning and treat as absent.
+Add `greeting_extra` to the defaults dict (`None`) and parse it in `load_config()`
+following the existing `Config` pattern: read the raw value, accept only strings
+that remain non-empty after `strip()`, and store the stripped value on the config
+object. For blank or non-string values, log a warning and normalise to `None`.
+`validate_config()` should not hard-fail on an invalid optional `greeting_extra`
+value.
 
 ### `plugins/greeting/plugin.py`
 
