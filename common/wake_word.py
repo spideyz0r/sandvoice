@@ -397,9 +397,10 @@ class WakeWordMode:
         if self.config.debug:
             self.audio.log_mixer_state("barge-in AFTER stop")
 
-        # Signal barge-in thread to stop and give it a brief chance to clean up
-        # Short timeout to allow PyAudio stream to close before LISTENING reopens it
-        self._cleanup_barge_in(timeout=0.3)
+        # Signal barge-in thread to stop and wait for PyAudio stream to close before LISTENING
+        # reopens it. 1.0s is enough here since barge-in just fired (thread exits quickly after
+        # detecting the wake word), but still more than the original 0.3s to avoid PortAudio races.
+        self._cleanup_barge_in(timeout=1.0)
 
         # Clean up any partial data
         self._remove_recorded_audio()
@@ -670,9 +671,11 @@ class WakeWordMode:
             self._respond_streaming()
 
         # Signal barge-in detector to stop and wait for it to finish
-        # Wait for thread to finish to ensure PyAudio stream is closed before LISTENING reopens it
+        # Wait for thread to finish to ensure PyAudio stream is closed before LISTENING reopens it.
+        # 3.0s gives PortAudio/CoreAudio enough time to fully release the input stream even after
+        # long playback sessions; 0.3s was too short and caused Pa_Terminate() deadlocks on macOS.
         barge_in_triggered = self.barge_in is not None and self.barge_in.is_triggered
-        self._cleanup_barge_in(timeout=0.3)
+        self._cleanup_barge_in(timeout=3.0)
 
         # Emit per-request timing summary only for fully completed (non-interrupted) requests
         if has_response and not barge_in_triggered:
