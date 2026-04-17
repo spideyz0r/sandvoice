@@ -165,6 +165,24 @@ class TestWeatherPluginWithCache(unittest.TestCase):
         self.assertIsNone(result)
 
     @patch('plugins.weather.plugin.OpenWeatherReader')
+    def test_warmup_fetches_when_fresh_legacy_entry(self, MockReader):
+        # Seed cache with a fresh but legacy JSON entry (old raw weather payload format)
+        self.cache.set(
+            _CACHE_KEY, json.dumps(_WEATHER_DATA),
+            ttl_s=10800, max_stale_s=21600,
+        )
+        MockReader.return_value.get_current_weather.return_value = _WEATHER_DATA
+        s = _make_sandvoice(cache=self.cache)
+        from plugins.weather import process
+        result = process("weather", {"refresh_only": True}, s)
+        # Legacy entry must NOT be skipped even though it is fresh — fetch and overwrite
+        MockReader.assert_called_once()
+        self.assertIsNone(result)
+        # Cache should now contain response text, not raw JSON
+        entry = self.cache.get(_CACHE_KEY)
+        self.assertEqual(entry.value, "It is 20°C in London.")
+
+    @patch('plugins.weather.plugin.OpenWeatherReader')
     def test_warmup_cache_check_failure_falls_through_to_fetch(self, MockReader):
         MockReader.return_value.get_current_weather.return_value = _WEATHER_DATA
         s = _make_sandvoice(cache=self.cache)

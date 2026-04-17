@@ -176,7 +176,7 @@ plan/
 **Description**: Rename `gpt_response_model`, `gpt_route_model`, and `gpt_summary_model` config keys to `llm_response_model`, `llm_route_model`, and `llm_summary_model`. Removes vendor-specific naming from user-facing configuration now that the provider facade makes the LLM layer provider-agnostic.
 
 ### Priority 49: Cache Warmup — Skip Fresh Entries on Restart
-**Document**: [backlog/49-cache-warmup-skip-fresh-entries.md](./backlog/49-cache-warmup-skip-fresh-entries.md)
+**Document**: [completed/49-cache-warmup-skip-fresh-entries.md](./completed/49-cache-warmup-skip-fresh-entries.md)
 **Description**: Fix cache warmup to skip live API/LLM calls when the SQLite-persisted entry is still fresh. Adds a fresh-entry early return in the `refresh_only=True` path for the weather and greeting plugins. Warmup is now instant when the cache is warm from a recent run. Pattern documented in `docs/PATTERNS.md`.
 
 ---
