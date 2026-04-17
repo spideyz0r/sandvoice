@@ -76,6 +76,16 @@ def process(user_input, route, s):
         ttl_s = route.get('ttl_s', s.config.cache_weather_ttl_s)
         max_stale_s = route.get('max_stale_s', s.config.cache_weather_max_stale_s)
 
+        # Skip live fetch during warmup if the cached entry is still fresh
+        if refresh_only and cache is not None:
+            try:
+                entry = cache.get(cache_key)
+                if entry is not None and cache.is_fresh(entry) and not _is_legacy_cache_entry(entry.value):
+                    logger.debug("Weather cache warmup skip (fresh): key=%r", cache_key)
+                    return None
+            except Exception as e:
+                logger.debug("Weather cache check failed during warmup, proceeding with fetch: %s", e)
+
         # Try serving from cache when not a background refresh
         if not refresh_only and cache is not None:
             try:

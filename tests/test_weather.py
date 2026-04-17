@@ -124,21 +124,55 @@ class TestWeatherPluginWithCache(unittest.TestCase):
         self.assertEqual(entry.value, "It is 20°C in London.")
 
     @patch('plugins.weather.plugin.OpenWeatherReader')
-    def test_refresh_only_bypasses_cache_read(self, MockReader):
-        # Pre-populate cache with fresh data
+    def test_warmup_skips_fetch_when_fresh(self, MockReader):
+        # Pre-populate cache with a fresh entry
         self.cache.set(
             _CACHE_KEY, "It is 20°C in London.",
             ttl_s=10800, max_stale_s=21600,
         )
-        MockReader.return_value.get_current_weather.return_value = {
-            "main": {"temp": 25}, "weather": [{"description": "sunny"}]
-        }
         s = _make_sandvoice(cache=self.cache)
         from plugins.weather import process
         result = process("weather", {"refresh_only": True}, s)
-        # API should have been called (bypass cache read)
+        # Fresh cache → API and LLM should be skipped entirely
+        MockReader.assert_not_called()
+        s.ai.generate_response.assert_not_called()
+        self.assertIsNone(result)
+
+    @patch('plugins.weather.plugin.OpenWeatherReader')
+    def test_warmup_fetches_when_stale(self, MockReader):
+        # Insert entry past TTL but within max_stale (stale-but-servable)
+        old_ts = (datetime.now(timezone.utc) - timedelta(hours=4)).isoformat()
+        self.cache.set_with_timestamp(
+            _CACHE_KEY, "It is 20°C in London.", ttl_s=3600, max_stale_s=21600,
+            updated_at=old_ts,
+        )
+        MockReader.return_value.get_current_weather.return_value = _WEATHER_DATA
+        s = _make_sandvoice(cache=self.cache)
+        from plugins.weather import process
+        result = process("weather", {"refresh_only": True}, s)
+        # Stale entry → live fetch should run and update cache
         MockReader.assert_called_once()
-        # Return value should be None for refresh_only
+        self.assertIsNone(result)
+
+    @patch('plugins.weather.plugin.OpenWeatherReader')
+    def test_warmup_fetches_when_missing(self, MockReader):
+        MockReader.return_value.get_current_weather.return_value = _WEATHER_DATA
+        s = _make_sandvoice(cache=self.cache)
+        from plugins.weather import process
+        result = process("weather", {"refresh_only": True}, s)
+        # No cache entry → live fetch runs
+        MockReader.assert_called_once()
+        self.assertIsNone(result)
+
+    @patch('plugins.weather.plugin.OpenWeatherReader')
+    def test_warmup_cache_check_failure_falls_through_to_fetch(self, MockReader):
+        MockReader.return_value.get_current_weather.return_value = _WEATHER_DATA
+        s = _make_sandvoice(cache=self.cache)
+        with patch.object(self.cache, 'get', side_effect=Exception("DB locked")):
+            from plugins.weather import process
+            result = process("weather", {"refresh_only": True}, s)
+        # Cache check failed → should fall through to live fetch
+        MockReader.assert_called_once()
         self.assertIsNone(result)
 
     @patch('plugins.weather.plugin.OpenWeatherReader')

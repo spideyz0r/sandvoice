@@ -162,12 +162,32 @@ class TestGreetingRefreshOnly(unittest.TestCase):
         self.assertIsNone(result)
         cache.set.assert_called_once()
 
-    def test_refresh_only_skips_cache_read(self):
+    def test_warmup_skips_generation_when_fresh(self):
         from plugins.greeting.plugin import process
 
         cache = MagicMock()
-        cache.get.return_value = MagicMock()
-        cache.can_serve.return_value = True
+        entry = MagicMock()
+        entry.value = "Bom dia!"
+        cache.get.return_value = entry
+        cache.is_fresh.return_value = True
+
+        s = _make_s(cache=cache)
+        route = {"refresh_only": True}
+
+        with patch("plugins.greeting.plugin._cache_key", return_value="greeting:morning"):
+            result = process("bom dia", route, s)
+
+        self.assertIsNone(result)
+        # Fresh cache → LLM should not be called
+        s.ai.generate_response.assert_not_called()
+
+    def test_warmup_generates_when_stale(self):
+        from plugins.greeting.plugin import process
+
+        cache = MagicMock()
+        entry = MagicMock()
+        cache.get.return_value = entry
+        cache.is_fresh.return_value = False
 
         s = _make_s(cache=cache)
         s.ai.define_route.return_value = {"route": "weather"}
@@ -181,9 +201,51 @@ class TestGreetingRefreshOnly(unittest.TestCase):
             result = process("bom dia", route, s)
 
         self.assertIsNone(result)
-        # LLM was called despite cache having an entry (refresh_only bypasses read)
+        # Stale entry → LLM should be called and cache updated
         s.ai.generate_response.assert_called_once()
-        cache.get.assert_not_called()
+        cache.set.assert_called_once()
+
+    def test_warmup_generates_when_missing(self):
+        from plugins.greeting.plugin import process
+
+        cache = MagicMock()
+        cache.get.return_value = None
+
+        s = _make_s(cache=cache)
+        s.ai.define_route.return_value = {"route": "weather"}
+        s.route_message.return_value = "12°C"
+        s.ai.generate_response.return_value.content = "Bom dia!"
+
+        route = {"refresh_only": True}
+
+        with patch("plugins.greeting.plugin._cache_key", return_value="greeting:morning"), \
+             patch("plugins.greeting.plugin.build_extra_routes_text", return_value=""):
+            result = process("bom dia", route, s)
+
+        self.assertIsNone(result)
+        # No cache entry → LLM should be called
+        s.ai.generate_response.assert_called_once()
+
+    def test_warmup_cache_check_failure_falls_through_to_fetch(self):
+        from plugins.greeting.plugin import process
+
+        cache = MagicMock()
+        cache.get.side_effect = Exception("DB locked")
+
+        s = _make_s(cache=cache)
+        s.ai.define_route.return_value = {"route": "weather"}
+        s.route_message.return_value = "12°C"
+        s.ai.generate_response.return_value.content = "Bom dia!"
+
+        route = {"refresh_only": True}
+
+        with patch("plugins.greeting.plugin._cache_key", return_value="greeting:morning"), \
+             patch("plugins.greeting.plugin.build_extra_routes_text", return_value=""):
+            result = process("bom dia", route, s)
+
+        self.assertIsNone(result)
+        # Cache check failed → should fall through to live generation
+        s.ai.generate_response.assert_called_once()
 
 
 class TestGreetingCacheFailure(unittest.TestCase):

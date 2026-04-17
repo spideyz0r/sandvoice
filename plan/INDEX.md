@@ -175,6 +175,10 @@ plan/
 **Document**: [completed/48-rename-gpt-model-config-keys.md](./completed/48-rename-gpt-model-config-keys.md)
 **Description**: Rename `gpt_response_model`, `gpt_route_model`, and `gpt_summary_model` config keys to `llm_response_model`, `llm_route_model`, and `llm_summary_model`. Removes vendor-specific naming from user-facing configuration now that the provider facade makes the LLM layer provider-agnostic.
 
+### Priority 49: Cache Warmup — Skip Fresh Entries on Restart
+**Document**: [backlog/49-cache-warmup-skip-fresh-entries.md](./backlog/49-cache-warmup-skip-fresh-entries.md)
+**Description**: Fix cache warmup to skip live API/LLM calls when the SQLite-persisted entry is still fresh. Adds a fresh-entry early return in the `refresh_only=True` path for the weather and greeting plugins. Warmup is now instant when the cache is warm from a recent run. Pattern documented in `docs/PATTERNS.md`.
+
 ---
 
 ## In Progress 🚧
@@ -218,9 +222,6 @@ plan/
 **Document**: [backlog/47-system-prompt-extraction.md](./backlog/47-system-prompt-extraction.md)
 **Description**: Move `OpenAILLMProvider._build_system_role()` logic into a standalone `build_system_role(config, extra_info=None)` function in `common/prompt.py`. The SandVoice bot identity, language, timezone/location context, verbosity instructions, and the formatting constraint not to reply as a chat are application-level concerns — not OpenAI-specific. Any future provider imports and calls the shared function directly.
 
-### Priority 49: Cache Warmup — Skip Fresh Entries on Restart
-**Document**: [backlog/49-cache-warmup-skip-fresh-entries.md](./backlog/49-cache-warmup-skip-fresh-entries.md)
-**Description**: Fix cache warmup to skip live API/LLM calls when the SQLite-persisted entry is still fresh. Currently `refresh_only=True` bypasses the cache read entirely, so every restart burns a weather API + LLM call even if the previous run was 2 minutes ago. Add a fresh-entry early return in the warmup path so restarts within the TTL window are instant.
 
 ### Future Enhancements
 **Document**: [backlog/FUTURE.md](./backlog/FUTURE.md)

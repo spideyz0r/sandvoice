@@ -500,6 +500,64 @@ Target: >80% for every new file. Check before every PR.
 
 ---
 
+## Cache-aware plugin warmup pattern
+
+Plugins that integrate with `VoiceCache` and support `refresh_only=True` (warmup) must
+implement a two-phase cache check so restarts within the TTL window don't burn API calls.
+
+### Phase 1 — warmup path (`refresh_only=True`): skip if fresh
+
+Insert this block **before** the live fetch, after reading `refresh_only` from the route:
+
+```python
+if refresh_only and cache is not None:
+    try:
+        entry = cache.get(cache_key)
+        if entry is not None and cache.is_fresh(entry):
+            logger.debug("Plugin cache warmup skip (fresh): key=%r", cache_key)
+            return None   # warmup callers ignore return values
+    except Exception as e:
+        logger.debug("Cache check failed during warmup, proceeding with fetch: %s", e)
+```
+
+If the plugin stores entries that can become structurally invalid (e.g. legacy JSON format),
+add an extra guard before returning early:
+
+```python
+if entry is not None and cache.is_fresh(entry) and not _is_legacy_entry(entry.value):
+```
+
+### Phase 2 — user request path (`refresh_only=False`): serve if can_serve
+
+The existing user-facing read stays unchanged:
+
+```python
+if not refresh_only and cache is not None:
+    try:
+        entry = cache.get(cache_key)
+        if entry is not None and cache.can_serve(entry):
+            return entry.value  # fresh or stale-but-valid, serve it
+    except Exception as e:
+        logger.warning("Cache read failed for key=%r: %s", cache_key, e)
+```
+
+### Behaviour table
+
+| Cache state at warmup | `is_fresh()` | Action |
+|---|---|---|
+| Entry fresh (age ≤ ttl_s) | `True` | Return `None` immediately — skip live fetch |
+| Entry stale but servable (ttl_s < age ≤ max_stale_s) | `False` | Run live fetch, update cache |
+| Entry missing or fully expired | — | Run live fetch, update cache |
+
+### Affected plugins (as of Plan 49)
+
+- `plugins/weather/plugin.py`
+- `plugins/greeting/plugin.py`
+
+Any new plugin that uses `refresh_only=True` must implement both phases.
+
+---
+
 ## Commit Messages
 
 Format: imperative mood, 50 chars or less for the subject line.
