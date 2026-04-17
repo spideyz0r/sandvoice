@@ -45,8 +45,9 @@ a string. `validate_config()` should not hard-fail on an invalid optional value.
 Append `system_prompt_extra` between the base persona block and `extra_info`:
 
 ```python
-if getattr(config, "system_prompt_extra", None):
-    system_role = system_role + config.system_prompt_extra.strip() + "\n"
+extra = getattr(config, "system_prompt_extra", None)
+if isinstance(extra, str) and extra.strip():
+    system_role = system_role + extra.strip() + "\n"
 if extra_info is not None:
     system_role = system_role + "Consider the following to answer your question: " + extra_info
 ```
