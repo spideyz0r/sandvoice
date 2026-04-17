@@ -2,7 +2,7 @@
 
 ## Problem
 
-On every SandVoice startup the `cache_auto_refresh` warmup unconditionally
+When `cache_auto_refresh` warmup is enabled and runs on SandVoice startup, it
 makes live API calls (weather API + LLM) for every configured plugin, even
 when the cached entry stored in SQLite is still fully fresh from the previous
 run.

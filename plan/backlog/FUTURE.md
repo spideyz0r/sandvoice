@@ -71,7 +71,7 @@ Integration with music services or local playback:
 ## Smart Home Integration
 
 Control smart home devices through voice:
-- HomeAssistant or HomeBridge integration
+- Home Assistant or Homebridge integration
 - "Turn off living room lights", "set thermostat to 20 degrees", "is the garage door closed?"
 
 ---
