@@ -46,7 +46,7 @@ if extra_info is not None:
     system_role = system_role + "Consider the following to answer your question: " + extra_info
 ```
 
-Prompt hierarchy (bottom of the system role, top to bottom):
+System role content order (first → last, as concatenated):
 
 1. Core persona (botname, language, timezone, location, verbosity)
 2. `system_prompt_extra` — standing user customisation
