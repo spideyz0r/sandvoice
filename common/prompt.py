@@ -39,6 +39,12 @@ def build_system_role(config, extra_info=None):
             "asks for details, or says they want a longer answer."
         )
 
+    logger.debug(
+        "Building system role: botname=%r language=%r verbosity=%r extra_info=%s",
+        config.botname, config.language, verbosity,
+        "present" if extra_info is not None else "absent",
+    )
+
     system_role = f"""
             Your name is {config.botname}.
             You are an assistant written in Python by Breno Brand.
