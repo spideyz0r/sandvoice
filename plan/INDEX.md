@@ -219,7 +219,7 @@ plan/
 **Description**: Pass the last N conversation turns to `define_route` so the routing LLM can correctly resolve follow-up utterances. Fixes misrouting of clarifications (e.g. "I mean the FIFA World Cup" after a realtime_websearch query routing to `news`).
 
 ### Priority 47: Extract System Prompt to common/prompt.py
-**Document**: [backlog/47-system-prompt-extraction.md](./backlog/47-system-prompt-extraction.md)
+**Document**: [completed/47-system-prompt-extraction.md](./completed/47-system-prompt-extraction.md)
 **Description**: Move `OpenAILLMProvider._build_system_role()` logic into a standalone `build_system_role(config, extra_info=None)` function in `common/prompt.py`. The SandVoice bot identity, language, timezone/location context, verbosity instructions, and the formatting constraint not to reply as a chat are application-level concerns — not OpenAI-specific. Any future provider imports and calls the shared function directly.
 
 

@@ -1,4 +1,3 @@
-import datetime
 import json
 import logging
 from collections import namedtuple
@@ -9,6 +8,7 @@ from types import SimpleNamespace
 
 from common.error_handling import retry_with_backoff, handle_api_error, handle_file_error
 from common.ai import _normalize_route_response, DEFAULT_ROUTE_NAME, ErrorMessage
+from common.prompt import build_system_role
 from common.providers.base import LLMProvider
 
 _WebSearchErrorResult = namedtuple("_WebSearchErrorResult", ["output_text"])
@@ -22,41 +22,7 @@ class OpenAILLMProvider(LLMProvider):
         self.config = config
 
     def _build_system_role(self, extra_info=None):
-        now = datetime.datetime.now()
-        verbosity = getattr(self.config, "verbosity", "brief")
-        if verbosity == "detailed":
-            verbosity_instruction = (
-                "Verbosity: detailed. Provide thorough, structured answers by default. "
-                "Include steps/examples when helpful. If the user asks for a short answer, comply."
-            )
-        elif verbosity == "normal":
-            verbosity_instruction = (
-                "Verbosity: normal. Be concise but complete. "
-                "Expand when the user explicitly asks for more detail."
-            )
-        else:
-            verbosity_instruction = (
-                "Verbosity: brief. Keep answers short by default (1-3 sentences). "
-                "Avoid long lists and excessive detail unless the user explicitly asks to expand, "
-                "asks for details, or says they want a longer answer."
-            )
-
-        system_role = f"""
-            Your name is {self.config.botname}.
-            You are an assistant written in Python by Breno Brand.
-            You must answer in {self.config.language}.
-            The person that is talking to you is in the {self.config.timezone} time zone.
-            The person that is talking to you is located in {self.config.location}.
-            Current date and time to be considered when answering the message: {now}.
-            Never answer as a chat, for example reading your name in a conversation.
-            DO NOT reply to messages with the format "{self.config.botname}": <message here>.
-            Never use symbols, always spell it out. For example say degrees instead of using the symbol. Don't say km/h, but kilometers per hour, and so on.
-            Reply in a natural and human way.
-            {verbosity_instruction}
-            """
-        if extra_info is not None:
-            system_role = system_role + "Consider the following to answer your question: " + extra_info
-        return system_role
+        return build_system_role(self.config, extra_info=extra_info)
 
     def _build_messages(self, user_input, conversation_history, system_role):
         """Build the messages list for chat completions.
