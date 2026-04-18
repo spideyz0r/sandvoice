@@ -58,6 +58,10 @@ def build_system_role(config, extra_info=None):
             Reply in a natural and human way.
             {verbosity_instruction}
             """
+    extra = getattr(config, "system_prompt_extra", None)
+    if isinstance(extra, str) and extra.strip():
+        system_role = system_role + extra.strip() + "\n"
+        logger.debug("system_prompt_extra active (%d chars)", len(extra.strip()))
     if extra_info is not None:
         system_role = system_role + "Consider the following to answer your question: " + extra_info
     return system_role

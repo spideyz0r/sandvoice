@@ -194,5 +194,63 @@ class TestBuildSystemRoleFallback(unittest.TestCase):
         self.assertIn("Verbosity: brief", result)
 
 
+class TestBuildSystemRoleSystemPromptExtra(unittest.TestCase):
+    def setUp(self):
+        self.patcher = patch("common.prompt.datetime")
+        mock_dt = self.patcher.start()
+        mock_dt.datetime.now.return_value = _FIXED_NOW
+
+    def tearDown(self):
+        self.patcher.stop()
+
+    def test_absent_leaves_prompt_unchanged(self):
+        result = build_system_role(_config())
+        expected = build_system_role(_config())
+        self.assertEqual(result, expected)
+        self.assertNotIn("system_prompt_extra", result)
+
+    def test_set_appended_before_extra_info(self):
+        cfg = _config(system_prompt_extra="Always respond formally.")
+        result = build_system_role(cfg, extra_info="Weather is sunny.")
+        formal_pos = result.index("Always respond formally.")
+        extra_pos = result.index("Consider the following")
+        self.assertLess(formal_pos, extra_pos)
+
+    def test_set_appended_after_persona(self):
+        cfg = _config(system_prompt_extra="Always respond formally.")
+        result = build_system_role(cfg)
+        self.assertIn("Always respond formally.", result)
+        verbosity_pos = result.index("Verbosity: brief")
+        extra_pos = result.index("Always respond formally.")
+        self.assertLess(verbosity_pos, extra_pos)
+
+    def test_blank_value_not_injected(self):
+        cfg = _config(system_prompt_extra="   ")
+        result = build_system_role(cfg)
+        baseline = build_system_role(_config())
+        self.assertEqual(result, baseline)
+
+    def test_none_value_not_injected(self):
+        cfg = _config(system_prompt_extra=None)
+        result = build_system_role(cfg)
+        baseline = build_system_role(_config())
+        self.assertEqual(result, baseline)
+
+    def test_both_system_prompt_extra_and_extra_info_present(self):
+        cfg = _config(system_prompt_extra="Custom instruction.")
+        result = build_system_role(cfg, extra_info="It is raining.")
+        self.assertIn("Custom instruction.", result)
+        self.assertIn("Consider the following to answer your question: It is raining.", result)
+        custom_pos = result.index("Custom instruction.")
+        extra_info_pos = result.index("Consider the following")
+        self.assertLess(custom_pos, extra_info_pos)
+
+    def test_value_is_stripped(self):
+        cfg = _config(system_prompt_extra="  Trimmed text.  ")
+        result = build_system_role(cfg)
+        self.assertIn("Trimmed text.", result)
+        self.assertNotIn("  Trimmed text.  ", result)
+
+
 if __name__ == "__main__":
     unittest.main()

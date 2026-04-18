@@ -142,6 +142,13 @@ class Config:
             "tts_provider": "openai",
             "stt_provider": "openai",
 
+            # Optional: append custom standing instructions to every system prompt.
+            # Supports YAML block scalar for multi-line text.
+            # system_prompt_extra: |
+            #   Always respond in a formal tone.
+            #   You are an expert in Brazilian cuisine.
+            "system_prompt_extra": None,
+
             # Task Scheduler (Plan 21)
             "scheduler_enabled": "disabled",
             "scheduler_poll_interval": 30,
@@ -331,6 +338,19 @@ class Config:
             self.voice_filler_phrases = list(self.defaults["voice_filler_phrases"])
         else:
             self.voice_filler_phrases = list(self.defaults["voice_filler_phrases"])
+
+        # System prompt extra (Plan 50)
+        raw_spe = self.get("system_prompt_extra")
+        if raw_spe is None:
+            self.system_prompt_extra = None
+        elif not isinstance(raw_spe, str) or not raw_spe.strip():
+            logger.warning(
+                "system_prompt_extra must be a non-empty string; ignoring value of type %s",
+                type(raw_spe).__name__,
+            )
+            self.system_prompt_extra = None
+        else:
+            self.system_prompt_extra = raw_spe.strip()
 
         # Auto-detect channels if not explicitly configured
         if self.channels is None:
