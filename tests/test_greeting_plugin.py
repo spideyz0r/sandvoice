@@ -338,5 +338,79 @@ class TestGreetingNoCacheConfigured(unittest.TestCase):
         self.assertEqual(result, "Boa noite!")
 
 
+class TestGreetingExtra(unittest.TestCase):
+    def test_greeting_extra_appended_to_prompt(self):
+        """When greeting_extra is set, it is appended to the extra_system prompt."""
+        from plugins.greeting.plugin import process
+
+        s = _make_s(cache=None)
+        s.config.greeting_extra = "End the greeting with a short proverb."
+        s.ai.define_route.return_value = {"route": "weather"}
+        s.route_message.return_value = "15°C"
+        s.ai.generate_response.return_value.content = "Good morning! Here's a proverb."
+
+        captured = []
+        def capture_response(user_input, extra_system):
+            captured.append(extra_system)
+            return s.ai.generate_response.return_value
+
+        s.ai.generate_response.side_effect = capture_response
+
+        with patch("plugins.greeting.plugin._cache_key", return_value="greeting:morning"), \
+             patch("plugins.greeting.plugin.build_extra_routes_text", return_value=""):
+            process("good morning", {}, s)
+
+        self.assertEqual(len(captured), 1)
+        self.assertIn("End the greeting with a short proverb.", captured[0])
+
+    def test_greeting_extra_absent_prompt_unchanged(self):
+        """When greeting_extra is not set, extra_system is unmodified."""
+        from plugins.greeting.plugin import process
+
+        s = _make_s(cache=None)
+        s.config.greeting_extra = None
+        s.ai.define_route.return_value = {"route": "weather"}
+        s.route_message.return_value = "15°C"
+        s.ai.generate_response.return_value.content = "Good morning!"
+
+        captured = []
+        def capture_response(user_input, extra_system):
+            captured.append(extra_system)
+            return s.ai.generate_response.return_value
+
+        s.ai.generate_response.side_effect = capture_response
+
+        with patch("plugins.greeting.plugin._cache_key", return_value="greeting:morning"), \
+             patch("plugins.greeting.plugin.build_extra_routes_text", return_value=""):
+            process("good morning", {}, s)
+
+        self.assertEqual(len(captured), 1)
+        self.assertNotIn("proverb", captured[0])
+
+    def test_greeting_extra_blank_value_skipped(self):
+        """When greeting_extra is blank whitespace, extra_system is unmodified."""
+        from plugins.greeting.plugin import process
+
+        s = _make_s(cache=None)
+        s.config.greeting_extra = "   "
+        s.ai.define_route.return_value = {"route": "weather"}
+        s.route_message.return_value = "15°C"
+        s.ai.generate_response.return_value.content = "Good morning!"
+
+        captured = []
+        def capture_response(user_input, extra_system):
+            captured.append(extra_system)
+            return s.ai.generate_response.return_value
+
+        s.ai.generate_response.side_effect = capture_response
+
+        with patch("plugins.greeting.plugin._cache_key", return_value="greeting:morning"), \
+             patch("plugins.greeting.plugin.build_extra_routes_text", return_value=""):
+            process("good morning", {}, s)
+
+        self.assertEqual(len(captured), 1)
+        self.assertFalse(captured[0].endswith("   \n"))
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -87,6 +87,10 @@ def process(user_input, route, s):
     Casually make a friendly and short comment on the weather. Weather info to consider the answer: {weather_response}
     Considering the current day and time, make a fun fact comment about today or this month.
     """
+        greeting_extra = getattr(s.config, "greeting_extra", None)
+        if isinstance(greeting_extra, str) and greeting_extra.strip():
+            extra_system = extra_system.rstrip() + "\n" + greeting_extra.strip() + "\n"
+            logger.debug("greeting_extra active (%d chars)", len(greeting_extra.strip()))
         response_text = s.ai.generate_response(user_input, extra_system).content
 
         if cache is not None:
