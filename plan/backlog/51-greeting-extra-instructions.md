@@ -44,7 +44,7 @@ Append `greeting_extra` to `extra_system` before the `generate_response` call:
 ```python
 greeting_extra = getattr(s.config, "greeting_extra", None)
 if greeting_extra and isinstance(greeting_extra, str) and greeting_extra.strip():
-    extra_system = extra_system + greeting_extra.strip() + "\n"
+    extra_system = extra_system.rstrip() + "\n" + greeting_extra.strip() + "\n"
     logger.debug("greeting_extra active (%d chars)", len(greeting_extra.strip()))
 ```
 

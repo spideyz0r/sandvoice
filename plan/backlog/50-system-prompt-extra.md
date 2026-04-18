@@ -58,10 +58,13 @@ System role content order (first → last, as concatenated):
 2. `system_prompt_extra` — standing user customisation
 3. `extra_info` — per-request runtime context (weather, news, etc.)
 
-Log at DEBUG when active:
+Log at DEBUG when active (inside the same `if` guard, using the already-defined `extra` variable):
 
 ```python
-logger.debug("system_prompt_extra active (%d chars)", len(config.system_prompt_extra.strip()))
+extra = getattr(config, "system_prompt_extra", None)
+if isinstance(extra, str) and extra.strip():
+    system_role = system_role + extra.strip() + "\n"
+    logger.debug("system_prompt_extra active (%d chars)", len(extra.strip()))
 ```
 
 ### `config.yaml`
