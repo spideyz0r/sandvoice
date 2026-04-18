@@ -84,3 +84,8 @@ Add the commented-out example above so users can discover the option.
 - Cache invalidation on config change is a known limitation; users can manually
   clear the cache if they want the new instructions to apply immediately. This
   could be addressed in a future plan.
+- Do not put secrets, API keys, or personally identifiable information (PII) in
+  `greeting_extra`. The value is appended to the greeting prompt and sent to the
+  LLM provider verbatim, where it will appear in API logs.
+- Custom instructions can compete with or partially override the default greeting
+  structure. This is intentional; users take responsibility for the interaction.

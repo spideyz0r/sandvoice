@@ -85,3 +85,9 @@ Add the commented-out example above so users can discover the option.
   request. Per-request context remains in `extra_info` (passed by plugins).
 - No changes to `OpenAILLMProvider` or call sites — `build_system_role` is the
   only place to update.
+- Do not put secrets, API keys, or personally identifiable information (PII) in
+  `system_prompt_extra`. The value is sent to the LLM provider verbatim with every
+  request and will appear in API logs.
+- Custom instructions can compete with or partially override the default persona
+  (e.g. a tone instruction like "always respond formally" overrides the natural-tone
+  instruction). This is intentional; users take responsibility for the interaction.
