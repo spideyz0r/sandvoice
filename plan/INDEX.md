@@ -231,6 +231,10 @@ plan/
 **Document**: [backlog/51-greeting-extra-instructions.md](./backlog/51-greeting-extra-instructions.md)
 **Description**: Add optional `greeting_extra` config key that appends user-defined instructions to the greeting plugin's generation prompt (e.g. "end the greeting with a short proverb"). Separate from `system_prompt_extra` — affects only the greeting plugin's live generation.
 
+### Priority 52: Weather Forecast — 5-Day / Future Date Queries
+**Document**: [backlog/52-weather-forecast.md](./backlog/52-weather-forecast.md)
+**Description**: Extend the weather plugin to handle future-date queries ("will it rain tomorrow?", "what's the weather on Saturday?") by routing to the OpenWeatherMap 5-day/3-hour forecast endpoint. Adds `days_ahead` route parameter (0–5), separate cache keys and TTL config for forecast entries. Days beyond 5 return a graceful degradation message.
+
 ### Future Enhancements
 **Document**: [backlog/FUTURE.md](./backlog/FUTURE.md)
 **Description**: Long-term feature ideas: alternative providers (Anthropic, Ollama, Piper), local offline mode, conversation history truncation, user-triggered timers, conversation memory, export, plugin hot-reload, API cost tracking, music control, smart home, calendar, todo lists, multi-user support.
