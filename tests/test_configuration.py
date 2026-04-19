@@ -1228,25 +1228,7 @@ class TestCacheWarmupConfig(_TempHomeBase):
         self.assertAlmostEqual(config.cache_warmup_retry_delay_s, 2.0)
 
 
-class TestSystemPromptExtraConfig(unittest.TestCase):
-    def setUp(self):
-        self.temp_dir = tempfile.mkdtemp()
-        self.original_home = os.environ.get('HOME')
-        os.environ['HOME'] = self.temp_dir
-        os.makedirs(os.path.join(self.temp_dir, ".sandvoice"), exist_ok=True)
-
-    def tearDown(self):
-        if self.original_home:
-            os.environ['HOME'] = self.original_home
-        else:
-            del os.environ['HOME']
-        shutil.rmtree(self.temp_dir, ignore_errors=True)
-
-    def write_config(self, config_dict):
-        config_path = os.path.join(self.temp_dir, ".sandvoice", "config.yaml")
-        with open(config_path, 'w') as f:
-            yaml.dump(config_dict, f)
-
+class TestSystemPromptExtraConfig(_TempHomeBase):
     def test_absent_defaults_to_none(self):
         config = Config()
         self.assertIsNone(config.system_prompt_extra)
@@ -1276,6 +1258,12 @@ class TestSystemPromptExtraConfig(unittest.TestCase):
         with self.assertLogs("common.configuration", level="WARNING") as cm:
             Config()
         self.assertTrue(any("system_prompt_extra" in msg for msg in cm.output))
+
+    def test_blank_string_logs_warning(self):
+        self.write_config({"system_prompt_extra": "   "})
+        with self.assertLogs("common.configuration", level="WARNING") as cm:
+            Config()
+        self.assertTrue(any("system_prompt_extra" in msg and "blank" in msg for msg in cm.output))
 
 
 if __name__ == '__main__':

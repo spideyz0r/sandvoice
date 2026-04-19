@@ -205,9 +205,10 @@ class TestBuildSystemRoleSystemPromptExtra(unittest.TestCase):
 
     def test_absent_leaves_prompt_unchanged(self):
         result = build_system_role(_config())
-        expected = build_system_role(_config())
-        self.assertEqual(result, expected)
-        self.assertNotIn("system_prompt_extra", result)
+        self.assertIn("Sandbot", result)
+        self.assertIn("Verbosity: brief", result)
+        self.assertNotIn("Always respond formally.", result)
+        self.assertNotIn("Consider the following", result)
 
     def test_set_appended_before_extra_info(self):
         cfg = _config(system_prompt_extra="Always respond formally.")

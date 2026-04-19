@@ -343,10 +343,16 @@ class Config:
         raw_spe = self.get("system_prompt_extra")
         if raw_spe is None:
             self.system_prompt_extra = None
-        elif not isinstance(raw_spe, str) or not raw_spe.strip():
+        elif not isinstance(raw_spe, str):
             logger.warning(
                 "system_prompt_extra must be a non-empty string; ignoring value of type %s",
                 type(raw_spe).__name__,
+            )
+            self.system_prompt_extra = None
+        elif not raw_spe.strip():
+            logger.warning(
+                "system_prompt_extra is blank or whitespace-only (length=%d); ignoring",
+                len(raw_spe),
             )
             self.system_prompt_extra = None
         else:
