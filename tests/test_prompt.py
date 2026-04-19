@@ -252,6 +252,12 @@ class TestBuildSystemRoleSystemPromptExtra(unittest.TestCase):
         self.assertIn("Trimmed text.", result)
         self.assertNotIn("  Trimmed text.  ", result)
 
+    def test_multiline_value_each_line_indented(self):
+        cfg = _config(system_prompt_extra="Line one.\nLine two.")
+        result = build_system_role(cfg)
+        self.assertIn("            Line one.", result)
+        self.assertIn("            Line two.", result)
+
 
 if __name__ == "__main__":
     unittest.main()

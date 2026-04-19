@@ -1,5 +1,6 @@
 import datetime
 import logging
+import textwrap
 
 logger = logging.getLogger(__name__)
 
@@ -60,8 +61,10 @@ def build_system_role(config, extra_info=None):
             """
     extra = getattr(config, "system_prompt_extra", None)
     if isinstance(extra, str) and extra.strip():
-        system_role = system_role + extra.strip() + "\n            "
-        logger.debug("system_prompt_extra active (%d chars)", len(extra.strip()))
+        extra_stripped = extra.strip()
+        indented = textwrap.indent(extra_stripped, "            ")
+        system_role = system_role.rstrip(" ") + indented + "\n            "
+        logger.debug("system_prompt_extra active (%d chars)", len(extra_stripped))
     if extra_info is not None:
         system_role = system_role + "Consider the following to answer your question: " + extra_info
     return system_role
