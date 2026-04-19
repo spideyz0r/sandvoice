@@ -89,8 +89,9 @@ def process(user_input, route, s):
     """
         greeting_extra = getattr(s.config, "greeting_extra", None)
         if isinstance(greeting_extra, str) and greeting_extra.strip():
-            extra_system = extra_system.rstrip() + "\n" + greeting_extra.strip() + "\n"
-            logger.debug("greeting_extra active (%d chars)", len(greeting_extra.strip()))
+            greeting_extra_stripped = greeting_extra.strip()
+            extra_system = extra_system.rstrip() + "\n" + greeting_extra_stripped + "\n"
+            logger.debug("greeting_extra active (%d chars)", len(greeting_extra_stripped))
         response_text = s.ai.generate_response(user_input, extra_system).content
 
         if cache is not None:

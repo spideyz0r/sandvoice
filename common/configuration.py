@@ -368,10 +368,16 @@ class Config:
         raw_ge = self.get("greeting_extra")
         if raw_ge is None:
             self.greeting_extra = None
-        elif not isinstance(raw_ge, str) or not raw_ge.strip():
+        elif not isinstance(raw_ge, str):
             logger.warning(
                 "greeting_extra must be a non-empty string; ignoring value of type %s",
                 type(raw_ge).__name__,
+            )
+            self.greeting_extra = None
+        elif not raw_ge.strip():
+            logger.warning(
+                "greeting_extra is blank or whitespace-only (length=%d); ignoring",
+                len(raw_ge),
             )
             self.greeting_extra = None
         else:
