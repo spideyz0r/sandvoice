@@ -1228,5 +1228,43 @@ class TestCacheWarmupConfig(_TempHomeBase):
         self.assertAlmostEqual(config.cache_warmup_retry_delay_s, 2.0)
 
 
+class TestSystemPromptExtraConfig(_TempHomeBase):
+    def test_absent_defaults_to_none(self):
+        config = Config()
+        self.assertIsNone(config.system_prompt_extra)
+
+    def test_valid_string_stored(self):
+        self.write_config({"system_prompt_extra": "Always respond formally."})
+        config = Config()
+        self.assertEqual(config.system_prompt_extra, "Always respond formally.")
+
+    def test_value_is_stripped(self):
+        self.write_config({"system_prompt_extra": "  Leading and trailing spaces.  "})
+        config = Config()
+        self.assertEqual(config.system_prompt_extra, "Leading and trailing spaces.")
+
+    def test_blank_string_normalised_to_none(self):
+        self.write_config({"system_prompt_extra": "   "})
+        config = Config()
+        self.assertIsNone(config.system_prompt_extra)
+
+    def test_non_string_normalised_to_none(self):
+        self.write_config({"system_prompt_extra": 42})
+        config = Config()
+        self.assertIsNone(config.system_prompt_extra)
+
+    def test_non_string_logs_warning(self):
+        self.write_config({"system_prompt_extra": 42})
+        with self.assertLogs("common.configuration", level="WARNING") as cm:
+            Config()
+        self.assertTrue(any("system_prompt_extra" in msg for msg in cm.output))
+
+    def test_blank_string_logs_warning(self):
+        self.write_config({"system_prompt_extra": "   "})
+        with self.assertLogs("common.configuration", level="WARNING") as cm:
+            Config()
+        self.assertTrue(any("system_prompt_extra" in msg and "blank" in msg for msg in cm.output))
+
+
 if __name__ == '__main__':
     unittest.main()

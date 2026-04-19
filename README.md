@@ -87,6 +87,9 @@ location: Toronto, ON, CA    # used by weather and routing
 unit: metric                 # metric or imperial
 language: English
 verbosity: brief             # brief, normal, or detailed
+# system_prompt_extra: |    # optional: append standing instructions to every system prompt
+#   Always respond in a formal tone.
+#   You are an expert in Brazilian cuisine.
 
 # Logging
 log_level: warning           # warning, info, or debug
