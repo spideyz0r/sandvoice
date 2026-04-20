@@ -159,6 +159,9 @@ voice_filler_phrases:                # set to [] to disable
   - "Let me check that."
   - "Sure, one moment."
 
+# greeting_extra: |             # optional: append custom instructions to the greeting prompt
+#   End the greeting with a short, relevant proverb.
+
 # Scheduler (see Scheduled Tasks section)
 scheduler_enabled: disabled
 scheduler_poll_interval: 30

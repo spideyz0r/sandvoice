@@ -1266,5 +1266,43 @@ class TestSystemPromptExtraConfig(_TempHomeBase):
         self.assertTrue(any("system_prompt_extra" in msg and "blank" in msg for msg in cm.output))
 
 
+class TestGreetingExtraConfig(_TempHomeBase):
+    def test_absent_defaults_to_none(self):
+        config = Config()
+        self.assertIsNone(config.greeting_extra)
+
+    def test_valid_string_stored(self):
+        self.write_config({"greeting_extra": "End with a proverb."})
+        config = Config()
+        self.assertEqual(config.greeting_extra, "End with a proverb.")
+
+    def test_value_is_stripped(self):
+        self.write_config({"greeting_extra": "  Add a joke.  "})
+        config = Config()
+        self.assertEqual(config.greeting_extra, "Add a joke.")
+
+    def test_blank_string_normalised_to_none(self):
+        self.write_config({"greeting_extra": "   "})
+        config = Config()
+        self.assertIsNone(config.greeting_extra)
+
+    def test_non_string_normalised_to_none(self):
+        self.write_config({"greeting_extra": 99})
+        config = Config()
+        self.assertIsNone(config.greeting_extra)
+
+    def test_non_string_logs_warning(self):
+        self.write_config({"greeting_extra": 99})
+        with self.assertLogs("common.configuration", level="WARNING") as cm:
+            Config()
+        self.assertTrue(any("greeting_extra" in msg for msg in cm.output))
+
+    def test_blank_string_logs_warning(self):
+        self.write_config({"greeting_extra": "   "})
+        with self.assertLogs("common.configuration", level="WARNING") as cm:
+            Config()
+        self.assertTrue(any("greeting_extra" in msg and "blank" in msg for msg in cm.output))
+
+
 if __name__ == '__main__':
     unittest.main()

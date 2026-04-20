@@ -126,6 +126,12 @@ class Config:
                 "Mm-hmm.",
             ],
 
+            # Optional: append custom instructions to the greeting plugin's generation prompt.
+            # Supports YAML block scalar for multi-line text.
+            # greeting_extra: |
+            #   End the greeting with a short, relevant proverb.
+            "greeting_extra": None,
+
             # Background Cache (Plan 20)
             "cache_enabled": "disabled",
             "cache_weather_ttl_s": 10800,    # 3 hours — refresh window
@@ -357,6 +363,25 @@ class Config:
             self.system_prompt_extra = None
         else:
             self.system_prompt_extra = raw_spe.strip()
+
+        # Greeting extra (Plan 51)
+        raw_ge = self.get("greeting_extra")
+        if raw_ge is None:
+            self.greeting_extra = None
+        elif not isinstance(raw_ge, str):
+            logger.warning(
+                "greeting_extra must be a non-empty string; ignoring value of type %s",
+                type(raw_ge).__name__,
+            )
+            self.greeting_extra = None
+        elif not raw_ge.strip():
+            logger.warning(
+                "greeting_extra is blank or whitespace-only (length=%d); ignoring",
+                len(raw_ge),
+            )
+            self.greeting_extra = None
+        else:
+            self.greeting_extra = raw_ge.strip()
 
         # Auto-detect channels if not explicitly configured
         if self.channels is None:
