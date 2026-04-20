@@ -1331,6 +1331,20 @@ class TestRouteHistoryDepthConfig(_TempHomeBase):
         self.assertEqual(config.route_history_depth, 4)
         self.assertTrue(any("route_history_depth" in msg for msg in cm.output))
 
+    def test_bool_rejected_falls_back_to_default(self):
+        self.write_config({"route_history_depth": True})
+        with self.assertLogs("common.configuration", level="WARNING") as cm:
+            config = Config()
+        self.assertEqual(config.route_history_depth, 4)
+        self.assertTrue(any("route_history_depth" in msg for msg in cm.output))
+
+    def test_float_rejected_falls_back_to_default(self):
+        self.write_config({"route_history_depth": 2.9})
+        with self.assertLogs("common.configuration", level="WARNING") as cm:
+            config = Config()
+        self.assertEqual(config.route_history_depth, 4)
+        self.assertTrue(any("route_history_depth" in msg for msg in cm.output))
+
 
 if __name__ == '__main__':
     unittest.main()

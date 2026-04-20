@@ -388,10 +388,14 @@ class Config:
         else:
             self.greeting_extra = raw_ge.strip()
 
-        try:
-            self.route_history_depth = max(0, int(self.get("route_history_depth")))
-        except (ValueError, TypeError):
-            logger.warning("route_history_depth must be a non-negative integer; using default 4")
+        _raw_depth = _parse_exact_int(self.get("route_history_depth"))
+        if isinstance(_raw_depth, int) and not isinstance(_raw_depth, bool):
+            self.route_history_depth = max(0, _raw_depth)
+        else:
+            logger.warning(
+                "route_history_depth must be a non-negative integer; using default %s",
+                self.defaults["route_history_depth"],
+            )
             self.route_history_depth = self.defaults["route_history_depth"]
 
         # Auto-detect channels if not explicitly configured

@@ -268,7 +268,7 @@ class TestOpenAILLMProviderDefineRoute(unittest.TestCase):
         self.assertEqual(roles, ["system", "user", "user", "user"])
         self.assertEqual(messages[1]["content"], "User: hi")
         self.assertEqual(messages[2]["content"], "Sandbot: Hello!")
-        self.assertEqual(messages[3]["content"], "what is the weather?")
+        self.assertEqual(messages[3]["content"], "User: what is the weather?")
 
     def test_empty_history_list_behaves_as_no_history(self):
         messages = self._call_define_route_messages(history=[])

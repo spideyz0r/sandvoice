@@ -147,7 +147,9 @@ class OpenAILLMProvider(LLMProvider):
         if history:
             for entry in history:
                 messages.append({"role": "user", "content": entry})
-        messages.append({"role": "user", "content": user_input})
+            messages.append({"role": "user", "content": f"User: {user_input}"})
+        else:
+            messages.append({"role": "user", "content": user_input})
 
         logger.info("Routing: %r (history=%d entries)", user_input, len(history) if history else 0)
         completion = self._client.chat.completions.create(

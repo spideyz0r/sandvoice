@@ -551,11 +551,8 @@ class WakeWordMode:
             # Generate response via plugin routing
             _t0 = time.monotonic()
             try:
-                depth = int(getattr(self.config, "route_history_depth", 4))
-            except (TypeError, ValueError):
-                depth = 4
-            try:
-                _route_history = self.ai.conversation_history[-depth:] if depth else None
+                depth = max(0, getattr(self.config, "route_history_depth", 4))
+                _route_history = (self.ai.conversation_history[-depth:] or None) if depth else None
             except TypeError:
                 _route_history = None
             route = self._poll_op(
