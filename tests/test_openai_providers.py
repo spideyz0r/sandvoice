@@ -243,6 +243,38 @@ class TestOpenAILLMProviderDefineRoute(unittest.TestCase):
                     result = self.provider.define_route("hi")
         self.assertEqual(result["route"], "default-route")
 
+    def _call_define_route_messages(self, history=None):
+        """Call define_route and return the messages list passed to the API."""
+        routes_yaml = "route_role: 'You are a router.'"
+        self._mock_route_response({"route": "weather", "reason": "weather query"})
+        with patch("builtins.open", mock_open(read_data=routes_yaml)):
+            with patch("common.providers.openai_llm.Template") as mock_tpl:
+                mock_tpl.return_value.render.return_value = routes_yaml
+                with patch("common.providers.openai_llm.yaml.safe_load") as mock_yaml:
+                    mock_yaml.return_value = {"route_role": "You are a router."}
+                    self.provider.define_route("what is the weather?", history=history)
+        return self.client.chat.completions.create.call_args[1]["messages"]
+
+    def test_no_history_sends_system_and_user(self):
+        messages = self._call_define_route_messages(history=None)
+        roles = [m["role"] for m in messages]
+        self.assertEqual(roles, ["system", "user"])
+        self.assertEqual(messages[-1]["content"], "what is the weather?")
+
+    def test_history_prepended_before_current_input(self):
+        history = ["User: hi", "Sandbot: Hello!"]
+        messages = self._call_define_route_messages(history=history)
+        roles = [m["role"] for m in messages]
+        self.assertEqual(roles, ["system", "user", "user", "user"])
+        self.assertEqual(messages[1]["content"], "User: hi")
+        self.assertEqual(messages[2]["content"], "Sandbot: Hello!")
+        self.assertEqual(messages[3]["content"], "what is the weather?")
+
+    def test_empty_history_list_behaves_as_no_history(self):
+        messages = self._call_define_route_messages(history=[])
+        roles = [m["role"] for m in messages]
+        self.assertEqual(roles, ["system", "user"])
+
 
 class TestOpenAILLMProviderTextSummary(unittest.TestCase):
     def setUp(self):

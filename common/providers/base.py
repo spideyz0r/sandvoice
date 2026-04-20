@@ -11,8 +11,12 @@ class LLMProvider(ABC):
         """Yield str deltas from the LLM stream."""
 
     @abstractmethod
-    def define_route(self, user_input, model=None, extra_routes=None):
-        """Return a route dict: {"route": str, "reason": str}."""
+    def define_route(self, user_input, model=None, extra_routes=None, history=None):
+        """Return a route dict: {"route": str, "reason": str}.
+
+        history: optional list of recent conversation strings prepended as
+        context so the router can resolve follow-up utterances correctly.
+        """
 
     @abstractmethod
     def text_summary(self, user_input, extra_info=None, words="100", model=None):

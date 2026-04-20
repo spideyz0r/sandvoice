@@ -550,8 +550,20 @@ class WakeWordMode:
 
             # Generate response via plugin routing
             _t0 = time.monotonic()
+            try:
+                depth = int(getattr(self.config, "route_history_depth", 4))
+            except (TypeError, ValueError):
+                depth = 4
+            try:
+                _route_history = self.ai.conversation_history[-depth:] if depth else None
+            except TypeError:
+                _route_history = None
             route = self._poll_op(
-                lambda: self.ai.define_route(user_input, extra_routes=self._extra_routes or None),
+                lambda: self.ai.define_route(
+                    user_input,
+                    extra_routes=self._extra_routes or None,
+                    history=_route_history,
+                ),
                 "route definition",
             )
             self._req_route_s = time.monotonic() - _t0
