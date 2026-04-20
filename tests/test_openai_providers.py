@@ -259,7 +259,7 @@ class TestOpenAILLMProviderDefineRoute(unittest.TestCase):
         messages = self._call_define_route_messages(history=None)
         roles = [m["role"] for m in messages]
         self.assertEqual(roles, ["system", "user"])
-        self.assertEqual(messages[-1]["content"], "what is the weather?")
+        self.assertEqual(messages[-1]["content"], "User: what is the weather?")
 
     def test_history_prepended_before_current_input(self):
         history = ["User: hi", "Sandbot: Hello!"]
