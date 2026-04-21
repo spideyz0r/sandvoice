@@ -1,0 +1,116 @@
+# Plan 55: Telegram Channel
+
+## Status
+📋 Backlog
+
+## Problem
+SandVoice is only reachable at home, via microphone or terminal. There is no way to
+interact with it from a phone or while away. A Telegram channel would make the same
+brain — same plugins, same routing, same conversation history — reachable from anywhere
+via a messaging app most people already have.
+
+## Goal
+Add an always-on Telegram channel that runs as a background thread alongside wake-word
+mode. Text messages sent to a private bot are routed through SandVoice exactly like
+voice input, and the response is sent back as text. The channel shares conversation
+history with the wake-word session so context carries across channels seamlessly.
+
+## Scope
+
+**In scope:**
+- Text in / text out only (Phase 1). Voice messages deferred to Phase 2.
+- Single-user bot: `telegram_allowed_user_ids` whitelist; all other senders are silently
+  ignored.
+- Runs as a background thread within the existing `SandVoice` process — same instance,
+  same `AI`, same `VoiceCache`, same `ConversationHistory`.
+- Works alongside wake-word mode and CLI mode. Enabling Telegram does not affect either.
+
+**Out of scope:**
+- Voice message in / TTS audio out — deferred.
+- Multi-user support — out of scope.
+- Telegram groups or channels — private chat only.
+
+## Design
+
+### Architecture
+`TelegramChannel` is a class with a single background thread, matching the `TaskScheduler`
+pattern:
+
+```python
+class TelegramChannel:
+    def __init__(self, config, ai, plugins, cache): ...
+    def start(self) -> None: ...   # launches daemon thread
+    def close(self) -> None: ...   # signals thread to stop
+```
+
+The thread runs a `polling` loop using `python-telegram-bot` in its own asyncio event
+loop (`asyncio.new_event_loop()` + `loop.run_until_complete()`), isolating async code
+from the sync main thread.
+
+### Message flow
+```
+Telegram message arrives
+  → check sender user ID against whitelist → ignore if not allowed
+  → user_input = message.text
+  → route = ai.define_route(user_input, history=recent_history)
+  → if route in plugins: response = plugins[route].process(user_input, route, s)
+  → else: response = ai.generate_response(user_input, conversation_history)
+  → bot.send_message(chat_id, response)
+  → history.append("user", user_input)
+  → history.append("assistant", response)
+```
+
+History is written directly to `ConversationHistory` (Plan 54). No turn lock — per
+the design decision, occasional context interleave from parallel wake-word + Telegram
+turns is acceptable for a non-mission-critical assistant.
+
+### New config keys (`config.yaml` / `configuration.py`)
+| Key | Default | Description |
+|-----|---------|-------------|
+| `telegram_enabled` | `"disabled"` | Enable/disable the Telegram channel |
+| `telegram_bot_token` | `""` | Bot token from @BotFather |
+| `telegram_allowed_user_ids` | `[]` | List of Telegram user IDs allowed to interact |
+
+All follow the 4-step config pattern. Startup validation: if `telegram_enabled` is
+`"enabled"` and `telegram_bot_token` is empty, log a warning and disable the channel.
+
+### Startup (`sandvoice.py`)
+```python
+telegram = None
+if config.telegram_enabled:
+    telegram = TelegramChannel(config, s.ai, s.plugins, s.cache)
+    telegram.start()
+    atexit.register(telegram.close)
+```
+
+### New file: `common/telegram_channel.py`
+Contains `TelegramChannel` class only. No plugin logic — it delegates entirely to the
+existing `AI` and plugin system.
+
+### Dependency
+`python-telegram-bot>=20.0` added to `requirements.txt`.
+
+## Acceptance Criteria
+- [ ] Telegram messages from whitelisted users receive a text response
+- [ ] Messages from non-whitelisted users are silently ignored
+- [ ] Telegram channel shares `ConversationHistory` with the main session
+- [ ] wake-word mode and CLI mode are unaffected when `telegram_enabled: disabled`
+- [ ] `telegram_enabled: enabled` with empty token logs a warning and does not crash
+- [ ] `telegram.close()` registered via `atexit`; thread exits cleanly on shutdown
+- [ ] All new code paths covered by unit tests (>80% coverage)
+
+## Testing Strategy
+- Unit-test message dispatch: mock `AI.define_route` and plugin, assert response sent.
+- Unit-test whitelist: non-allowed user ID → assert no response, no history write.
+- Unit-test missing token: assert warning logged, channel disabled gracefully.
+- Unit-test history write: assert `ConversationHistory.append` called for user + assistant turns.
+- Integration smoke test: real bot token optional, skipped in CI via env var guard.
+
+## Dependencies
+- Plan 54 (Conversation History SQLite) — required for shared history.
+- `python-telegram-bot>=20.0` — new dependency.
+
+## Phase 2 (future)
+- Voice message in: download OGG, transcribe via Whisper, same routing flow.
+- TTS response: generate MP3, send as voice message via `bot.send_voice()`.
+- Audio cache (Plan 53) applies naturally to the TTS step.
