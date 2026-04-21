@@ -11,7 +11,7 @@ There is no reason to call TTS more than once per unique (text, voice, model) co
 ## Goal
 Cache the generated MP3 alongside the text response. On a cache hit, if a valid audio
 file already exists, play it directly and skip the TTS call entirely. Audio files are
-stored in a configurable directory and validated by a content hash before use.
+stored in a configurable directory and keyed by a hash of (text, voice, tts_model).
 
 ## Scope
 
@@ -33,9 +33,10 @@ audio file. If any of the three change, the hash changes and the old file is ign
 
 ```python
 import hashlib
+import json
 
 def _audio_hash(text, voice, tts_model):
-    payload = f"{text}|{voice}|{tts_model}"
+    payload = json.dumps([text, voice, tts_model], ensure_ascii=False, separators=(",", ":"))
     return hashlib.sha256(payload.encode()).hexdigest()
 ```
 
@@ -47,6 +48,8 @@ path, it is valid by construction.
 Add an optional `audio_hash` column to the `voice_cache` SQLite table:
 
 ```sql
+-- Only run if the column does not already exist (idempotent migration):
+-- check via PRAGMA table_info(voice_cache) and skip if audio_hash is present.
 ALTER TABLE voice_cache ADD COLUMN audio_hash TEXT;
 ```
 
@@ -58,7 +61,7 @@ callers can verify the file.
 After a text cache hit:
 
 1. Retrieve `entry.audio_hash` from the cache.
-2. Compute expected hash: `_audio_hash(entry.value, config.bot_voice_model_voice, config.bot_voice_model)`.
+2. Compute expected hash: `_audio_hash(entry.value, config.bot_voice_model, config.text_to_speech_model)`.
 3. Build path: `os.path.join(config.audio_cache_dir, f"{expected_hash}.mp3")`.
 4. If the file exists and `entry.audio_hash == expected_hash`: play the file, skip TTS.
 5. Otherwise: call TTS normally, save the resulting MP3 to the path, call `cache.set()`
