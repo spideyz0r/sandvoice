@@ -233,7 +233,7 @@ plan/
 
 ### Priority 53: Audio Response Cache
 **Document**: [backlog/53-audio-response-cache.md](./backlog/53-audio-response-cache.md)
-**Description**: Cache TTS-generated MP3 files alongside text cache entries. On a cache hit, if a valid audio file exists (validated by SHA-256 hash of text+voice+model), play it directly and skip the TTS API call. Adds `audio_cache_enabled`, `audio_cache_dir`, and `audio_cache_max_files` config keys. Streaming TTS path excluded.
+**Description**: Cache TTS-generated MP3 files alongside text cache entries. On a cache hit, if a valid audio file exists (keyed by SHA-256 hash of text+voice+tts_model+tts_provider), play it directly and skip the TTS API call. Adds `audio_cache_enabled`, `audio_cache_dir`, and `audio_cache_max_files` config keys. Streaming TTS path excluded.
 
 ### Future Enhancements
 **Document**: [backlog/FUTURE.md](./backlog/FUTURE.md)
