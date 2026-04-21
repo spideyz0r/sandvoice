@@ -108,6 +108,9 @@ speech_to_text_translate_model: gpt-5-mini
 text_to_speech_model: tts-1
 bot_voice_model: nova
 
+# Context-aware routing
+route_history_depth: 4       # recent conversation turns passed to the router (0 = stateless)
+
 # Response streaming
 stream_responses: disabled   # enabled = stream LLM deltas (required in --wake-word)
 stream_tts: disabled         # enabled = play TTS while response generates (required in --wake-word)
