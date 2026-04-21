@@ -324,7 +324,7 @@ class TestAIDefineRoute(unittest.TestCase):
         ai = AI(llm, tts, stt, _make_config())
         result = ai.define_route("what is the weather?")
         llm.define_route.assert_called_once_with(
-            "what is the weather?", model=None, extra_routes=None
+            "what is the weather?", model=None, extra_routes=None, history=None
         )
         self.assertEqual(result["route"], "weather")
 

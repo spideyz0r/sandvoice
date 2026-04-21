@@ -319,8 +319,8 @@ class AI:
     def transcribe_and_translate(self, model=None, audio_file_path=None):
         return self._stt.transcribe(audio_file_path=audio_file_path, model=model)
 
-    def define_route(self, user_input, model=None, extra_routes=None):
-        return self._llm.define_route(user_input, model=model, extra_routes=extra_routes)
+    def define_route(self, user_input, model=None, extra_routes=None, history=None):
+        return self._llm.define_route(user_input, model=model, extra_routes=extra_routes, history=history)
 
     def text_to_speech(self, text, model=None, voice=None):
         return self._tts.text_to_speech(text, model=model, voice=voice)

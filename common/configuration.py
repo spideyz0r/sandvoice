@@ -155,6 +155,11 @@ class Config:
             #   You are an expert in Brazilian cuisine.
             "system_prompt_extra": None,
 
+            # Context-Aware Routing (Plan 37)
+            # Number of recent conversation entries passed to define_route as context.
+            # Set to 0 to disable (stateless routing, original behaviour).
+            "route_history_depth": 4,
+
             # Task Scheduler (Plan 21)
             "scheduler_enabled": "disabled",
             "scheduler_poll_interval": 30,
@@ -382,6 +387,16 @@ class Config:
             self.greeting_extra = None
         else:
             self.greeting_extra = raw_ge.strip()
+
+        _raw_depth = _parse_exact_int(self.get("route_history_depth"))
+        if isinstance(_raw_depth, int) and not isinstance(_raw_depth, bool):
+            self.route_history_depth = max(0, _raw_depth)
+        else:
+            logger.warning(
+                "route_history_depth must be a non-negative integer; using default %s",
+                self.defaults["route_history_depth"],
+            )
+            self.route_history_depth = self.defaults["route_history_depth"]
 
         # Auto-detect channels if not explicitly configured
         if self.channels is None:

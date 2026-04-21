@@ -1304,5 +1304,47 @@ class TestGreetingExtraConfig(_TempHomeBase):
         self.assertTrue(any("greeting_extra" in msg and "blank" in msg for msg in cm.output))
 
 
+class TestRouteHistoryDepthConfig(_TempHomeBase):
+    def test_default_is_four(self):
+        config = Config()
+        self.assertEqual(config.route_history_depth, 4)
+
+    def test_custom_value_stored(self):
+        self.write_config({"route_history_depth": 6})
+        config = Config()
+        self.assertEqual(config.route_history_depth, 6)
+
+    def test_zero_disables_history(self):
+        self.write_config({"route_history_depth": 0})
+        config = Config()
+        self.assertEqual(config.route_history_depth, 0)
+
+    def test_negative_clamped_to_zero(self):
+        self.write_config({"route_history_depth": -2})
+        config = Config()
+        self.assertEqual(config.route_history_depth, 0)
+
+    def test_invalid_string_falls_back_to_default(self):
+        self.write_config({"route_history_depth": "bad"})
+        with self.assertLogs("common.configuration", level="WARNING") as cm:
+            config = Config()
+        self.assertEqual(config.route_history_depth, 4)
+        self.assertTrue(any("route_history_depth" in msg for msg in cm.output))
+
+    def test_bool_rejected_falls_back_to_default(self):
+        self.write_config({"route_history_depth": True})
+        with self.assertLogs("common.configuration", level="WARNING") as cm:
+            config = Config()
+        self.assertEqual(config.route_history_depth, 4)
+        self.assertTrue(any("route_history_depth" in msg for msg in cm.output))
+
+    def test_float_rejected_falls_back_to_default(self):
+        self.write_config({"route_history_depth": 2.9})
+        with self.assertLogs("common.configuration", level="WARNING") as cm:
+            config = Config()
+        self.assertEqual(config.route_history_depth, 4)
+        self.assertTrue(any("route_history_depth" in msg for msg in cm.output))
+
+
 if __name__ == '__main__':
     unittest.main()

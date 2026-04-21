@@ -641,9 +641,15 @@ class SandVoice:
             user_input = self.ai.transcribe_and_translate()
             print(f"You: {user_input}")
 
+        try:
+            depth = max(0, getattr(self.config, "route_history_depth", 4))
+            _route_history = (self.ai.conversation_history[-depth:] or None) if depth else None
+        except TypeError:
+            _route_history = None
         route = self.ai.define_route(
             user_input,
             extra_routes=build_extra_routes_text(self._plugin_manifests, location=self.config.location),
+            history=_route_history,
         )
 
         # Plan 08 Phase 2 (default route only): stream LLM response and start TTS playback early.

@@ -130,7 +130,7 @@ class OpenAILLMProvider(LLMProvider):
             pass  # caller assembles and appends the assistant turn
 
     @retry_with_backoff(max_attempts=3, initial_delay=1)
-    def _call_define_route(self, user_input, model=None, extra_routes=None):
+    def _call_define_route(self, user_input, model=None, extra_routes=None, history=None):
         """Make the routing API call. Raises on failure so retry_with_backoff can retry."""
         if not model:
             model = self.config.llm_route_model
@@ -143,22 +143,25 @@ class OpenAILLMProvider(LLMProvider):
         if extra_routes:
             route_role_text = route_role_text.rstrip() + extra_routes
 
-        logger.info("Routing: %r", user_input)
+        messages = [{"role": "system", "content": route_role_text}]
+        if history:
+            for entry in history:
+                messages.append({"role": "user", "content": entry})
+        messages.append({"role": "user", "content": f"User: {user_input}"})
+
+        logger.info("Routing: %r (history=%d entries)", user_input, len(history) if history else 0)
         completion = self._client.chat.completions.create(
             model=model,
-            messages=[
-                {"role": "system", "content": route_role_text},
-                {"role": "user", "content": user_input},
-            ]
+            messages=messages,
         )
         route = json.loads(completion.choices[0].message.content)
         result = _normalize_route_response(route)
         logger.info("Route chosen: %s", result)
         return result
 
-    def define_route(self, user_input, model=None, extra_routes=None):
+    def define_route(self, user_input, model=None, extra_routes=None, history=None):
         try:
-            return self._call_define_route(user_input, model=model, extra_routes=extra_routes)
+            return self._call_define_route(user_input, model=model, extra_routes=extra_routes, history=history)
         except FileNotFoundError as e:
             error_msg = handle_file_error(e, operation="read", filename="routes.yaml")
             logger.error("Routes file error: %s", e)
