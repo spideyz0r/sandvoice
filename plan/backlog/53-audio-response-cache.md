@@ -28,21 +28,29 @@ stored in a configurable directory and keyed by a hash of (text, voice, tts_mode
 ## Design
 
 ### Hash function
-A SHA-256 digest of `text + "|" + voice + "|" + tts_model` uniquely identifies an
-audio file. If any of the three change, the hash changes and the old file is ignored.
+A SHA-256 digest of a canonical JSON serialization of `(text, voice, tts_model, tts_provider)`
+uniquely identifies an audio file. Including the provider prevents cross-provider collisions
+when the same `(voice, model)` strings are used with different TTS backends. If any of the
+four inputs change, the hash changes and the old file is ignored.
 
 ```python
 import hashlib
 import json
 
-def _audio_hash(text, voice, tts_model):
-    payload = json.dumps([text, voice, tts_model], ensure_ascii=False, separators=(",", ":"))
-    return hashlib.sha256(payload.encode()).hexdigest()
+def _audio_hash(text, voice, tts_model, tts_provider):
+    payload = json.dumps(
+        {"text": text, "voice": voice, "tts_model": tts_model, "tts_provider": tts_provider},
+        sort_keys=True,
+        separators=(",", ":"),
+    )
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 ```
 
 The audio file is stored as `<audio_cache_dir>/<hash>.mp3`. The filename is the hash,
-so no separate index is needed to verify freshness — if the file exists at the expected
-path, it is valid by construction.
+so no separate index is needed to track freshness. Writers must generate the MP3 at a
+temporary path in the same directory and atomically rename it into place once complete.
+Readers should treat a cached file as a hit only if the expected file exists and passes
+a minimal validation check (non-zero size and/or a decodable MP3 header).
 
 ### VoiceCache changes (`common/cache.py`)
 Add an optional `audio_hash` column to the `voice_cache` SQLite table:
@@ -61,7 +69,7 @@ callers can verify the file.
 After a text cache hit:
 
 1. Retrieve `entry.audio_hash` from the cache.
-2. Compute expected hash: `_audio_hash(entry.value, config.bot_voice_model, config.text_to_speech_model)`.
+2. Compute expected hash: `_audio_hash(entry.value, config.bot_voice_model, config.text_to_speech_model, config.tts_provider)`.
 3. Build path: `os.path.join(config.audio_cache_dir, f"{expected_hash}.mp3")`.
 4. If the file exists and `entry.audio_hash == expected_hash`: play the file, skip TTS.
 5. Otherwise: call TTS normally, save the resulting MP3 to the path, call `cache.set()`
@@ -101,8 +109,8 @@ mechanism — no background thread, no per-file expiry.
 - [ ] All new code paths covered by unit tests (>80% coverage)
 
 ## Testing Strategy
-- Unit-test `_audio_hash()` for determinism and collision resistance (different text →
-  different hash; same text+voice+model → same hash).
+- Unit-test `_audio_hash()` for determinism, stability, and input separation (same
+  text+voice+model+provider → same hash; different text/voice/model/provider → different hash).
 - Unit-test cache hit with valid file: mock file existence, assert TTS not called.
 - Unit-test cache hit with missing file: assert TTS called, file written, hash stored.
 - Unit-test hash mismatch: assert TTS called even though a file exists at a different path.
