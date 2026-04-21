@@ -16,8 +16,9 @@ stored in a configurable directory and keyed by a hash of (text, voice, tts_mode
 ## Scope
 
 **In scope:**
-- Non-streaming playback path only (CLI mode and wake-word mode when `stream_responses` is
-  disabled). Streaming TTS pipelines LLM deltas directly into audio; that path is excluded.
+- Non-streaming playback path only (CLI mode and default interactive mode). Wake-word mode
+  requires `stream_responses` and `stream_tts` to be enabled and is therefore excluded.
+  Streaming TTS pipelines LLM deltas directly into audio; that path is excluded.
 - Plugins that already use `VoiceCache` for text: `weather` and `greeting` today; any
   future plugin that opts in.
 
