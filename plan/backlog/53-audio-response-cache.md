@@ -76,11 +76,12 @@ After a text cache hit, before any TTS call (streaming or non-streaming):
 3. Build path: `os.path.join(config.audio_cache_dir, f"{expected_hash}.mp3")`.
 4. If the file exists and `entry.audio_hash == expected_hash`: play the file directly,
    skip TTS entirely (works in all modes including wake-word).
-5. Otherwise — **non-streaming path**: call TTS, save MP3 to a temp path, atomically
-   rename into place, call `cache.set()` with the new `audio_hash`.
-6. Otherwise — **streaming path**: proceed with `stream_tts` as normal, simultaneously
-   writing audio chunks to a temp file; atomically rename into place after playback
-   completes, then call `cache.set()` with the new `audio_hash`.
+5. Otherwise — **non-streaming path**: call TTS, write MP3 bytes to a temp path,
+   atomically rename into place, call `cache.set()` with the new `audio_hash`.
+6. Otherwise — **streaming path**: open a temp file before the stream starts; for each
+   audio chunk, play it and append the bytes to the temp file; after the final chunk,
+   atomically rename into place, call `cache.set()` with the new `audio_hash`.
+   MP3 frames can be appended directly — the resulting file is a valid MP3.
 
 Hash mismatch means the cached text was refreshed with new content since the audio was
 generated. The old file is not deleted — it will be orphaned until a cleanup sweep
