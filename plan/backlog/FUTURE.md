@@ -107,3 +107,6 @@ Recognize different users by voice fingerprint and provide personalized response
 ## Notes
 
 When any item above is prioritized for development, it gets its own detailed planning document following the standard format in `plan/backlog/`.
+
+## Test entry (to be removed)
+- Copilot availability check
