@@ -16,14 +16,16 @@ stored in a configurable directory and keyed by a hash of (text, voice, tts_mode
 ## Scope
 
 **In scope:**
-- Non-streaming playback path only (CLI mode and default interactive mode). Wake-word mode
-  requires `stream_responses` and `stream_tts` to be enabled and is therefore excluded.
-  Streaming TTS pipelines LLM deltas directly into audio; that path is excluded.
+- All playback modes: CLI, default interactive, and wake-word mode.
+- On a text cache hit, the audio hash is checked **before** any TTS call. If a valid MP3
+  exists, it is played directly regardless of whether the mode uses streaming or not.
+- On a cache miss in streaming mode, audio chunks are teed to a temp file while playing;
+  the file is atomically renamed into place after playback completes so future hits skip
+  the stream entirely.
 - Plugins that already use `VoiceCache` for text: `weather` and `greeting` today; any
   future plugin that opts in.
 
 **Out of scope:**
-- Streaming TTS path (`stream_tts`) — deferred.
 - Conversational (non-cached) responses — no value; those are unique per request.
 
 ## Design
@@ -67,14 +69,18 @@ the text value. `VoiceCache.get()` returns the `audio_hash` field in `CacheEntry
 callers can verify the file.
 
 ### Playback path (`common/audio.py` or call site)
-After a text cache hit:
+After a text cache hit, before any TTS call (streaming or non-streaming):
 
 1. Retrieve `entry.audio_hash` from the cache.
 2. Compute expected hash: `_audio_hash(entry.value, config.bot_voice_model, config.text_to_speech_model, config.tts_provider)`.
 3. Build path: `os.path.join(config.audio_cache_dir, f"{expected_hash}.mp3")`.
-4. If the file exists and `entry.audio_hash == expected_hash`: play the file, skip TTS.
-5. Otherwise: call TTS normally, save the resulting MP3 to the path, call `cache.set()`
-   again with the new `audio_hash`.
+4. If the file exists and `entry.audio_hash == expected_hash`: play the file directly,
+   skip TTS entirely (works in all modes including wake-word).
+5. Otherwise — **non-streaming path**: call TTS, save MP3 to a temp path, atomically
+   rename into place, call `cache.set()` with the new `audio_hash`.
+6. Otherwise — **streaming path**: proceed with `stream_tts` as normal, simultaneously
+   writing audio chunks to a temp file; atomically rename into place after playback
+   completes, then call `cache.set()` with the new `audio_hash`.
 
 Hash mismatch means the cached text was refreshed with new content since the audio was
 generated. The old file is not deleted — it will be orphaned until a cleanup sweep
@@ -106,14 +112,17 @@ mechanism — no background thread, no per-file expiry.
 - [ ] `audio_cache_dir` is created on first use if missing
 - [ ] Orphan files pruned to `audio_cache_max_files` on startup
 - [ ] Audio caching is completely disabled when `audio_cache_enabled: disabled`
-- [ ] Streaming TTS path is unaffected
+- [ ] Wake-word mode: cache hit plays MP3 directly, skipping the streaming TTS pipeline
+- [ ] Wake-word mode: cache miss streams and writes audio to file; subsequent hit plays from file
 - [ ] All new code paths covered by unit tests (>80% coverage)
 
 ## Testing Strategy
 - Unit-test `_audio_hash()` for determinism, stability, and input separation (same
   text+voice+model+provider → same hash; different text/voice/model/provider → different hash).
 - Unit-test cache hit with valid file: mock file existence, assert TTS not called.
-- Unit-test cache hit with missing file: assert TTS called, file written, hash stored.
+- Unit-test cache miss on non-streaming path: assert TTS called, file written, hash stored.
+- Unit-test cache miss on streaming path: assert stream runs, chunks written to temp file,
+  atomically renamed, hash stored.
 - Unit-test hash mismatch: assert TTS called even though a file exists at a different path.
 - Unit-test orphan cleanup: assert oldest files removed when count exceeds limit.
 
