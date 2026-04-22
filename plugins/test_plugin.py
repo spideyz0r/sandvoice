@@ -1,9 +1,37 @@
-def process(user_input, route, s):
-    data = fetch_data(user_input)
-    result = data['value']
-    return result
+import logging
 
-def fetch_data(query):
-    import requests
-    r = requests.get(f"https://api.example.com/data?q={query}")
-    return r.json()
+import requests
+
+logger = logging.getLogger(__name__)
+
+
+def fetch_data(query, timeout=10):
+    try:
+        response = requests.get(
+            "https://api.example.com/data",
+            params={"q": query},
+            timeout=timeout,
+        )
+        response.raise_for_status()
+        data = response.json()
+        value = data.get("value")
+        if not isinstance(value, str):
+            logger.warning("Unexpected response shape from example API: %r", data)
+            return None
+        return value
+    except requests.exceptions.RequestException as e:
+        logger.error("Example API request failed: %s", e)
+        return None
+    except Exception as e:
+        logger.error("Unexpected error fetching example data: %s", e)
+        return None
+
+
+def process(user_input, route, s):
+    if route.get("refresh_only"):
+        return None
+    timeout = getattr(s.config, "api_timeout", 10)
+    result = fetch_data(user_input, timeout=timeout)
+    if result is None:
+        return "Sorry, I couldn't fetch that information right now."
+    return result
