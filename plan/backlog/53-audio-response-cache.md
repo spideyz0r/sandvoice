@@ -6,12 +6,12 @@
 ## Problem
 Every text cache hit (weather, greeting) still makes a full TTS API call. The text is
 identical across hits within the same TTL window, so the resulting audio is also identical.
-There is no reason to call TTS more than once per unique (text, voice, model) combination.
+There is no reason to call TTS more than once per unique (text, voice, tts_model, tts_provider) combination.
 
 ## Goal
 Cache the generated MP3 alongside the text response. On a cache hit, if a valid audio
 file already exists, play it directly and skip the TTS call entirely. Audio files are
-stored in a configurable directory and keyed by a hash of (text, voice, tts_model).
+stored in a configurable directory and keyed by a hash of (text, voice, tts_model, tts_provider).
 
 ## Scope
 
@@ -54,12 +54,12 @@ Readers should treat a cached file as a hit only if the expected file exists and
 a minimal validation check (non-zero size and/or a decodable MP3 header).
 
 ### VoiceCache changes (`common/cache.py`)
-Add an optional `audio_hash` column to the `voice_cache` SQLite table:
+Add an optional `audio_hash` column to the `cache_entries` SQLite table:
 
 ```sql
 -- Only run if the column does not already exist (idempotent migration):
--- check via PRAGMA table_info(voice_cache) and skip if audio_hash is present.
-ALTER TABLE voice_cache ADD COLUMN audio_hash TEXT;
+-- check via PRAGMA table_info(cache_entries) and skip if audio_hash is present.
+ALTER TABLE cache_entries ADD COLUMN audio_hash TEXT;
 ```
 
 `VoiceCache.set()` accepts an optional `audio_hash` argument and persists it alongside
