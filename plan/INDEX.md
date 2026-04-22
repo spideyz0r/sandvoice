@@ -231,6 +231,10 @@ plan/
 **Document**: [backlog/51-greeting-extra-instructions.md](./backlog/51-greeting-extra-instructions.md)
 **Description**: Add optional `greeting_extra` config key that appends user-defined instructions to the greeting plugin's generation prompt (e.g. "end the greeting with a short proverb"). Separate from `system_prompt_extra` — affects only the greeting plugin's live generation.
 
+### Priority 53: Audio Response Cache
+**Document**: [backlog/53-audio-response-cache.md](./backlog/53-audio-response-cache.md)
+**Description**: Cache TTS-generated MP3 files alongside text cache entries. On a cache hit, if a valid audio file exists (keyed by SHA-256 hash of text+voice+tts_model+tts_provider), play it directly and skip the TTS API call. Adds `audio_cache_enabled`, `audio_cache_dir`, and `audio_cache_max_files` config keys. Streaming TTS path excluded.
+
 ### Future Enhancements
 **Document**: [backlog/FUTURE.md](./backlog/FUTURE.md)
 **Description**: Long-term feature ideas: alternative providers (Anthropic, Ollama, Piper), local offline mode, conversation history truncation, user-triggered timers, conversation memory, export, plugin hot-reload, API cost tracking, music control, smart home, calendar, todo lists, multi-user support.
