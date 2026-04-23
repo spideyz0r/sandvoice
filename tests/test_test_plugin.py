@@ -54,7 +54,7 @@ class TestFetchData(unittest.TestCase):
         self.assertIsNone(result)
 
     @patch("plugins.test_plugin.requests.get")
-    def test_timeout_uses_config(self, mock_get):
+    def test_timeout_param_passed_through(self, mock_get):
         mock_get.return_value.json.return_value = {"value": "ok"}
         mock_get.return_value.raise_for_status = MagicMock()
         fetch_data("test", timeout=5)
