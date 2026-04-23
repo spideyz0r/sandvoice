@@ -86,9 +86,10 @@ class TestProcess(unittest.TestCase):
 
     @patch("plugins.test_plugin.fetch_data")
     def test_refresh_only_returns_none(self, mock_fetch):
+        mock_fetch.return_value = "some answer"
         result = process("my query", {"refresh_only": True}, self._make_s())
         self.assertIsNone(result)
-        mock_fetch.assert_not_called()
+        mock_fetch.assert_called_once()
 
     @patch("plugins.test_plugin.fetch_data")
     def test_passes_api_timeout_from_config(self, mock_fetch):
