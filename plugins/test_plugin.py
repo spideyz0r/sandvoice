@@ -14,6 +14,9 @@ def fetch_data(query, timeout=10):
         )
         response.raise_for_status()
         data = response.json()
+        if not isinstance(data, dict):
+            logger.warning("Unexpected response shape from example API: %r", data)
+            return None
         value = data.get("value")
         if not isinstance(value, str):
             logger.warning("Unexpected response shape from example API: %r", data)

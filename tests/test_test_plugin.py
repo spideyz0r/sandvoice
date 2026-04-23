@@ -16,6 +16,14 @@ class TestFetchData(unittest.TestCase):
             params={"q": "test query"},
             timeout=10,
         )
+        mock_get.return_value.raise_for_status.assert_called_once_with()
+
+    @patch("plugins.test_plugin.requests.get")
+    def test_non_dict_response_returns_none(self, mock_get):
+        mock_get.return_value.json.return_value = ["not", "a", "dict"]
+        mock_get.return_value.raise_for_status = MagicMock()
+        result = fetch_data("test")
+        self.assertIsNone(result)
 
     @patch("plugins.test_plugin.requests.get")
     def test_missing_value_key_returns_none(self, mock_get):
@@ -34,7 +42,7 @@ class TestFetchData(unittest.TestCase):
     @patch("plugins.test_plugin.requests.get")
     def test_http_error_returns_none(self, mock_get):
         import requests as req
-        mock_get.side_effect = req.exceptions.HTTPError("404")
+        mock_get.return_value.raise_for_status.side_effect = req.exceptions.HTTPError("404")
         result = fetch_data("test")
         self.assertIsNone(result)
 
@@ -55,6 +63,7 @@ class TestFetchData(unittest.TestCase):
             params={"q": "test"},
             timeout=5,
         )
+        mock_get.return_value.raise_for_status.assert_called_once_with()
 
 
 class TestProcess(unittest.TestCase):
