@@ -35,7 +35,7 @@ def fetch_data(query, timeout=10):
 def process(user_input, route, s):
     timeout = getattr(s.config, "api_timeout", 10)
     result = fetch_data(user_input, timeout=timeout)
-    if route.get("refresh_only"):
+    if route.get("refresh_only") is True:
         return None
     if result is None:
         return "Sorry, I couldn't fetch that information right now."
