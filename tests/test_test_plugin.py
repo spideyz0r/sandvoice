@@ -54,6 +54,20 @@ class TestFetchData(unittest.TestCase):
         self.assertIsNone(result)
 
     @patch("plugins.test_plugin.requests.get")
+    def test_timeout_error_returns_none(self, mock_get):
+        import requests as req
+        mock_get.side_effect = req.exceptions.Timeout("timed out")
+        result = fetch_data("test")
+        self.assertIsNone(result)
+
+    @patch("plugins.test_plugin.requests.get")
+    def test_json_parse_error_returns_none(self, mock_get):
+        mock_get.return_value.raise_for_status = MagicMock()
+        mock_get.return_value.json.side_effect = ValueError("not json")
+        result = fetch_data("test")
+        self.assertIsNone(result)
+
+    @patch("plugins.test_plugin.requests.get")
     def test_timeout_param_passed_through(self, mock_get):
         mock_get.return_value.json.return_value = {"value": "ok"}
         mock_get.return_value.raise_for_status = MagicMock()
