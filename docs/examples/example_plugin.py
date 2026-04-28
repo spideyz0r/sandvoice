@@ -17,10 +17,13 @@ def fetch_data(query, timeout=10):
         if not isinstance(data, dict):
             logger.warning("Unexpected response shape from example API: got %s", type(data).__name__)
             return None
-        value = data.get("value")
+        if "value" not in data:
+            logger.warning("Missing 'value' key in example API response")
+            return None
+        value = data["value"]
         if not isinstance(value, str):
             logger.warning(
-                "Unexpected 'value' type from example API: got %s", type(value).__name__
+                "Unexpected 'value' type from example API: expected str, got %s", type(value).__name__
             )
             return None
         return value
