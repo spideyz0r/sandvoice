@@ -228,7 +228,11 @@ class WakeWordMode:
         """Create a new OpenWakeWordDetector with current config."""
         model_name = getattr(self.config, "openwakeword_model", "hey_jarvis")
         threshold = self.config.wake_word_sensitivity
-        return OpenWakeWordDetector(model_name=model_name, threshold=threshold)
+        return OpenWakeWordDetector(
+            model_name=model_name,
+            threshold=threshold,
+            device_sample_rate=self.config.rate,
+        )
 
     def _require_config_enabled(self, flag_value, error_msg):
         """Raise RuntimeError if flag_value is not considered enabled by _is_enabled_flag()."""
@@ -264,7 +268,7 @@ class WakeWordMode:
         try:
             pa = pyaudio.PyAudio()
             audio_stream = pa.open(
-                rate=self.porcupine.sample_rate,
+                rate=self.porcupine.device_sample_rate,
                 channels=1,
                 format=pyaudio.paInt16,
                 input=True,

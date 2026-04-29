@@ -207,7 +207,11 @@ class BargeInDetector:
 
     def _create_porcupine_instance(self):
         """Create a fresh OpenWakeWordDetector for this thread."""
-        return OpenWakeWordDetector(model_name=self._model_name, threshold=self._sensitivity)
+        return OpenWakeWordDetector(
+            model_name=self._model_name,
+            threshold=self._sensitivity,
+            device_sample_rate=self._config.rate,
+        )
 
     def _cleanup_pyaudio(self, stream, pa):
         """Stop and close a PyAudio stream, then terminate the PyAudio instance."""
@@ -244,7 +248,7 @@ class BargeInDetector:
             logger.debug("Barge-in thread: Opening PyAudio stream...")
             pa = pyaudio.PyAudio()
             audio_stream = pa.open(
-                rate=porcupine_instance.sample_rate,
+                rate=porcupine_instance.device_sample_rate,
                 channels=1,
                 format=pyaudio.paInt16,
                 input=True,
