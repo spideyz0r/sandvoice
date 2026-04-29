@@ -1,7 +1,7 @@
 croniter
 setuptools<81
 openwakeword
-onnxruntime
+onnxruntime==1.20.0
 beautifulsoup4
 coverage
 feedparser
