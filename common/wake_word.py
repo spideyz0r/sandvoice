@@ -7,8 +7,9 @@ import threading
 import time
 from enum import Enum
 
-import pvporcupine
 import pyaudio
+
+from common.openwakeword_detector import OpenWakeWordDetector
 
 from common.beep_generator import create_confirmation_beep, create_ack_earcon
 from common.ai import pop_streaming_chunk
@@ -147,15 +148,6 @@ class WakeWordMode:
         """
         logger.debug("Initializing wake word detection and VAD")
 
-        if not self.config.porcupine_access_key:
-            error_msg = (
-                "Porcupine access key is required for wake word mode. "
-                "Get your free key at https://console.picovoice.ai/ and add it to your config: "
-                "porcupine_access_key: YOUR_KEY_HERE"
-            )
-            print(f"Error: {error_msg}")
-            raise RuntimeError(error_msg)
-
         self._require_config_enabled(
             getattr(self.config, "vad_enabled", False),
             "Wake-word mode requires VAD-based recording. "
@@ -178,39 +170,13 @@ class WakeWordMode:
         )
 
         try:
-            keyword_paths = getattr(self.config, "porcupine_keyword_paths", None)
+            self.porcupine = self._create_detector_instance()
+            logger.debug("Wake word detector sample rate: %s", self.porcupine.sample_rate)
+            logger.debug("Wake word detector frame length: %s", self.porcupine.frame_length)
 
-            if not keyword_paths:
-                wake_keyword = self.config.wake_phrase.lower()
-
-                if hasattr(pvporcupine, "KEYWORDS") and wake_keyword not in pvporcupine.KEYWORDS:
-                    supported = ", ".join(sorted(pvporcupine.KEYWORDS)) if hasattr(pvporcupine, "KEYWORDS") else "unknown"
-                    error_msg = (
-                        f"Invalid Porcupine wake phrase '{self.config.wake_phrase}'. "
-                        f"When using built-in keywords, wake_phrase must be one of: {supported}. "
-                        "For a custom wake phrase, create a .ppn model at https://console.picovoice.ai/ "
-                        "and configure its path via 'porcupine_keyword_paths' in your config."
-                    )
-                    logger.error(error_msg)
-                    print(f"Error: {error_msg}")
-                    raise RuntimeError(error_msg)
-
-            # Create main Porcupine instance
-            self.porcupine = self._create_porcupine_instance()
-
-            if keyword_paths:
-                logger.debug("Porcupine initialized with custom keyword paths: %s", keyword_paths)
-            else:
-                logger.debug("Porcupine initialized with built-in wake phrase: '%s'", self.config.wake_phrase)
-
-            logger.debug("Porcupine sample rate: %s", self.porcupine.sample_rate)
-            logger.debug("Porcupine frame length: %s", self.porcupine.frame_length)
-
-            # Create barge-in detector now that config is validated.
             self.barge_in = BargeInDetector(
-                access_key=self.config.porcupine_access_key,
-                keyword_paths=getattr(self.config, "porcupine_keyword_paths", None),
-                sensitivity=self.config.wake_word_sensitivity,
+                model_name=getattr(self.config, "openwakeword_model", "hey_jarvis"),
+                threshold=self.config.wake_word_sensitivity,
                 audio_lock=self._audio_lock,
                 audio=self.audio,
                 config=self.config,
@@ -258,37 +224,11 @@ class WakeWordMode:
             pop_streaming_chunk, self.config, ui=self.ui,
         )
 
-    def _create_porcupine_instance(self):
-        """Create a new Porcupine instance with current config.
-
-        Returns:
-            Porcupine instance
-
-        Raises:
-            RuntimeError: If initialization fails
-        """
-        keyword_paths = getattr(self.config, "porcupine_keyword_paths", None)
-
-        if keyword_paths:
-            if not isinstance(keyword_paths, (list, tuple)):
-                keyword_paths = [keyword_paths]
-
-            base_sensitivity = self.config.wake_word_sensitivity
-            sensitivities = [base_sensitivity] * len(keyword_paths)
-
-            return pvporcupine.create(
-                access_key=self.config.porcupine_access_key,
-                keyword_paths=keyword_paths,
-                sensitivities=sensitivities
-            )
-        else:
-            wake_keyword = self.config.wake_phrase.lower()
-
-            return pvporcupine.create(
-                access_key=self.config.porcupine_access_key,
-                keywords=[wake_keyword],
-                sensitivities=[self.config.wake_word_sensitivity]
-            )
+    def _create_detector_instance(self):
+        """Create a new OpenWakeWordDetector with current config."""
+        model_name = getattr(self.config, "openwakeword_model", "hey_jarvis")
+        threshold = self.config.wake_word_sensitivity
+        return OpenWakeWordDetector(model_name=model_name, threshold=threshold)
 
     def _require_config_enabled(self, flag_value, error_msg):
         """Raise RuntimeError if flag_value is not considered enabled by _is_enabled_flag()."""

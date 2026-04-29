@@ -3,8 +3,9 @@ import struct
 import threading
 import time
 
-import pvporcupine
 import pyaudio
+
+from common.openwakeword_detector import OpenWakeWordDetector
 
 logger = logging.getLogger(__name__)
 
@@ -33,24 +34,20 @@ class BargeInDetector:
         detector.stop()
     """
 
-    def __init__(self, access_key, keyword_paths, sensitivity, audio_lock, audio, config):
+    def __init__(self, model_name, threshold, audio_lock, audio, config):
         """Initialise the detector.
 
         Args:
-            access_key: Porcupine access key string.
-            keyword_paths: List of .ppn file paths, or None to use built-in
-                keywords derived from ``config.wake_phrase``.
-            sensitivity: Float sensitivity for wake-word detection (0.0–1.0).
+            model_name: openWakeWord model name (e.g. "hey_jarvis").
+            threshold: Detection score threshold (0.0–1.0).
             audio_lock: threading.Lock (or None) acquired around playback
                 calls inside the host WakeWordMode.  Not used by the detector
                 itself; stored so callers can pass it along if needed.
             audio: Audio instance (stored for future use; not used internally).
-            config: Config instance; used to read ``wake_phrase`` when
-                creating Porcupine instances with built-in keywords.
+            config: Config instance.
         """
-        self._access_key = access_key
-        self._keyword_paths = keyword_paths
-        self._sensitivity = sensitivity
+        self._model_name = model_name
+        self._sensitivity = threshold
         self._audio_lock = audio_lock
         self._audio = audio
         self._config = config
@@ -209,24 +206,8 @@ class BargeInDetector:
     # ------------------------------------------------------------------
 
     def _create_porcupine_instance(self):
-        """Create a fresh Porcupine instance for this thread."""
-        if self._keyword_paths:
-            paths = self._keyword_paths
-            if not isinstance(paths, (list, tuple)):
-                paths = [paths]
-            sensitivities = [self._sensitivity] * len(paths)
-            return pvporcupine.create(
-                access_key=self._access_key,
-                keyword_paths=paths,
-                sensitivities=sensitivities,
-            )
-        else:
-            wake_keyword = self._config.wake_phrase.lower()
-            return pvporcupine.create(
-                access_key=self._access_key,
-                keywords=[wake_keyword],
-                sensitivities=[self._sensitivity],
-            )
+        """Create a fresh OpenWakeWordDetector for this thread."""
+        return OpenWakeWordDetector(model_name=self._model_name, threshold=self._sensitivity)
 
     def _cleanup_pyaudio(self, stream, pa):
         """Stop and close a PyAudio stream, then terminate the PyAudio instance."""

@@ -99,6 +99,7 @@ class Config:
             "wake_word_enabled": "enabled",
             "wake_phrase": "hey sandvoice",
             "wake_word_sensitivity": 0.5,
+            "openwakeword_model": "hey_jarvis",
             "porcupine_access_key": "",
             "porcupine_keyword_paths": None,
             # Voice Activity Detection
