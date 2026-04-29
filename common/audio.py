@@ -2,7 +2,6 @@
 #from pydub import AudioSegment
 import contextlib
 import os, platform, time, threading, pyaudio, wave, lameenc, logging, queue
-from pynput import keyboard
 from common.error_handling import handle_file_error
 
 logger = logging.getLogger(__name__)
@@ -55,6 +54,7 @@ class Audio:
             logger.debug(">>> MIXER STATE [%s]: Error getting state: %s", context, e)
 
     def init_recording(self):
+        from pynput import keyboard
         listener = keyboard.Listener(on_press=self.on_press)
         listener.start()
         self.start_recording()
