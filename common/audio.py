@@ -8,6 +8,14 @@ logger = logging.getLogger(__name__)
 
 # this is necessary to mute some outputs from pygame
 os.environ['PYGAME_HIDE_SUPPORT_PROMPT'] = "hide"
+
+# On Linux, SDL defaults to the first ALSA device which may not be the USB audio device.
+# Point SDL at the default ALSA PCM so it uses whatever the system default is set to.
+# Users can override by setting SDL_AUDIODRIVER and AUDIODEV in their environment.
+if platform.system().lower() == "linux":
+    os.environ.setdefault("SDL_AUDIODRIVER", "alsa")
+    os.environ.setdefault("AUDIODEV", "default")
+
 import pygame
 
 
