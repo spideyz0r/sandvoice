@@ -283,6 +283,12 @@ class WakeWordMode:
         elif self.config.visual_state_indicator:
             print(f"⏸️  Waiting for wake word ('{self.config.wake_phrase}')...")
 
+        # Reset the OWW model's rolling prediction buffer before each detection
+        # cycle. Without this, audio captured during TTS playback (bot's own
+        # voice heard through the mic) leaves residual high scores that trigger
+        # a false positive on the very first frame of the next IDLE loop.
+        self.porcupine.reset()
+
         pa = None
         audio_stream = None
 

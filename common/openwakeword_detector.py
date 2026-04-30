@@ -111,5 +111,18 @@ class OpenWakeWordDetector:
             return 0
         return -1
 
+    def reset(self):
+        """Reset the model's internal prediction buffer.
+
+        Call this before re-entering detection after a response cycle so that
+        audio processed during TTS playback (bot's own voice picked up by the
+        mic) does not carry over into the next IDLE loop as a false positive.
+        """
+        try:
+            self._model.reset()
+            logger.debug("OpenWakeWord model buffer reset")
+        except Exception as e:
+            logger.debug("OpenWakeWord model reset failed (non-fatal): %s", e)
+
     def delete(self):
         """No-op — openWakeWord holds no native resources requiring explicit release."""
