@@ -46,7 +46,7 @@ Tested and working:
 |-------|-----------|
 | Porcupine requires company email + per-device activation | Plan 52: replace with openWakeWord |
 | `onnxruntime>=1.21` crashes on Pi 3B (C++ STL assertion) | Plan 52: pin `onnxruntime==1.20.0` |
-| `tflite-runtime` fails on Python 3.13 | Plan 52: install openWakeWord with `--no-deps` |
+| `tflite-runtime` unavailable on Pi/aarch64 (confirmed Python 3.13 / Trixie; outside CI coverage) | Plan 52: install openWakeWord with `--no-deps` |
 | PyAudio opens virtual ALSA `default` device (amplitude=0) | Plan 53: auto-select `hw:N,M` input |
 | `pygame` binds to `bcm2835` onboard device instead of USB headset | Plan 54: auto-detect SDL `AUDIODEV` |
 | `pynput` import crashes on headless Linux | Plan 54: lazy import inside `init_recording()` |

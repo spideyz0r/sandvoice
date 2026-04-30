@@ -54,7 +54,14 @@ class OpenWakeWordDetector:
 
     @property
     def frame_length(self) -> int:
-        """Samples per frame at device_sample_rate (covers the same 80 ms window)."""
+        """Samples per frame at device_sample_rate (80 ms window at 16 kHz = 1280 samples).
+
+        NOTE: openWakeWord requires 80 ms / 1280 samples per frame, which
+        differs from Porcupine's 32 ms / 512 samples. The interface is
+        compatible (same property name) but the value changes. All existing
+        test mocks that hardcode ``frame_length = 512`` must be updated to
+        ``frame_length = 1280`` when switching to this implementation.
+        """
 
     def process(self, pcm) -> int:
         """Return 0 if wake word detected, -1 otherwise.
@@ -135,8 +142,11 @@ Remove `porcupine_access_key` and `porcupine_keyword_paths` from defaults
 ### Platform-specific install handling
 
 `openwakeword` cannot be installed via `pip install -r requirements.txt` on
-Raspberry Pi because `tflite-runtime` (a transitive dependency) has no wheel
-for Python 3.13 on aarch64. To support both platforms without a broken
+Raspberry Pi because `tflite-runtime` (a transitive dependency) is not
+reliably available as a wheel on Pi/aarch64. This was confirmed on the
+validated Pi target (Trixie / Debian 13, Python 3.13) which is outside the
+project's current CI coverage (Python 3.10–3.12); the issue may also affect
+earlier Python versions on aarch64. To support both platforms without a broken
 `requirements.txt`, `openwakeword` is kept out of the shared requirements file
 and documented as a separate install step per platform.
 
@@ -189,8 +199,8 @@ Document both constraints in `docs/raspberry-pi-setup.md` (Plan 05).
 | `common/configuration.py` | Add `openwakeword_model`; lower sensitivity default; remove Porcupine keys |
 | `requirements.txt` | Add `onnxruntime==1.20.0` (hard pin); remove `pvporcupine`; **do not add `openwakeword`** (platform-specific install — see above) |
 | `tests/test_openwakeword_detector.py` | New test file |
-| `tests/test_wake_word.py` | Update mocks |
-| `tests/test_barge_in.py` | Update mocks |
+| `tests/test_wake_word.py` | Update mocks: `frame_length = 512` → `1280`; `device_sample_rate`; swap pvporcupine references |
+| `tests/test_barge_in.py` | Update mocks: `frame_length = 512` → `1280`; swap pvporcupine references |
 
 ---
 

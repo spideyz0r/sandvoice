@@ -113,7 +113,8 @@ def init_recording(self):
 | File | Change |
 |------|--------|
 | `common/audio.py` | SDL AUDIODEV auto-detection block; lazy pynput import |
-| `tests/test_audio.py` | Test AUDIODEV is set on Linux; test lazy import path |
+| `tests/test_audio_playback.py` | Test `SDL_AUDIODRIVER`/`AUDIODEV` env vars set correctly on Linux before pygame import |
+| `tests/test_audio_device_detection.py` | Test device scanning logic, fallback behaviour, and lazy `pynput` import path |
 
 ---
 
