@@ -1,6 +1,6 @@
 # Linux Audio Output Device Auto-Detection
 
-**Status**: 📋 Planned
+**Status**: 📋 Backlog
 **Priority**: 54
 **Platforms**: Raspberry Pi 3B (Linux). No change on macOS.
 

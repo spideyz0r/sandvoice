@@ -1,6 +1,6 @@
 # VAD Pre-Speech Grace Period
 
-**Status**: 📋 Planned
+**Status**: 📋 Backlog
 **Priority**: 55
 **Platforms**: macOS M1, Raspberry Pi 3B
 

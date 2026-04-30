@@ -1,6 +1,6 @@
 # Linux ALSA Input Device Auto-Selection
 
-**Status**: 📋 Planned
+**Status**: 📋 Backlog
 **Priority**: 53
 **Platforms**: Raspberry Pi 3B (Linux). No change on macOS.
 

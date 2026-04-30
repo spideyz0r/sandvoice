@@ -1,6 +1,6 @@
 # Raspberry Pi Compatibility
 
-**Status**: 📋 Planned
+**Status**: 📋 Backlog
 **Priority**: 5
 **Platforms**: Raspberry Pi 3B (primary target)
 

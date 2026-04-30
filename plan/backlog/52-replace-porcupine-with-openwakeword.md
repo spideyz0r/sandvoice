@@ -1,6 +1,6 @@
 # Replace Porcupine with openWakeWord
 
-**Status**: 📋 Planned
+**Status**: 📋 Backlog
 **Priority**: 52
 **Platforms**: macOS M1, Raspberry Pi 3B
 
