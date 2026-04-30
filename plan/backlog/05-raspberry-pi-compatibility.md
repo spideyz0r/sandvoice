@@ -1,244 +1,131 @@
 # Raspberry Pi Compatibility
 
-**Status**: 📋 Planned
+**Status**: 📋 Backlog
 **Priority**: 5
-**Platforms**: Raspberry Pi 3B (primary target), also Pi 4/5
-
----
-
-## Overview
-
-Ensure SandVoice works seamlessly on Raspberry Pi 3B with USB audio devices. Document setup process, dependencies, and testing procedures. The goal is to make Raspberry Pi a viable platform for deploying SandVoice as a personal voice assistant.
-
----
-
-## Problem Statement
-
-Current development is Mac-focused with no Pi testing:
-- Unknown if dependencies install correctly on Pi
-- No documentation for Pi setup
-- No testing on ARM architecture
-- No performance benchmarks for Pi 3B
-- USB audio device setup not documented
-
-This prevents users from deploying on affordable, dedicated hardware like Raspberry Pi.
-
----
-
-## User Stories
-
-**As a user**, I want to run SandVoice on a Raspberry Pi, so I can have a dedicated, always-available voice assistant.
-
-**As a new Pi user**, I want clear setup instructions, so I can get SandVoice running without troubleshooting.
-
-**As a developer**, I want to know SandVoice works on Pi, so I can confidently develop features for both platforms.
-
----
-
-## Acceptance Criteria
-
-### Raspberry Pi OS Compatibility
-- [ ] Identify Python version shipped with latest Raspberry Pi OS
-- [ ] Verify all dependencies install on Pi 3B
-- [ ] Document any Pi-specific package requirements
-- [ ] Test on Raspberry Pi OS (64-bit preferred)
-
-### USB Audio Device Support
-- [ ] Document recommended USB audio devices
-- [ ] Document setup for USB headsets
-- [ ] Document setup for USB microphones + speakers
-- [ ] Provide audio device troubleshooting guide
-
-### Performance
-- [ ] Verify acceptable performance on Pi 3B
-- [ ] Measure latency for full interaction cycle
-- [ ] Verify wake word detection works on Pi
-- [ ] Document any performance limitations
-
-### Documentation
-- [ ] Complete setup guide for Pi installation
-- [ ] List of required apt packages
-- [ ] Python package installation instructions
-- [ ] Audio device configuration steps
-- [ ] Common troubleshooting issues
-- [ ] Performance optimization tips
-
----
-
-## Technical Requirements
-
-### Research Tasks
-
-**Raspberry Pi OS Python Version:**
-- Identify Python version in latest Raspberry Pi OS Lite and Desktop
-- Verify compatibility with SandVoice requirements
-- Document any version-specific issues
-
-**USB Audio Devices:**
-- Test with common USB headsets
-- Test with USB microphone + 3.5mm speakers
-- Test with USB audio adapters
-- Document device selection in PyAudio
-
-### System Requirements
-
-**Minimum Hardware:**
-- Raspberry Pi 3B (1GB RAM)
-- 8GB+ microSD card
-- USB audio device (microphone + speakers or headset)
-- Internet connection
-
-**Recommended Hardware:**
-- Raspberry Pi 4 (2GB+ RAM) or Pi 5 for better performance
-- 16GB+ microSD card (Class 10)
-- Quality USB headset with noise cancellation
-- Ethernet connection (more stable than WiFi)
-
-### Installation Steps (To Be Documented)
-
-**System Setup:**
-1. Flash Raspberry Pi OS (64-bit recommended)
-2. Configure WiFi/Ethernet
-3. Update system packages
-4. Install required apt packages
-
-**Audio Setup:**
-1. Connect USB audio device
-2. Verify device detected
-3. Test recording
-4. Test playback
-5. Configure ALSA settings if needed
-
-**SandVoice Installation:**
-1. Install Python dependencies
-2. Clone repository
-3. Create virtual environment
-4. Install requirements
-5. Configure settings
-6. Test basic functionality
-
-**Wake Word Setup (if enabled):**
-1. Install Porcupine
-2. Configure wake word model
-3. Test detection
-4. Optimize sensitivity
-
-### Performance Expectations
-
-**Pi 3B (realistic expectations):**
-- Wake word detection: Should work well (lightweight)
-- Audio recording: No issues
-- OpenAI API calls: Network bound (same as Mac)
-- Audio playback: No issues
-- MP3 encoding: May be slower than Mac (acceptable delay)
-
-**Bottlenecks:**
-- lameenc MP3 encoding on Pi 3B may add 1-2 seconds
-- Network latency to OpenAI (not hardware specific)
-- SD card I/O (use quality card)
-
-### Platform-Specific Code
-
-Ensure platform detection correctly identifies Pi:
-- Detect ARM architecture
-- Detect Linux OS
-- Configure audio appropriately
-- Use ALSA library correctly
-
----
-
-## Configuration Changes
-
-No config changes needed - platform auto-detection should handle Pi setup.
-
-Document recommended config.yaml settings for Pi in setup guide.
-
----
-
-## Documentation Structure
-
-Create `docs/raspberry-pi-setup.md`:
-
-```markdown
-# Raspberry Pi Setup Guide
-
-## Hardware Requirements
-## Raspberry Pi OS Installation
-## Audio Device Setup
-## SandVoice Installation
-## Testing
-## Troubleshooting
-## Performance Tips
-```
-
----
-
-## Testing Requirements
-
-### Initial Testing
-- [ ] Test on Raspberry Pi 3B with Raspberry Pi OS
-- [ ] Test with USB headset
-- [ ] Test all three interaction modes (voice, CLI, wake word)
-- [ ] Test all plugins
-- [ ] Measure performance metrics
-
-### Performance Metrics to Collect
-- Time from wake word to start recording
-- Audio encoding time (WAV to MP3)
-- Round-trip time for full interaction
-- CPU usage idle vs active
-- Memory usage
-
-### Compatibility Testing
-- [ ] Test with different USB audio devices
-- [ ] Test with Raspberry Pi 4 (if available)
-- [ ] Test on 32-bit vs 64-bit Pi OS
-
-### Regression Testing
-- Ensure changes for Pi don't break Mac functionality
-- Test on Mac M1 after Pi compatibility changes
+**Platforms**: Raspberry Pi 3B (primary target)
 
 ---
 
 ## Dependencies
 
-- **Depends on**: Error Handling (Priority 1) - need robust error handling for Pi
-- **Depends on**: Platform Auto-Detection (Priority 2) - critical for Pi setup
-- **Depends on**: Unit Tests (Priority 3) - verify Pi compatibility
-- **Depends on**: Wake Word Mode (Priority 4) - main use case for Pi
+- **Plan 52** — openWakeWord engine (replaces Porcupine)
+- **Plan 53** — Linux ALSA input device auto-selection
+- **Plan 54** — Linux audio output device auto-detection
+- **Plan 55** — VAD pre-speech grace period
 
-**Pi-Specific System Packages (to be documented):**
-```bash
-# Expected packages (TBD during implementation)
-sudo apt-get update
-sudo apt-get install -y \
-    python3-dev \
-    portaudio19-dev \
-    python3-pyaudio \
-    libasound2-dev \
-    # ... others as discovered
-```
+This plan is documentation-only. All code changes are covered by plans 52–55.
+Implement those first, then write the setup guide.
+
+---
+
+## Overview
+
+Document and validate the complete process for deploying SandVoice on a
+Raspberry Pi 3B from scratch. The target is a headless Pi running
+Raspberry Pi OS Lite 64-bit (Trixie / Debian 13) with a USB audio device
+(headset or separate mic + speaker).
+
+---
+
+## Validated Hardware
+
+Tested and working:
+
+| Component | Model |
+|-----------|-------|
+| Board | Raspberry Pi 3 Model B (1 GB RAM) |
+| OS | Raspberry Pi OS Lite 64-bit (Trixie / Debian 13) |
+| Audio | Razer Barracuda X 2.4 USB wireless headset |
+| Storage | 32 GB microSD (Class 10) |
+
+---
+
+## Known Pi-Specific Issues (Resolved by code plans)
+
+| Issue | Resolution |
+|-------|-----------|
+| Porcupine requires company email + per-device activation | Plan 52: replace with openWakeWord |
+| `onnxruntime>=1.21` crashes on Pi 3B (C++ STL assertion) | Plan 52: pin `onnxruntime==1.20.0` |
+| `tflite-runtime` unavailable on Pi/aarch64 (confirmed Python 3.13 / Trixie; outside CI coverage) | Plan 52: install openWakeWord with `--no-deps` |
+| PyAudio opens virtual ALSA `default` device (amplitude=0) | Plan 53: auto-select `hw:N,M` input |
+| `pygame` binds to `bcm2835` onboard device instead of USB headset | Plan 54: auto-detect SDL `AUDIODEV` |
+| `pynput` import crashes on headless Linux | Plan 54: lazy import inside `init_recording()` |
+| VAD cuts off before user has time to speak | Plan 55: pre-speech grace period |
+| Confirmation beep blocks when PyAudio input stream holds hw: device | Plan 52: move beep after `_cleanup_pyaudio()` in `_state_idle()` |
+
+---
+
+## System Requirements
+
+**Minimum hardware:**
+- Raspberry Pi 3B (1 GB RAM)
+- 8 GB+ microSD card
+- USB audio device (headset, or mic + speaker)
+- Internet connection (OpenAI API calls)
+
+**Recommended:**
+- 16 GB+ microSD card (Class 10 or better)
+- USB headset with mic (single device, simpler ALSA config)
+- Ethernet (more stable than WiFi for API latency)
+
+---
+
+## Acceptance Criteria (Documentation)
+
+### `docs/raspberry-pi-setup.md` must cover:
+
+- [ ] Hardware requirements
+- [ ] Flashing Raspberry Pi OS Lite 64-bit with Raspberry Pi Imager
+  - Enable SSH, set hostname (`sandvoice.local`), configure WiFi during flash
+- [ ] First boot and SSH access
+- [ ] System package installation:
+  ```bash
+  sudo apt-get update && sudo apt-get upgrade -y
+  sudo apt-get install -y \
+      python3-dev python3-venv python3-pip \
+      portaudio19-dev libasound2-dev \
+      libopenblas-dev libatlas-base-dev \
+      git
+  ```
+- [ ] Python virtual environment setup
+- [ ] Repository clone and dependency installation:
+  ```bash
+  # Install openWakeWord first with --no-deps to skip tflite-runtime
+  # (no wheel for Python 3.13 on aarch64); must come before requirements.txt
+  # because requirements.txt does not list openwakeword (see Plan 52).
+  pip install openwakeword>=0.6.0 --no-deps
+  pip install scipy
+  pip install -r requirements.txt
+  ```
+- [ ] First-run model download (`openwakeword.utils.download_models()`)
+- [ ] `~/.sandvoice/config.yaml` minimum configuration:
+  ```yaml
+  openwakeword_model: hey_jarvis
+  wake_phrase: "hey jarvis"
+  wake_word_sensitivity: 0.35
+  log_level: info
+  ```
+- [ ] Verifying audio device detection (ALSA device listing)
+- [ ] Running SandVoice in wake word mode:
+  ```bash
+  OPENAI_API_KEY=YOUR_OPENAI_API_KEY python3 sandvoice.py --wake-word
+  ```
+- [ ] Troubleshooting:
+  - No audio output → check `AUDIODEV` env var; try `aplay -l`
+  - Wake word not triggering → lower `wake_word_sensitivity` (try `0.25`)
+  - VAD cuts off early → `vad_silence_duration: 2.0` in config
+  - High CPU → verify `onnxruntime==1.20.0` is installed
+  - `tflite-runtime` install error → use `--no-deps` (documented above)
+- [ ] Recommended `~/.sandvoice/config.yaml` for Pi (with timezone, TTS voice, etc.)
+- [ ] Running as a systemd service (optional section)
 
 ---
 
 ## Out of Scope
 
-- Raspberry Pi Zero support (too slow)
-- Raspberry Pi 1/2 support (outdated)
-- GUI/touch screen interface
-- Custom Pi OS images
-- Automated Pi provisioning
-- Hardware HATs (stick with USB audio)
-- Power management/optimization
-
----
-
-## Success Metrics
-
-- Complete setup guide written and tested
-- Successfully runs on Pi 3B from fresh install
-- All features work on Pi (voice, CLI, wake word, all plugins)
-- Performance acceptable (<5 second total latency)
-- Wake word detection >90% accuracy on Pi
-- No platform-specific crashes
-- Setup takes <30 minutes for new user
+- Raspberry Pi Zero (too slow for real-time inference)
+- Raspberry Pi 1/2 (outdated)
+- GUI or touch screen
+- Custom OS images or automated provisioning
+- Hardware HATs (USB audio only)
+- Bluetooth audio devices
