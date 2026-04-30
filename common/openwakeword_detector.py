@@ -100,10 +100,10 @@ class OpenWakeWordDetector:
 
         prediction = self._model.predict(audio)
         score = prediction.get(self._prediction_key, 0.0)
+        if score > 0.05:
+            logger.debug("Wake word score: model=%s score=%.3f threshold=%.2f", self._model_name, score, self._threshold)
         if score >= self._threshold:
-            logger.debug(
-                "Wake word detected: model=%s score=%.3f", self._model_name, score
-            )
+            logger.debug("Wake word detected: model=%s score=%.3f", self._model_name, score)
             return 0
         return -1
 
