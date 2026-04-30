@@ -12,9 +12,27 @@ os.environ['PYGAME_HIDE_SUPPORT_PROMPT'] = "hide"
 # On Linux, SDL defaults to the first ALSA device which may not be the USB audio device.
 # Point SDL at the default ALSA PCM so it uses whatever the system default is set to.
 # Users can override by setting SDL_AUDIODRIVER and AUDIODEV in their environment.
-if platform.system().lower() == "linux":
-    os.environ.setdefault("SDL_AUDIODRIVER", "alsa")
-    os.environ.setdefault("AUDIODEV", "default")
+if platform.system().lower() == "linux" and "SDL_AUDIODRIVER" not in os.environ:
+    os.environ["SDL_AUDIODRIVER"] = "alsa"
+    # Point SDL at the default PyAudio output device so pygame uses the same
+    # device as the rest of the app. Falls back to "default" if detection fails.
+    try:
+        import pyaudio as _pa
+        _audio = _pa.PyAudio()
+        try:
+            _dev = _audio.get_default_output_device_info()
+            _name = _dev.get("name", "")
+            # Extract hw card/device index from names like "Razer ...: USB Audio (hw:2,0)"
+            import re as _re
+            _m = _re.search(r'hw:(\d+),(\d+)', _name)
+            if _m:
+                os.environ["AUDIODEV"] = f"plughw:{_m.group(1)},{_m.group(2)}"
+            else:
+                os.environ.setdefault("AUDIODEV", "default")
+        finally:
+            _audio.terminate()
+    except Exception:
+        os.environ.setdefault("AUDIODEV", "default")
 
 import pygame
 
