@@ -108,7 +108,7 @@ Tested and working:
 - [ ] Verifying audio device detection (ALSA device listing)
 - [ ] Running SandVoice in wake word mode:
   ```bash
-  OPENAI_API_KEY=sk-... python3 sandvoice.py --wake-word
+  OPENAI_API_KEY=YOUR_OPENAI_API_KEY python3 sandvoice.py --wake-word
   ```
 - [ ] Troubleshooting:
   - No audio output → check `AUDIODEV` env var; try `aplay -l`

@@ -35,8 +35,8 @@ helper returns `None` and PyAudio uses its normal default.
   is the ALSA `default` virtual device — it enumerates successfully but
   delivers amplitude=0 frames.
 - Device index 2 (`hw:2,0`) is the actual USB audio hardware — it works.
-- Without explicit selection, `_state_idle()` logs `frame 1 max_amplitude=0`
-  forever and no wake word is ever detected.
+- Without explicit selection, `_state_idle()` can remain on a silent input
+  stream (zeroed / near-zero frames), so no wake word is ever detected.
 - The same issue affects `BargeInDetector._detection_loop()`.
 
 ---

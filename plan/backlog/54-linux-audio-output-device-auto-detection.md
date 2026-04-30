@@ -24,7 +24,8 @@ nothing through their USB headset.
 This plan adds startup code in `audio.py` that detects the correct ALSA output
 device and sets the `SDL_AUDIODRIVER` and `AUDIODEV` environment variables
 **before** `pygame` is imported, so pygame picks up the right device
-automatically on every platform.
+automatically on Linux systems such as the Raspberry Pi, with no change on
+other platforms.
 
 Also included: move `from pynput import keyboard` from module-level to inside
 `Audio.init_recording()`. The module-level import crashes on headless Linux
