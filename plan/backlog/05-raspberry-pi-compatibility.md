@@ -34,7 +34,7 @@ Tested and working:
 | Component | Model |
 |-----------|-------|
 | Board | Raspberry Pi 3 Model B (1 GB RAM) |
-| OS | Raspberry Pi OS Lite 64-bit (Bookworm / Debian 12) |
+| OS | Raspberry Pi OS Lite 64-bit (Trixie / Debian 13) |
 | Audio | Razer Barracuda X 2.4 USB wireless headset |
 | Storage | 32 GB microSD (Class 10) |
 
