@@ -22,15 +22,22 @@ if platform.system().lower() == "linux" and "SDL_AUDIODRIVER" not in os.environ:
         import pyaudio as _pa
         _audio = _pa.PyAudio()
         try:
+            # Prefer a device that has both input and output (e.g. USB headset).
+            # Fall back to any hw: output device if no combined device found.
             _audiodev = None
+            _fallback = None
             for _i in range(_audio.get_device_count()):
                 _dev = _audio.get_device_info_by_index(_i)
-                if _dev.get("maxOutputChannels", 0) > 0:
-                    _m = _re.search(r'hw:(\d+),(\d+)', _dev.get("name", ""))
-                    if _m:
-                        _audiodev = f"plughw:{_m.group(1)},{_m.group(2)}"
-                        break
-            os.environ["AUDIODEV"] = _audiodev or "default"
+                _m = _re.search(r'hw:(\d+),(\d+)', _dev.get("name", ""))
+                if not _m:
+                    continue
+                _plug = f"plughw:{_m.group(1)},{_m.group(2)}"
+                if _dev.get("maxOutputChannels", 0) > 0 and _dev.get("maxInputChannels", 0) > 0:
+                    _audiodev = _plug
+                    break
+                if _fallback is None and _dev.get("maxOutputChannels", 0) > 0:
+                    _fallback = _plug
+            os.environ["AUDIODEV"] = _audiodev or _fallback or "default"
         finally:
             _audio.terminate()
     except Exception:
