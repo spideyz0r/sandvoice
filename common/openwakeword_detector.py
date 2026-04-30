@@ -95,8 +95,12 @@ class OpenWakeWordDetector:
         """
         audio = np.array(pcm, dtype=np.int16)
         if self._device_rate != _SAMPLE_RATE:
-            ratio = self._device_rate // _SAMPLE_RATE
-            audio = audio[::ratio].astype(np.int16)
+            from math import gcd
+            _g = gcd(self._device_rate, _SAMPLE_RATE)
+            _up = _SAMPLE_RATE // _g
+            _down = self._device_rate // _g
+            from scipy.signal import resample_poly
+            audio = resample_poly(audio, _up, _down).astype(np.int16)
 
         prediction = self._model.predict(audio)
         score = prediction.get(self._prediction_key, 0.0)
