@@ -14,25 +14,27 @@ os.environ['PYGAME_HIDE_SUPPORT_PROMPT'] = "hide"
 # Users can override by setting SDL_AUDIODRIVER and AUDIODEV in their environment.
 if platform.system().lower() == "linux" and "SDL_AUDIODRIVER" not in os.environ:
     os.environ["SDL_AUDIODRIVER"] = "alsa"
-    # Point SDL at the default PyAudio output device so pygame uses the same
-    # device as the rest of the app. Falls back to "default" if detection fails.
+    # Point SDL at the first real hardware output device (name contains "hw:N,M").
+    # The ALSA "default" virtual device often doesn't work with SDL2 on headless Pi.
+    # Falls back to "default" if no hardware device is found.
     try:
+        import re as _re
         import pyaudio as _pa
         _audio = _pa.PyAudio()
         try:
-            _dev = _audio.get_default_output_device_info()
-            _name = _dev.get("name", "")
-            # Extract hw card/device index from names like "Razer ...: USB Audio (hw:2,0)"
-            import re as _re
-            _m = _re.search(r'hw:(\d+),(\d+)', _name)
-            if _m:
-                os.environ["AUDIODEV"] = f"plughw:{_m.group(1)},{_m.group(2)}"
-            else:
-                os.environ.setdefault("AUDIODEV", "default")
+            _audiodev = None
+            for _i in range(_audio.get_device_count()):
+                _dev = _audio.get_device_info_by_index(_i)
+                if _dev.get("maxOutputChannels", 0) > 0:
+                    _m = _re.search(r'hw:(\d+),(\d+)', _dev.get("name", ""))
+                    if _m:
+                        _audiodev = f"plughw:{_m.group(1)},{_m.group(2)}"
+                        break
+            os.environ["AUDIODEV"] = _audiodev or "default"
         finally:
             _audio.terminate()
     except Exception:
-        os.environ.setdefault("AUDIODEV", "default")
+        os.environ["AUDIODEV"] = "default"
 
 import pygame
 
