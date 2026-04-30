@@ -160,7 +160,7 @@ Document both constraints in `docs/raspberry-pi-setup.md` (Plan 05).
 | `common/wake_word.py` | Swap engine; add `reset()` call in `_state_idle()` |
 | `common/barge_in.py` | Swap engine |
 | `common/configuration.py` | Add `openwakeword_model`; lower sensitivity default; remove Porcupine keys |
-| `requirements.txt` | Add openwakeword + onnxruntime; remove pvporcupine |
+| `requirements.txt` | Add `onnxruntime==1.20.0` (hard pin); remove `pvporcupine`; **do not add `openwakeword`** (platform-specific install — see above) |
 | `tests/test_openwakeword_detector.py` | New test file |
 | `tests/test_wake_word.py` | Update mocks |
 | `tests/test_barge_in.py` | Update mocks |

@@ -73,8 +73,19 @@ else:
   take as long as they need to start talking.
 - After the user speaks and stops: the 1.5 s silence window closes the recording
   exactly as before.
-- Empty-input behavior: if the user never speaks, the full `vad_timeout` elapses
-  and the recording is discarded (existing behavior for truly silent recordings).
+- Empty-input behavior: if the user never speaks, the full `vad_timeout` elapses.
+  The loop exits with `speech_detected = False`. A post-loop guard must return
+  `None` in this case to avoid writing and returning a WAV file full of silence:
+
+  ```python
+  if not speech_detected:
+      return None
+  ```
+
+  Note: the current code only returns `None` when `frames` is empty (i.e. the
+  stream read failed immediately). With the `speech_detected` flag, the post-loop
+  check must be added explicitly, otherwise a 30 s silent recording would still
+  be transcribed and sent to the LLM.
 
 No config changes required. Existing `vad_silence_duration` and `vad_timeout`
 semantics are preserved.
@@ -85,7 +96,7 @@ semantics are preserved.
 
 | File | Change |
 |------|--------|
-| `common/vad_recorder.py` | Add `speech_detected` flag; gate silence countdown on it |
+| `common/vad_recorder.py` | Add `speech_detected` flag; gate silence countdown on it; return `None` post-loop if no speech detected |
 | `tests/test_vad_recorder.py` | Add tests for pre-speech silence (no early cutoff) and post-speech silence (normal cutoff) |
 
 ---
@@ -101,9 +112,12 @@ semantics are preserved.
 
 - [ ] `VadRecorder.record()` does not cut off before the first speech frame is seen
 - [ ] After speech is detected, silence of `vad_silence_duration` still ends the recording
-- [ ] `vad_timeout` still terminates the recording if the user never speaks
+- [ ] `vad_timeout` elapses and `record()` returns `None` if the user never speaks (no WAV written, no ack earcon)
 - [ ] No config changes required
-- [ ] Tests cover: starts speaking immediately, starts speaking after 2 s delay,
-      never speaks (timeout), speaks then pauses
+- [ ] Tests cover:
+  - starts speaking immediately
+  - starts speaking after 2 s delay
+  - never speaks (timeout) — must return `None`
+  - speaks then pauses
 - [ ] All existing tests pass
 - [ ] >80% coverage
