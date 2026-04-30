@@ -100,14 +100,39 @@ Remove `porcupine_access_key` and `porcupine_keyword_paths` from defaults
 
 ### `requirements.txt`
 
-- Add `openwakeword>=0.6.0`
 - Add `onnxruntime==1.20.0` (**hard pin — do not bump without Pi 3B testing**)
 - Remove `pvporcupine`
+- **Do NOT add `openwakeword` to `requirements.txt`** — see platform-specific
+  install section below.
+
+### Platform-specific install handling
+
+`openwakeword` cannot be installed via `pip install -r requirements.txt` on
+Raspberry Pi because `tflite-runtime` (a transitive dependency) has no wheel
+for Python 3.13 on aarch64. To support both platforms without a broken
+`requirements.txt`, `openwakeword` is kept out of the shared requirements file
+and documented as a separate install step per platform.
+
+**macOS (development):**
+```bash
+pip install openwakeword>=0.6.0
+```
+
+**Raspberry Pi 3B:**
+```bash
+# Install before requirements.txt; --no-deps skips tflite-runtime
+pip install openwakeword>=0.6.0 --no-deps
+pip install scipy   # required transitive dep not pulled in by --no-deps
+pip install -r requirements.txt
+```
+
+Document this in `docs/raspberry-pi-setup.md` (Plan 05) and in a comment in
+`requirements.txt` near the `onnxruntime` pin.
 
 ### Critical Pi 3B version constraints
 
-> These were discovered through direct testing on Pi 3B (Bookworm, Python 3.13,
-> aarch64). Both constraints must be preserved exactly.
+> These were discovered through direct testing on Pi 3B (Trixie / Debian 13,
+> Python 3.13, aarch64). Both constraints must be preserved exactly.
 
 **`onnxruntime==1.20.0`**
 Versions 1.21+ crash at model load time on Pi 3B with a C++ STL vector
@@ -118,18 +143,10 @@ Assertion failed: (index < size_), function operator[], ...
 1.20.0 is the last version confirmed stable on armv8/aarch64 Pi 3B.
 Pin it exactly; do not use `>=` or `~=`.
 
-**`openwakeword>=0.6.0 --no-deps` (Pi only)**
-`tflite-runtime` (an optional openWakeWord dependency) has no wheel for
-Python 3.13 on aarch64. Installing with `--no-deps` skips it; openWakeWord
-works fine without it when using the ONNX inference backend (which is the
-default and the one we use). `scipy` must be installed separately:
-
-```bash
-pip install openwakeword>=0.6.0 --no-deps
-pip install scipy
-```
-
-On macOS `pip install openwakeword>=0.6.0` (with deps) works normally.
+**`openwakeword` — platform-specific install (see above)**
+Covered in the "Platform-specific install handling" section above.
+Full rationale: `tflite-runtime` has no wheel for Python 3.13 on aarch64;
+`--no-deps` skips it; ONNX inference backend works without it.
 
 Document both constraints in `docs/raspberry-pi-setup.md` (Plan 05).
 

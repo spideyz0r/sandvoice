@@ -22,8 +22,8 @@ Implement those first, then write the setup guide.
 
 Document and validate the complete process for deploying SandVoice on a
 Raspberry Pi 3B from scratch. The target is a headless Pi running
-Raspberry Pi OS Lite 64-bit (Bookworm) with a USB audio device (headset or
-separate mic + speaker).
+Raspberry Pi OS Lite 64-bit (Trixie / Debian 13) with a USB audio device
+(headset or separate mic + speaker).
 
 ---
 
@@ -90,10 +90,12 @@ Tested and working:
 - [ ] Python virtual environment setup
 - [ ] Repository clone and dependency installation:
   ```bash
-  pip install -r requirements.txt
-  # openWakeWord: install without tflite-runtime (not available on Python 3.13)
+  # Install openWakeWord first with --no-deps to skip tflite-runtime
+  # (no wheel for Python 3.13 on aarch64); must come before requirements.txt
+  # because requirements.txt does not list openwakeword (see Plan 52).
   pip install openwakeword>=0.6.0 --no-deps
   pip install scipy
+  pip install -r requirements.txt
   ```
 - [ ] First-run model download (`openwakeword.utils.download_models()`)
 - [ ] `~/.sandvoice/config.yaml` minimum configuration:

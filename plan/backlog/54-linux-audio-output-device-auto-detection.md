@@ -52,31 +52,34 @@ never called.
 At module load time, before `import pygame`:
 
 ```python
-if platform.system().lower() == "linux" and "SDL_AUDIODRIVER" not in os.environ:
-    os.environ["SDL_AUDIODRIVER"] = "alsa"
-    try:
-        import re as _re, pyaudio as _pa
-        _audio = _pa.PyAudio()
+if platform.system().lower() == "linux":
+    if "SDL_AUDIODRIVER" not in os.environ:
+        os.environ["SDL_AUDIODRIVER"] = "alsa"
+
+    if "AUDIODEV" not in os.environ:
         try:
-            _audiodev = None
-            _fallback = None
-            for _i in range(_audio.get_device_count()):
-                _dev = _audio.get_device_info_by_index(_i)
-                _m = _re.search(r'hw:(\d+),(\d+)', _dev.get("name", ""))
-                if not _m:
-                    continue
-                _plug = f"plughw:{_m.group(1)},{_m.group(2)}"
-                # Prefer a device with both input AND output (USB headset).
-                if _dev.get("maxOutputChannels", 0) > 0 and _dev.get("maxInputChannels", 0) > 0:
-                    _audiodev = _plug
-                    break
-                if _fallback is None and _dev.get("maxOutputChannels", 0) > 0:
-                    _fallback = _plug
-            os.environ["AUDIODEV"] = _audiodev or _fallback or "default"
-        finally:
-            _audio.terminate()
-    except Exception:
-        os.environ["AUDIODEV"] = "default"
+            import re as _re, pyaudio as _pa
+            _audio = _pa.PyAudio()
+            try:
+                _audiodev = None
+                _fallback = None
+                for _i in range(_audio.get_device_count()):
+                    _dev = _audio.get_device_info_by_index(_i)
+                    _m = _re.search(r'hw:(\d+),(\d+)', _dev.get("name", ""))
+                    if not _m:
+                        continue
+                    _plug = f"plughw:{_m.group(1)},{_m.group(2)}"
+                    # Prefer a device with both input AND output (USB headset).
+                    if _dev.get("maxOutputChannels", 0) > 0 and _dev.get("maxInputChannels", 0) > 0:
+                        _audiodev = _plug
+                        break
+                    if _fallback is None and _dev.get("maxOutputChannels", 0) > 0:
+                        _fallback = _plug
+                os.environ["AUDIODEV"] = _audiodev or _fallback or "default"
+            finally:
+                _audio.terminate()
+        except Exception:
+            os.environ["AUDIODEV"] = "default"
 
 import pygame
 ```
@@ -124,10 +127,11 @@ def init_recording(self):
 
 ## Acceptance Criteria
 
-- [ ] `SDL_AUDIODRIVER=alsa` and `AUDIODEV=plughw:N,M` set before `pygame` import on Linux
-- [ ] Prefers `hw:N,M` device with both input and output channels (USB headset)
-- [ ] Falls back to first output-only `hw:N,M` device, then `"default"`
-- [ ] Env vars not overwritten if already set by the user
+- [ ] `SDL_AUDIODRIVER` set to `alsa` on Linux if not already set by the user
+- [ ] `AUDIODEV` set to `plughw:N,M` on Linux if not already set by the user
+- [ ] Scans PyAudio devices for `hw:N,M` names; prefers device with both input and output channels (USB headset)
+- [ ] Falls back to first output-only `hw:N,M` device and sets `AUDIODEV=plughw:N,M`, then `"default"`
+- [ ] `SDL_AUDIODRIVER` and `AUDIODEV` checked and set independently — a user-set `AUDIODEV` is not overwritten
 - [ ] `from pynput import keyboard` moved inside `init_recording()`
 - [ ] No crash on headless Linux when `init_recording()` is never called
 - [ ] macOS behavior unchanged
