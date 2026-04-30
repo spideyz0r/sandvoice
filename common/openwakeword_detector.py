@@ -1,6 +1,6 @@
-import importlib.resources
 import logging
 import os
+import warnings
 
 import numpy as np
 
@@ -9,59 +9,36 @@ logger = logging.getLogger(__name__)
 _SAMPLE_RATE = 16000
 _FRAME_LENGTH = 1280  # 80 ms at 16 kHz — matches openWakeWord's expected chunk size
 
-# Common device sample rates and their downsample ratios to 16 kHz
-_SUPPORTED_DEVICE_RATES = (16000, 32000, 44100, 48000)
-
-# Maps short model names to bundled .onnx filenames
-_BUNDLED_MODELS = {
-    "hey_jarvis": "hey_jarvis_v0.1.onnx",
-    "alexa": "alexa_v0.1.onnx",
-    "hey_marvin": "hey_marvin_v0.1.onnx",
-    "hey_mycroft": "hey_mycroft_v0.1.onnx",
-    "weather": "weather_v0.1.onnx",
-    "timer": "timer_v0.1.onnx",
-}
-
-
-def _resolve_model_path(model_name):
-    """Return an absolute path to the model .onnx file.
-
-    Accepts either a short name (e.g. "hey_jarvis") that resolves to a bundled
-    model, or an absolute/relative path to a custom .onnx file.
-    """
-    if os.path.isabs(model_name) or model_name.endswith(".onnx"):
-        return model_name
-
-    filename = _BUNDLED_MODELS.get(model_name)
-    if filename is None:
-        available = ", ".join(sorted(_BUNDLED_MODELS))
-        raise ValueError(
-            f"Unknown openWakeWord model '{model_name}'. "
-            f"Built-in options: {available}. "
-            "Or provide an absolute path to a custom .onnx file."
-        )
-
-    pkg_resources = importlib.resources.files("openwakeword") / "resources" / "models" / filename
-    return str(pkg_resources)
+# Short names of models bundled with the package (present in 0.4.x, downloadable in 0.6.x)
+_KNOWN_MODELS = frozenset([
+    "hey_jarvis",
+    "alexa",
+    "hey_marvin",
+    "hey_mycroft",
+    "weather",
+    "timer",
+    "hey_rhasspy",
+])
 
 
 class OpenWakeWordDetector:
     """Wraps an openWakeWord model to expose a Porcupine-compatible interface.
 
-    Provides ``sample_rate``, ``frame_length``, ``process(pcm)``, and ``delete()``
-    so it can be used as a drop-in replacement for Porcupine inside
-    WakeWordMode and BargeInDetector without changing their audio loop logic.
+    Provides ``sample_rate``, ``device_sample_rate``, ``frame_length``,
+    ``process(pcm)``, and ``delete()`` so it can be used as a drop-in
+    replacement for Porcupine inside WakeWordMode and BargeInDetector.
     """
 
     def __init__(self, model_name="hey_jarvis", threshold=0.5, device_sample_rate=None):
         """Initialise the detector.
 
         Args:
-            model_name: Short built-in name (e.g. "hey_jarvis") or path to a .onnx file.
+            model_name: Short built-in name (e.g. "hey_jarvis") or absolute
+                path to a custom .onnx file.
             threshold: Detection score threshold (0.0–1.0).
-            device_sample_rate: Sample rate of the audio device. When it differs from
-                16000 Hz the detector will downsample each frame before inference.
-                Defaults to 16000 (no resampling).
+            device_sample_rate: Sample rate of the audio device. When it
+                differs from 16000 Hz the detector downsamples each frame
+                before inference. Defaults to 16000 (no resampling).
         """
         from openwakeword.model import Model
 
@@ -69,16 +46,22 @@ class OpenWakeWordDetector:
         self._threshold = threshold
         self._device_rate = device_sample_rate or _SAMPLE_RATE
 
-        model_path = _resolve_model_path(model_name)
-        self._model = Model(wakeword_model_paths=[model_path])
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            if os.path.isabs(model_name) or model_name.endswith(".onnx"):
+                self._model = Model(wakeword_model_paths=[model_name], inference_framework="onnx")
+                self._prediction_key = os.path.splitext(os.path.basename(model_name))[0]
+            else:
+                self._model = Model(wakeword_models=[model_name], inference_framework="onnx")
+                self._prediction_key = model_name
 
-        # The prediction dict key is the model filename stem (without extension)
-        self._prediction_key = os.path.splitext(os.path.basename(model_path))[0]
+        # Warm up the prediction buffer so keys are initialised
+        _dummy = np.zeros(_FRAME_LENGTH, dtype=np.int16)
+        self._model.predict(_dummy)
 
         logger.debug(
-            "OpenWakeWord detector initialized: model=%s key=%s threshold=%.2f device_rate=%d",
+            "OpenWakeWord detector initialized: model=%s threshold=%.2f device_rate=%d",
             model_name,
-            self._prediction_key,
             threshold,
             self._device_rate,
         )
@@ -95,11 +78,7 @@ class OpenWakeWordDetector:
 
     @property
     def frame_length(self):
-        """Number of samples to read from the device per frame.
-
-        When device_sample_rate > 16000, this is proportionally larger so that
-        each frame covers the same 80 ms window after downsampling.
-        """
+        """Samples per frame at device_sample_rate (covers the same 80 ms window)."""
         if self._device_rate == _SAMPLE_RATE:
             return _FRAME_LENGTH
         return int(_FRAME_LENGTH * self._device_rate / _SAMPLE_RATE)
@@ -129,4 +108,4 @@ class OpenWakeWordDetector:
         return -1
 
     def delete(self):
-        """No-op — openWakeWord holds no native resources that require explicit release."""
+        """No-op — openWakeWord holds no native resources requiring explicit release."""

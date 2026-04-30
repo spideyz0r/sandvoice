@@ -1,6 +1,6 @@
 croniter
 setuptools<81
-openwakeword
+openwakeword>=0.6.0
 onnxruntime==1.20.0
 beautifulsoup4
 coverage
