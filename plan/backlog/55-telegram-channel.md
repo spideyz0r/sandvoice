@@ -47,22 +47,32 @@ The thread runs a `polling` loop using `python-telegram-bot` in its own asyncio 
 loop (`asyncio.new_event_loop()` + `loop.run_until_complete()`), isolating async code
 from the sync main thread.
 
+**Important**: `Application.run_polling()` installs signal handlers by default, which
+raises `ValueError: signal only works in main thread` when called from a non-main thread.
+The implementation must pass `stop_signals=()` (or `stop_signals=None`) to
+`run_polling()` (or use the lower-level `initialize()`/`start()`/`updater.start_polling()`
+async lifecycle methods directly) to avoid this.
+
 ### Message flow
 ```
 Telegram message arrives
   → check sender user ID against whitelist → ignore if not allowed
   → user_input = message.text
-  → route = ai.define_route(user_input, history=recent_history)
-  → if route in plugins: response = plugins[route].process(user_input, route, s)
-  → else: response = ai.generate_response(user_input, conversation_history)
+  → route = ai.define_route(user_input)
+  → route_name = route["route"]
+  → if route_name in plugins: response = plugins[route_name](user_input, route, ctx)
+  → else: response = ai.generate_response(user_input)
   → bot.send_message(chat_id, response)
   → history.append("user", user_input)
   → history.append("assistant", response)
 ```
 
-History is written directly to `ConversationHistory` (Plan 54). No turn lock — per
-the design decision, occasional context interleave from parallel wake-word + Telegram
-turns is acceptable for a non-mission-critical assistant.
+History is written directly to `ConversationHistory` (Plan 54). The in-memory
+`AI.conversation_history` list is not shared with the Telegram thread — each turn
+appends to the SQLite DB via `ConversationHistory`, and context is loaded fresh from DB
+per turn if needed. No turn lock — per the design decision, occasional context interleave
+from parallel wake-word + Telegram turns is acceptable for a non-mission-critical
+assistant. SQLite WAL mode handles concurrent writes safely.
 
 ### New config keys (`config.yaml` / `configuration.py`)
 | Key | Default | Description |

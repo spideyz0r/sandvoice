@@ -23,8 +23,9 @@ table, giving them a shared, durable conversation history.
 - New config keys: `history_enabled`, `history_max_entries`.
 
 **Out of scope:**
-- Cross-process sharing — this plan targets in-process use only. Separate processes
-  reading the same SQLite file are covered by Plan 55's Telegram design.
+- Cross-process sharing — this plan targets in-process use only. Plan 55's Telegram
+  channel runs as a background thread within the same process, not a separate process,
+  so no multi-process SQLite guarantees are required.
 - History search, export, or summarisation — future work.
 - Pruning old entries beyond the startup load window — simple mtime/rowid pruning on
   startup is sufficient.
@@ -57,8 +58,8 @@ class ConversationHistory:
 ```
 
 `load_recent` returns the last `limit` entries as plain strings in the existing
-`"User: ..."` / `"Assistant: ..."` prefix format so `AI.conversation_history` stays
-unchanged.
+`"User: ..."` / `"<botname>: ..."` prefix format (where botname comes from
+`config.botname`, e.g. `"Sandbot: ..."`) so `AI.conversation_history` stays unchanged.
 
 ### AI changes (`common/ai.py`)
 `AI.__init__` accepts an optional `history: ConversationHistory | None` parameter.
@@ -82,9 +83,10 @@ All follow the 4-step config pattern.
 ```python
 history = None
 if config.history_enabled:
-    history = ConversationHistory(config.db_path)
+    history = ConversationHistory(config.scheduler_db_path)
     atexit.register(history.close)
-ai = AI(config, openai_client, history=history)
+# AI is constructed via its existing factory — history injected as optional param:
+ai = AI(config, history=history)   # internal OpenAI client created inside AI.__init__
 ```
 
 ## Acceptance Criteria
