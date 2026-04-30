@@ -1,4 +1,6 @@
 import logging
+import platform
+import re
 import struct
 import threading
 import time
@@ -247,11 +249,19 @@ class BargeInDetector:
 
             logger.debug("Barge-in thread: Opening PyAudio stream...")
             pa = pyaudio.PyAudio()
+            input_device_index = None
+            if platform.system().lower() == "linux":
+                for _i in range(pa.get_device_count()):
+                    _dev = pa.get_device_info_by_index(_i)
+                    if _dev.get("maxInputChannels", 0) > 0 and re.search(r'hw:\d+,\d+', _dev.get("name", "")):
+                        input_device_index = _i
+                        break
             audio_stream = pa.open(
                 rate=porcupine_instance.device_sample_rate,
                 channels=1,
                 format=pyaudio.paInt16,
                 input=True,
+                input_device_index=input_device_index,
                 frames_per_buffer=porcupine_instance.frame_length,
             )
 

@@ -21,6 +21,27 @@ from common.utils import _is_enabled_flag
 logger = logging.getLogger(__name__)
 
 
+def _find_hw_input_device(pa):
+    """Return the index of the first real hardware input device (name contains 'hw:N,M').
+
+    On Linux the PyAudio default input is often a virtual 'default' device that
+    may not deliver audio from the actual USB mic. Explicitly picking the first
+    hw: input device ensures we use the real hardware.
+
+    Returns None on macOS/non-Linux (let PyAudio pick the system default).
+    """
+    import re
+    import platform
+    if platform.system().lower() != "linux":
+        return None
+    for i in range(pa.get_device_count()):
+        dev = pa.get_device_info_by_index(i)
+        if dev.get("maxInputChannels", 0) > 0 and re.search(r'hw:\d+,\d+', dev.get("name", "")):
+            logger.debug("Wake word: selected hw input device index=%s name=%s", i, dev["name"])
+            return i
+    return None
+
+
 class State(Enum):
     """Wake word mode states."""
     IDLE = "idle"
@@ -267,15 +288,15 @@ class WakeWordMode:
 
         try:
             pa = pyaudio.PyAudio()
-            default_input = pa.get_default_input_device_info()
-            logger.debug("Wake word: opening input device index=%s name=%s rate=%s frames=%s",
-                         default_input.get('index'), default_input.get('name'),
-                         self.porcupine.device_sample_rate, self.porcupine.frame_length)
+            input_device_index = _find_hw_input_device(pa)
+            logger.debug("Wake word: opening input device index=%s rate=%s frames=%s",
+                         input_device_index, self.porcupine.device_sample_rate, self.porcupine.frame_length)
             audio_stream = pa.open(
                 rate=self.porcupine.device_sample_rate,
                 channels=1,
                 format=pyaudio.paInt16,
                 input=True,
+                input_device_index=input_device_index,
                 frames_per_buffer=self.porcupine.frame_length
             )
             logger.debug("Wake word: audio stream opened, entering detection loop")
