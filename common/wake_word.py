@@ -267,6 +267,10 @@ class WakeWordMode:
 
         try:
             pa = pyaudio.PyAudio()
+            default_input = pa.get_default_input_device_info()
+            logger.debug("Wake word: opening input device index=%s name=%s rate=%s frames=%s",
+                         default_input.get('index'), default_input.get('name'),
+                         self.porcupine.device_sample_rate, self.porcupine.frame_length)
             audio_stream = pa.open(
                 rate=self.porcupine.device_sample_rate,
                 channels=1,
@@ -274,10 +278,16 @@ class WakeWordMode:
                 input=True,
                 frames_per_buffer=self.porcupine.frame_length
             )
+            logger.debug("Wake word: audio stream opened, entering detection loop")
 
+            _frame_count = 0
             while self.running and self.state == State.IDLE:
                 pcm = audio_stream.read(self.porcupine.frame_length, exception_on_overflow=False)
                 pcm = struct.unpack_from("h" * self.porcupine.frame_length, pcm)
+                _frame_count += 1
+                if _frame_count <= 3:
+                    _max = max(abs(s) for s in pcm)
+                    logger.debug("Wake word: frame %d max_amplitude=%d", _frame_count, _max)
 
                 keyword_index = self.porcupine.process(pcm)
 
