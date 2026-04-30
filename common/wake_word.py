@@ -287,9 +287,6 @@ class WakeWordMode:
                         self._req_seq += 1
                         self._req_filler_s = None
                     self._req_t_start = time.monotonic()
-
-                    self._play_confirmation_beep()
-
                     self.state = State.LISTENING
                     break
 
@@ -300,6 +297,10 @@ class WakeWordMode:
             self.running = False
         finally:
             self._cleanup_pyaudio(audio_stream, pa)
+
+        # Play beep after PyAudio stream is closed so both don't compete for the device
+        if self.state == State.LISTENING:
+            self._play_confirmation_beep()
 
     def _state_listening(self):
         """LISTENING state: Record audio with VAD until silence detected.
