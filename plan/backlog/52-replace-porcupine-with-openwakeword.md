@@ -82,6 +82,10 @@ Handles both short built-in model names (`hey_jarvis`, `alexa`, …) and absolut
   `OpenWakeWordDetector(model_name=..., threshold=..., device_sample_rate=config.rate)`.
 - Call `self.porcupine.reset()` at the top of `_state_idle()` before opening the
   PyAudio stream (clears buffer state left over from the previous TTS cycle).
+- Move `_play_confirmation_beep()` to after `_cleanup_pyaudio()` in
+  `_state_idle()`. On Linux, PyAudio holds exclusive `hw:` device access while
+  the input stream is open; playing the beep through pygame while the stream is
+  still open blocks indefinitely. Closing the stream first avoids the contention.
 
 ### Changes to `common/barge_in.py`
 
@@ -92,11 +96,34 @@ Handles both short built-in model names (`hey_jarvis`, `alexa`, …) and absolut
 
 | Key | Default | Notes |
 |-----|---------|-------|
-| `openwakeword_model` | `"hey_jarvis"` | Short built-in name or absolute `.onnx` path |
+| `openwakeword_model` | `"hey_jarvis"` | Short built-in name or absolute `.onnx` path; authoritative for detection |
+| `wake_phrase` | *(derived)* | User-facing label; see interaction rules below |
 | `wake_word_sensitivity` | `0.35` | Lowered from `0.5`; openWakeWord scores differ from Porcupine |
 
+**`wake_phrase` / `openwakeword_model` interaction:**
+
+With Porcupine, `wake_phrase` drove keyword selection. With openWakeWord the
+detectable phrase is fixed by the model, so `openwakeword_model` is
+authoritative. The two keys interact as follows:
+
+- **Built-in model** (e.g. `hey_jarvis`, `alexa`): the phrase is fixed by the
+  model. `wake_phrase` must match the model's phrase (e.g. `"hey jarvis"` for
+  `hey_jarvis`) so UI labels, logs, and the terminal prompt are consistent with
+  what the detector actually listens for. Validation at startup should warn (or
+  error) if they are mismatched.
+- **Custom `.onnx` path**: the phrase cannot be reliably inferred from the
+  filename. `wake_phrase` is user-provided and informational only; no mismatch
+  validation is possible.
+
+For the default config, set both keys consistently:
+```yaml
+openwakeword_model: hey_jarvis
+wake_phrase: "hey jarvis"
+```
+
 Remove `porcupine_access_key` and `porcupine_keyword_paths` from defaults
-(no longer needed). Keep validation only for the new keys.
+(no longer needed). Keep validation for the new keys and the
+`wake_phrase`/`openwakeword_model` consistency rule.
 
 ### `requirements.txt`
 

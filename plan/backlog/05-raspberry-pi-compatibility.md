@@ -51,7 +51,7 @@ Tested and working:
 | `pygame` binds to `bcm2835` onboard device instead of USB headset | Plan 54: auto-detect SDL `AUDIODEV` |
 | `pynput` import crashes on headless Linux | Plan 54: lazy import inside `init_recording()` |
 | VAD cuts off before user has time to speak | Plan 55: pre-speech grace period |
-| Confirmation beep blocks when PyAudio input stream holds hw: device | Plan 52/53: beep played after `_cleanup_pyaudio()` |
+| Confirmation beep blocks when PyAudio input stream holds hw: device | Plan 52: move beep after `_cleanup_pyaudio()` in `_state_idle()` |
 
 ---
 
@@ -101,8 +101,8 @@ Tested and working:
 - [ ] `~/.sandvoice/config.yaml` minimum configuration:
   ```yaml
   openwakeword_model: hey_jarvis
+  wake_phrase: "hey jarvis"
   wake_word_sensitivity: 0.35
-  wake_phrase: "hey sandvoice"
   log_level: info
   ```
 - [ ] Verifying audio device detection (ALSA device listing)
