@@ -12,8 +12,8 @@ route_description: >
   divided by comma. Also add a key called "unit". The key unit, if not
   informed, is "metric" by default, the other option is "imperial". Trim
   all spaces. Please use ISO 3166 country codes. For example: Toronto,ON,CA.
-  Add a key "days_ahead": set it to 0 (or omit it) for present-tense queries,
-  and set it to an integer from 1 to 5 for future-date queries (1 = tomorrow,
+  Always include a key "days_ahead" with an integer value: use 0 for
+  present-tense queries, and 1 to 5 for future-date queries (1 = tomorrow,
   2 = day after tomorrow, etc.). Do not set days_ahead above 5.
   Example of result for a current weather query:
   {"route": "weather", "reason": "The user asked for the weather",

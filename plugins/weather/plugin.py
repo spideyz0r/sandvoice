@@ -135,7 +135,15 @@ def process(user_input, route, s):
 
         location = route['location']
         unit = route['unit']
-        days_ahead = int(route.get('days_ahead', 0))
+        try:
+            days_ahead = int(route.get('days_ahead', 0))
+        except (TypeError, ValueError):
+            logger.warning("Invalid days_ahead value %r in route; defaulting to 0", route.get('days_ahead'))
+            days_ahead = 0
+
+        if days_ahead < 0:
+            logger.warning("Negative days_ahead %d in route; defaulting to 0", days_ahead)
+            days_ahead = 0
 
         if days_ahead > 5:
             return "I can only forecast up to 5 days ahead."

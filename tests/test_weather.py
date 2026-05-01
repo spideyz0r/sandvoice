@@ -511,13 +511,12 @@ class TestGetForecast(unittest.TestCase):
     @patch('plugins.weather.plugin.requests.get')
     def test_get_forecast_filters_by_target_date(self, mock_get):
         import datetime as dt_mod
-        # Use UTC (tz_offset=0) for simplicity
+        # Use UTC (tz_offset=0) for simplicity; build timestamps relative to real now
         tz = dt_mod.timezone.utc
         now = dt_mod.datetime.now(tz)
-        tomorrow = now + dt_mod.timedelta(days=1)
 
         # Slot on tomorrow at noon UTC
-        tomorrow_noon = tomorrow.replace(hour=12, minute=0, second=0, microsecond=0)
+        tomorrow_noon = (now + dt_mod.timedelta(days=1)).replace(hour=12, minute=0, second=0, microsecond=0)
         # Slot on the day after tomorrow at noon UTC
         day_after = (now + dt_mod.timedelta(days=2)).replace(hour=12, minute=0, second=0, microsecond=0)
 
@@ -542,8 +541,8 @@ class TestGetForecast(unittest.TestCase):
         import datetime as dt_mod
         tz = dt_mod.timezone.utc
         now = dt_mod.datetime.now(tz)
-        # All slots are on today, not tomorrow — filtering for days_ahead=1 should return nothing,
-        # triggering the fallback
+
+        # Slot is today at noon UTC; filtering for days_ahead=5 finds nothing → full-list fallback
         today_noon = now.replace(hour=12, minute=0, second=0, microsecond=0)
         slot = self._make_slot(int(today_noon.timestamp()))
         payload = self._make_forecast_payload([slot], tz_offset=0)
