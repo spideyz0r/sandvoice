@@ -247,6 +247,14 @@ plan/
 **Document**: [backlog/55-vad-pre-speech-grace-period.md](./backlog/55-vad-pre-speech-grace-period.md)
 **Description**: Only start the VAD silence countdown after at least one speech frame has been detected. Prevents the 1.5 s silence window from cutting off the recording before the user has had time to start speaking after the wake word beep.
 
+### Priority 56: Conversation History Persistence (SQLite)
+**Document**: [backlog/54-conversation-history-sqlite.md](./backlog/54-conversation-history-sqlite.md)
+**Description**: Persist each conversation turn to a `conversation_history` SQLite table in the existing DB file. On startup, seed the in-memory list from the last `history_max_entries` rows so sessions resume naturally. Required foundation for multi-channel history sharing (Plan 57).
+
+### Priority 57: Telegram Channel
+**Document**: [backlog/55-telegram-channel.md](./backlog/55-telegram-channel.md)
+**Description**: Add an always-on Telegram channel as a background thread within the SandVoice process. Text messages from whitelisted user IDs are routed through the same AI, plugins, and conversation history as wake-word mode. Adds `telegram_enabled`, `telegram_bot_token`, and `telegram_allowed_user_ids` config keys. Phase 1 is text only; Phase 2 adds voice message support.
+
 ### Future Enhancements
 **Document**: [backlog/FUTURE.md](./backlog/FUTURE.md)
 **Description**: Long-term feature ideas: alternative providers (Anthropic, Ollama, Piper), local offline mode, conversation history truncation, user-triggered timers, conversation memory, export, plugin hot-reload, API cost tracking, music control, smart home, calendar, todo lists, multi-user support.
