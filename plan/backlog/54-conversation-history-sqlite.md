@@ -85,9 +85,16 @@ history = None
 if config.history_enabled:
     history = ConversationHistory(config.scheduler_db_path)
     atexit.register(history.close)
-# AI is constructed via its existing factory — history injected as optional param:
-ai = AI(config, history=history)   # internal OpenAI client created inside AI.__init__
+# AI is constructed via its existing factory; history is seeded after construction:
+ai = AI.from_config(config)
+if history is not None:
+    ai.conversation_history = history.load_recent(config.history_max_entries)
 ```
+
+Alternatively, `AI.from_config` can be extended to accept an optional `history`
+parameter so seeding is encapsulated inside the factory — either approach is valid.
+The key constraint is that `AI.__init__` takes provider objects (`llm`, `tts`, `stt`,
+`config`), not a raw config, so callers must go through `from_config`.
 
 ## Acceptance Criteria
 - [ ] Each user/assistant turn is written to `conversation_history` table after it completes
