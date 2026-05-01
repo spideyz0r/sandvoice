@@ -26,7 +26,7 @@ The AI sets `days_ahead` to `0` (or omits it) for present-tense queries, and to 
 1. Read `route.get('days_ahead', 0)` after existing location/unit defaults.
 2. If `days_ahead == 0`: use existing `OpenWeatherReader.get_current_weather()` path unchanged.
 3. If `1 <= days_ahead <= 5`: call a new `OpenWeatherReader.get_forecast(days_ahead)` method:
-   - Hits `/data/2.5/forecast?q=<location>&appid=<key>&units=<unit>&cnt=<slots>` where `cnt = min(days_ahead * 8, 40)` (8 three-hour slots per day, API max 40).
+   - Hits `/data/2.5/forecast?q=<location>&appid=<key>&units=<unit>&cnt=40` — always fetch all 40 slots (the API maximum). Using `cnt = days_ahead * 8` risks missing the target date when the request is made late in the day, since `cnt` counts slots from "now" rather than calendar days. Fetching 40 slots ensures the target date is always covered.
    - Filters the returned `list` to entries whose forecast date matches `today + days_ahead` in the location's timezone. Use the `city.timezone` offset from the payload (seconds east of UTC) to derive both the target date and to interpret each slot's `dt` field, avoiding off-by-one-day errors around midnight.
    - Returns the filtered list (or the full list if timezone-based filtering produces nothing — graceful fallback).
 4. If `days_ahead > 5`: return a friendly message without calling the API (e.g. "I can only forecast up to 5 days ahead.").
