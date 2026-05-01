@@ -511,14 +511,14 @@ class TestGetForecast(unittest.TestCase):
     @patch('plugins.weather.plugin.requests.get')
     def test_get_forecast_filters_by_target_date(self, mock_get):
         import datetime as dt_mod
-        # Use UTC (tz_offset=0) for simplicity; build timestamps relative to real now
+        # Freeze "now" via _now injection to avoid midnight flakiness
         tz = dt_mod.timezone.utc
-        now = dt_mod.datetime.now(tz)
+        fixed_now = dt_mod.datetime(2026, 6, 1, 10, 0, 0, tzinfo=tz)
 
         # Slot on tomorrow at noon UTC
-        tomorrow_noon = (now + dt_mod.timedelta(days=1)).replace(hour=12, minute=0, second=0, microsecond=0)
+        tomorrow_noon = (fixed_now + dt_mod.timedelta(days=1)).replace(hour=12, minute=0, second=0, microsecond=0)
         # Slot on the day after tomorrow at noon UTC
-        day_after = (now + dt_mod.timedelta(days=2)).replace(hour=12, minute=0, second=0, microsecond=0)
+        day_after = (fixed_now + dt_mod.timedelta(days=2)).replace(hour=12, minute=0, second=0, microsecond=0)
 
         tomorrow_slot = self._make_slot(int(tomorrow_noon.timestamp()), temp=10, desc="rain")
         other_slot = self._make_slot(int(day_after.timestamp()), temp=20, desc="sunny")
@@ -531,7 +531,7 @@ class TestGetForecast(unittest.TestCase):
 
         from plugins.weather import OpenWeatherReader
         reader = OpenWeatherReader("London", "metric", timeout=5)
-        result = reader.get_forecast(1)
+        result = reader.get_forecast(1, _now=fixed_now)
 
         self.assertEqual(len(result), 1)
         self.assertEqual(result[0]["dt"], tomorrow_slot["dt"])
@@ -539,11 +539,13 @@ class TestGetForecast(unittest.TestCase):
     @patch('plugins.weather.plugin.requests.get')
     def test_get_forecast_falls_back_to_full_list_if_no_match(self, mock_get):
         import datetime as dt_mod
+        # Freeze "now" via _now injection to avoid midnight flakiness
         tz = dt_mod.timezone.utc
-        now = dt_mod.datetime.now(tz)
+        fixed_now = dt_mod.datetime(2026, 6, 1, 10, 0, 0, tzinfo=tz)
 
-        # Slot is today at noon UTC; filtering for days_ahead=5 finds nothing → full-list fallback
-        today_noon = now.replace(hour=12, minute=0, second=0, microsecond=0)
+        # Slot is on fixed_now's date (2026-06-01); filtering for days_ahead=5
+        # finds nothing (target = 2026-06-06) → full-list fallback
+        today_noon = fixed_now.replace(hour=12, minute=0, second=0, microsecond=0)
         slot = self._make_slot(int(today_noon.timestamp()))
         payload = self._make_forecast_payload([slot], tz_offset=0)
 
@@ -555,7 +557,7 @@ class TestGetForecast(unittest.TestCase):
         from plugins.weather import OpenWeatherReader
         reader = OpenWeatherReader("London", "metric", timeout=5)
         # Request days_ahead=5; slot is today so filtering finds nothing → full list returned
-        result = reader.get_forecast(5)
+        result = reader.get_forecast(5, _now=fixed_now)
         self.assertEqual(result, [slot])
 
     @patch('plugins.weather.plugin.requests.get')

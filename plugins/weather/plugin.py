@@ -43,7 +43,7 @@ class OpenWeatherReader:
             )
             return {"error": "Weather service unavailable"}
 
-    def get_forecast(self, days_ahead):
+    def get_forecast(self, days_ahead, _now=None):
         """Fetch the 5-day/3-hour forecast and return slots matching today + days_ahead.
 
         Uses the city.timezone offset from the API response to convert each slot's
@@ -52,6 +52,8 @@ class OpenWeatherReader:
         Returns a list of forecast slot dicts.  Falls back to the full list if
         date-based filtering produces no matches.  Returns a dict with an "error"
         key on network/parse failure.
+
+        _now is an optional datetime (with tzinfo) used to override "now" in tests.
         """
         try:
             response = requests.get(
@@ -70,7 +72,7 @@ class OpenWeatherReader:
             # Derive target date using the city's UTC offset (seconds east of UTC)
             tz_offset_s = data.get("city", {}).get("timezone", 0)
             tz = datetime.timezone(datetime.timedelta(seconds=tz_offset_s))
-            now_local = datetime.datetime.now(tz)
+            now_local = _now.astimezone(tz) if _now is not None else datetime.datetime.now(tz)
             target_date = (now_local + datetime.timedelta(days=days_ahead)).date()
 
             slots = data.get("list", [])
