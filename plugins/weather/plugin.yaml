@@ -2,21 +2,30 @@ name: weather
 version: 1.0.0
 
 route_description: >
-  The user is asking how the weather is or feels like, the user may or may not
-  mention what is the location. For example: "How is the weather outside now?"
-  The JSON answer must also include the keys location and unit. If no location
-  is defined, consider {{ location }}. Add a key "location" to the json with
-  the location. Convert the location to the following convention: City name,
-  state code (only for the US) and country code divided by comma. Also add a
-  key called "unit". The key unit, if not informed, is "metric" by default,
-  the other option is "imperial". Trim all spaces. Please use ISO 3166 country
-  codes. For example: Toronto,ON,CA. Example of result:
+  The user is asking about the weather, either current conditions or a future
+  date (e.g. "How is the weather outside now?", "Will it rain tomorrow?",
+  "What's the weather on Saturday?").
+  The JSON answer must include the keys location, unit, and days_ahead.
+  If no location is defined, consider {{ location }}. Add a key "location"
+  to the json with the location. Convert the location to the following
+  convention: City name, state code (only for the US) and country code
+  divided by comma. Also add a key called "unit". The key unit, if not
+  informed, is "metric" by default, the other option is "imperial". Trim
+  all spaces. Please use ISO 3166 country codes. For example: Toronto,ON,CA.
+  Add a key "days_ahead": set it to 0 (or omit it) for present-tense queries,
+  and set it to an integer from 1 to 5 for future-date queries (1 = tomorrow,
+  2 = day after tomorrow, etc.). Do not set days_ahead above 5.
+  Example of result for a current weather query:
   {"route": "weather", "reason": "The user asked for the weather",
-  "location": "Toronto,ON,CA", "unit": "metric"}
+  "location": "Toronto,ON,CA", "unit": "metric", "days_ahead": 0}
+  Example of result for a forecast query (tomorrow):
+  {"route": "weather", "reason": "The user asked about tomorrow's weather",
+  "location": "Toronto,ON,CA", "unit": "metric", "days_ahead": 1}
 
 route_extra_keys:
   - location
   - unit
+  - days_ahead
 
 env_vars:
   - OPENWEATHERMAP_API_KEY

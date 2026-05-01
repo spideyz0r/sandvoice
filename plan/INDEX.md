@@ -255,7 +255,7 @@ plan/
 **Document**: [backlog/55-telegram-channel.md](./backlog/55-telegram-channel.md)
 **Description**: Add an always-on Telegram channel as a background thread within the SandVoice process. Text messages from whitelisted user IDs are routed through the same AI, plugins, and conversation history as wake-word mode. Adds `telegram_enabled`, `telegram_bot_token`, and `telegram_allowed_user_ids` config keys. Phase 1 is text only; Phase 2 adds voice message support.
 
-### Priority 58: Weather Forecast — 5-Day / Future Date Queries
+### Priority 58: Weather Forecast — 5-Day / Future Date Queries 🚧
 **Document**: [backlog/58-weather-forecast.md](./backlog/58-weather-forecast.md)
 **Description**: Extend the weather plugin to handle future-date queries ("will it rain tomorrow?", "what's the weather on Saturday?") by routing to the OpenWeatherMap 5-day/3-hour forecast endpoint. Adds `days_ahead` route parameter (0–5), separate cache keys and TTL config for forecast entries. Days beyond 5 return a graceful degradation message.
 

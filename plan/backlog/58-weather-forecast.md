@@ -1,7 +1,7 @@
 # Plan 58: Weather Forecast — 5-Day / Future Date Queries
 
 ## Status
-📋 Backlog
+🚧 In Progress
 
 ## Problem
 The weather plugin (`plugins/weather/plugin.py`) only queries the OpenWeatherMap **current weather** endpoint (`/data/2.5/weather`). When a user asks "what will the weather be like on Thursday?" or "will it rain this weekend?", the plugin returns today's conditions — which is misleading.

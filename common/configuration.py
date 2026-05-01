@@ -136,6 +136,8 @@ class Config:
             "cache_enabled": "disabled",
             "cache_weather_ttl_s": 10800,    # 3 hours — refresh window
             "cache_weather_max_stale_s": 21600,  # 6 hours — hard expiry
+            "cache_weather_forecast_ttl_s": 3600,    # 1 hour — forecast refresh window
+            "cache_weather_forecast_max_stale_s": 7200,  # 2 hours — forecast hard expiry
             "cache_auto_refresh": [],
 
             # Blocking Cache Warmup (Plan 39)
@@ -308,6 +310,22 @@ class Config:
                 self.cache_weather_ttl_s,
             )
             self.cache_weather_max_stale_s = self.cache_weather_ttl_s
+        try:
+            self.cache_weather_forecast_ttl_s = max(1, int(self.get("cache_weather_forecast_ttl_s")))
+        except (TypeError, ValueError):
+            self.cache_weather_forecast_ttl_s = self.defaults["cache_weather_forecast_ttl_s"]
+        try:
+            self.cache_weather_forecast_max_stale_s = max(1, int(self.get("cache_weather_forecast_max_stale_s")))
+        except (TypeError, ValueError):
+            self.cache_weather_forecast_max_stale_s = self.defaults["cache_weather_forecast_max_stale_s"]
+        if self.cache_weather_forecast_max_stale_s < self.cache_weather_forecast_ttl_s:
+            logger.warning(
+                "cache_weather_forecast_max_stale_s (%d) is less than cache_weather_forecast_ttl_s (%d); "
+                "clamping max_stale to ttl value.",
+                self.cache_weather_forecast_max_stale_s,
+                self.cache_weather_forecast_ttl_s,
+            )
+            self.cache_weather_forecast_max_stale_s = self.cache_weather_forecast_ttl_s
         self.cache_auto_refresh = self._parse_cache_auto_refresh(self.get("cache_auto_refresh"))
         _timeout = _parse_exact_int(self.get("cache_warmup_timeout_s"))
         if isinstance(_timeout, int) and not isinstance(_timeout, bool):
