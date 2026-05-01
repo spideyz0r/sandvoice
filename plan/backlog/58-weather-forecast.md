@@ -32,7 +32,7 @@ The AI sets `days_ahead` to `0` (or omits it) for present-tense queries, and to 
 4. If `days_ahead > 5`: return a friendly message without calling the API (e.g. "I can only forecast up to 5 days ahead.").
 5. Cache key includes `days_ahead` to avoid collisions between current and forecast entries: `weather:<JSON([loc,unit,days_ahead])>`.
 6. TTL for forecast entries is shorter (configurable, default 1 h) because forecasts change faster than current-conditions summaries.
-7. The LLM prompt for forecast queries asks the model to summarise the day's expected conditions rather than giving a point-in-time reading.
+7. The LLM prompt for forecast queries asks the model to summarize the day's expected conditions rather than giving a point-in-time reading.
 
 ### New config keys (`config.yaml` / `configuration.py`)
 | Key | Default | Description |
