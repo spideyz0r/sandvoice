@@ -49,7 +49,13 @@ def _cache_key(location, unit, days_ahead=0):
     encoded = json.dumps([location, unit, days_ahead], separators=(",", ":"))
     return f"weather:{encoded}"
 ```
-Legacy entries (encoded without `days_ahead`) are automatically separate — no migration needed.
+
+**Cache key migration note**: Adding `days_ahead=0` to the key changes the shape for
+current-weather entries (`["loc","unit",0]` vs the legacy `["loc","unit"]`), so existing
+cached current-weather entries will not be reused after the upgrade — a one-time cold
+start. This is intentional and acceptable: the weather cache TTL is short (default 3 h)
+so entries expire quickly regardless. No read-through fallback to the legacy key format
+is needed.
 
 ## Acceptance Criteria
 - [ ] "What's the weather today?" routes to current endpoint (unchanged behavior)
