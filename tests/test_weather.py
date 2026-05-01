@@ -16,7 +16,9 @@ _CACHE_KEY = _cache_key("London", "metric")
 
 def _make_sandvoice(cache=None, debug=False, location="London", unit="metric",
                     api_timeout=10, cache_weather_ttl_s=10800,
-                    cache_weather_max_stale_s=21600):
+                    cache_weather_max_stale_s=21600,
+                    cache_weather_forecast_ttl_s=3600,
+                    cache_weather_forecast_max_stale_s=7200):
     """Build a minimal SandVoice-like mock for weather plugin tests."""
     s = MagicMock()
     s.config.debug = debug
@@ -25,6 +27,8 @@ def _make_sandvoice(cache=None, debug=False, location="London", unit="metric",
     s.config.api_timeout = api_timeout
     s.config.cache_weather_ttl_s = cache_weather_ttl_s
     s.config.cache_weather_max_stale_s = cache_weather_max_stale_s
+    s.config.cache_weather_forecast_ttl_s = cache_weather_forecast_ttl_s
+    s.config.cache_weather_forecast_max_stale_s = cache_weather_forecast_max_stale_s
     s.cache = cache
 
     # ai.generate_response returns an object with .content
@@ -402,4 +406,163 @@ class TestOpenWeatherReader(unittest.TestCase):
         from plugins.weather import OpenWeatherReader
         reader = OpenWeatherReader("London", "metric", timeout=5)
         result = reader.get_current_weather()
+        self.assertIn("error", result)
+
+
+class TestCacheKeyForecast(unittest.TestCase):
+    """Tests for _cache_key with days_ahead parameter."""
+
+    def test_cache_key_includes_days_ahead(self):
+        from plugins.weather import _cache_key
+        key0 = _cache_key("London", "metric", 0)
+        key2 = _cache_key("London", "metric", 2)
+        self.assertNotEqual(key0, key2)
+
+    def test_cache_key_zero_differs_from_legacy(self):
+        from plugins.weather import _cache_key
+        new_key = _cache_key("London", "metric", 0)
+        legacy_key = 'weather:["London","metric"]'
+        self.assertNotEqual(new_key, legacy_key)
+
+
+class TestWeatherForecastProcess(unittest.TestCase):
+    """Tests for forecast code paths in process()."""
+
+    def setUp(self):
+        os.environ['OPENWEATHERMAP_API_KEY'] = 'test-key'
+        self.tmp = tempfile.mkdtemp()
+        self.cache = VoiceCache(os.path.join(self.tmp, "cache.db"))
+
+    def tearDown(self):
+        os.environ.pop('OPENWEATHERMAP_API_KEY', None)
+        self.cache.close()
+        shutil.rmtree(self.tmp, ignore_errors=True)
+
+    def test_days_ahead_gt_5_returns_friendly_message(self):
+        s = _make_sandvoice(cache=None)
+        from plugins.weather import process
+        result = process("weather saturday", {"days_ahead": 6}, s)
+        self.assertIn("5 days", result)
+
+    @patch('plugins.weather.plugin.OpenWeatherReader')
+    def test_forecast_called_when_days_ahead_1(self, MockReader):
+        forecast_slots = [{"dt": 1700000000, "main": {"temp": 15}, "weather": [{"description": "rain"}]}]
+        MockReader.return_value.get_forecast.return_value = forecast_slots
+        s = _make_sandvoice(cache=None)
+        from plugins.weather import process
+        process("weather tomorrow", {"days_ahead": 1}, s)
+        MockReader.return_value.get_forecast.assert_called_once_with(1)
+
+    @patch('plugins.weather.plugin.OpenWeatherReader')
+    def test_forecast_uses_forecast_ttl_config(self, MockReader):
+        forecast_slots = [{"dt": 1700000000, "main": {"temp": 15}}]
+        MockReader.return_value.get_forecast.return_value = forecast_slots
+        s = _make_sandvoice(
+            cache=self.cache,
+            cache_weather_forecast_ttl_s=3600,
+            cache_weather_forecast_max_stale_s=7200,
+        )
+        from plugins.weather import _cache_key as ck, process
+        with patch.object(self.cache, 'set', wraps=self.cache.set) as mock_set:
+            process("weather tomorrow", {"days_ahead": 1}, s)
+        expected_key = ck("London", "metric", 1)
+        mock_set.assert_called_once_with(
+            expected_key,
+            "It is 20°C in London.",
+            ttl_s=s.config.cache_weather_forecast_ttl_s,
+            max_stale_s=s.config.cache_weather_forecast_max_stale_s,
+        )
+
+    @patch('plugins.weather.plugin.OpenWeatherReader')
+    def test_forecast_cache_key_includes_days_ahead(self, MockReader):
+        forecast_slots = [{"dt": 1700000000, "main": {"temp": 15}}]
+        MockReader.return_value.get_forecast.return_value = forecast_slots
+        s = _make_sandvoice(cache=self.cache)
+        from plugins.weather import _cache_key as ck, process
+        with patch.object(self.cache, 'get', wraps=self.cache.get) as mock_get, \
+             patch.object(self.cache, 'set', wraps=self.cache.set) as mock_set:
+            process("weather tomorrow", {"days_ahead": 1}, s)
+        expected_key = ck("London", "metric", 1)
+        mock_get.assert_called_with(expected_key)
+        mock_set.assert_called_once()
+        call_args = mock_set.call_args
+        self.assertEqual(call_args[0][0], expected_key)
+
+
+class TestGetForecast(unittest.TestCase):
+    """Unit tests for OpenWeatherReader.get_forecast()."""
+
+    def setUp(self):
+        os.environ['OPENWEATHERMAP_API_KEY'] = 'test-key'
+
+    def tearDown(self):
+        os.environ.pop('OPENWEATHERMAP_API_KEY', None)
+
+    def _make_forecast_payload(self, slots, tz_offset=0):
+        """Build a minimal forecast API response payload."""
+        return {
+            "city": {"name": "London", "timezone": tz_offset},
+            "list": slots,
+        }
+
+    def _make_slot(self, dt_unix, temp=15, desc="cloudy"):
+        return {"dt": dt_unix, "main": {"temp": temp}, "weather": [{"description": desc}]}
+
+    @patch('plugins.weather.plugin.requests.get')
+    def test_get_forecast_filters_by_target_date(self, mock_get):
+        import datetime as dt_mod
+        # Use UTC (tz_offset=0) for simplicity
+        tz = dt_mod.timezone.utc
+        now = dt_mod.datetime.now(tz)
+        tomorrow = now + dt_mod.timedelta(days=1)
+
+        # Slot on tomorrow at noon UTC
+        tomorrow_noon = tomorrow.replace(hour=12, minute=0, second=0, microsecond=0)
+        # Slot on the day after tomorrow at noon UTC
+        day_after = (now + dt_mod.timedelta(days=2)).replace(hour=12, minute=0, second=0, microsecond=0)
+
+        tomorrow_slot = self._make_slot(int(tomorrow_noon.timestamp()), temp=10, desc="rain")
+        other_slot = self._make_slot(int(day_after.timestamp()), temp=20, desc="sunny")
+        payload = self._make_forecast_payload([tomorrow_slot, other_slot], tz_offset=0)
+
+        mock_resp = Mock()
+        mock_resp.json.return_value = payload
+        mock_resp.raise_for_status.return_value = None
+        mock_get.return_value = mock_resp
+
+        from plugins.weather import OpenWeatherReader
+        reader = OpenWeatherReader("London", "metric", timeout=5)
+        result = reader.get_forecast(1)
+
+        self.assertEqual(len(result), 1)
+        self.assertEqual(result[0]["dt"], tomorrow_slot["dt"])
+
+    @patch('plugins.weather.plugin.requests.get')
+    def test_get_forecast_falls_back_to_full_list_if_no_match(self, mock_get):
+        import datetime as dt_mod
+        tz = dt_mod.timezone.utc
+        now = dt_mod.datetime.now(tz)
+        # All slots are on today, not tomorrow — filtering for days_ahead=1 should return nothing,
+        # triggering the fallback
+        today_noon = now.replace(hour=12, minute=0, second=0, microsecond=0)
+        slot = self._make_slot(int(today_noon.timestamp()))
+        payload = self._make_forecast_payload([slot], tz_offset=0)
+
+        mock_resp = Mock()
+        mock_resp.json.return_value = payload
+        mock_resp.raise_for_status.return_value = None
+        mock_get.return_value = mock_resp
+
+        from plugins.weather import OpenWeatherReader
+        reader = OpenWeatherReader("London", "metric", timeout=5)
+        # Request days_ahead=5; slot is today so filtering finds nothing → full list returned
+        result = reader.get_forecast(5)
+        self.assertEqual(result, [slot])
+
+    @patch('plugins.weather.plugin.requests.get')
+    def test_get_forecast_returns_error_on_request_exception(self, mock_get):
+        mock_get.side_effect = ConnectionError("network down")
+        from plugins.weather import OpenWeatherReader
+        reader = OpenWeatherReader("London", "metric", timeout=5)
+        result = reader.get_forecast(1)
         self.assertIn("error", result)

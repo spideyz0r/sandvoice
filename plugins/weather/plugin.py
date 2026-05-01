@@ -1,3 +1,4 @@
+import datetime
 import json
 import logging
 import os
@@ -15,12 +16,16 @@ class OpenWeatherReader:
         self.location = location
         self.unit = unit
         self.timeout = timeout
-        self.base_url = "https://api.openweathermap.org/data/2.5/weather?"
+        self.base_url = "https://api.openweathermap.org/data/2.5/weather"
+        self.forecast_url = "https://api.openweathermap.org/data/2.5/forecast"
 
     def get_current_weather(self):
         try:
-            url = f"{self.base_url}q={self.location}&appid={self.api_key}&units={self.unit}"
-            response = requests.get(url, timeout=self.timeout)
+            response = requests.get(
+                self.base_url,
+                params={"q": self.location, "appid": self.api_key, "units": self.unit},
+                timeout=self.timeout,
+            )
             response.raise_for_status()
             # not formatting the output, since the model can understand that
             return response.json()
@@ -38,10 +43,70 @@ class OpenWeatherReader:
             )
             return {"error": "Weather service unavailable"}
 
+    def get_forecast(self, days_ahead):
+        """Fetch the 5-day/3-hour forecast and return slots matching today + days_ahead.
 
-def _cache_key(location, unit):
-    # JSON-encode the pair to avoid collisions when location contains ':'.
-    encoded = json.dumps([location, unit], separators=(",", ":"))
+        Uses the city.timezone offset from the API response to convert each slot's
+        Unix timestamp to a local date, so the filtering is timezone-aware.
+
+        Returns a list of forecast slot dicts.  Falls back to the full list if
+        date-based filtering produces no matches.  Returns a dict with an "error"
+        key on network/parse failure.
+        """
+        try:
+            response = requests.get(
+                self.forecast_url,
+                params={
+                    "q": self.location,
+                    "appid": self.api_key,
+                    "units": self.unit,
+                    "cnt": 40,
+                },
+                timeout=self.timeout,
+            )
+            response.raise_for_status()
+            data = response.json()
+
+            # Derive target date using the city's UTC offset (seconds east of UTC)
+            tz_offset_s = data.get("city", {}).get("timezone", 0)
+            tz = datetime.timezone(datetime.timedelta(seconds=tz_offset_s))
+            now_local = datetime.datetime.now(tz)
+            target_date = (now_local + datetime.timedelta(days=days_ahead)).date()
+
+            slots = data.get("list", [])
+            filtered = [
+                slot for slot in slots
+                if datetime.datetime.fromtimestamp(slot["dt"], tz=tz).date() == target_date
+            ]
+
+            if filtered:
+                return filtered
+            # Graceful fallback: filtering produced nothing (e.g. target date is at edge
+            # of the 40-slot window), return everything so the LLM can still answer.
+            logger.debug(
+                "Forecast: no slots matched target date %s (tz_offset=%ds); returning full list",
+                target_date,
+                tz_offset_s,
+            )
+            return slots
+        except requests.exceptions.RequestException as e:
+            status = getattr(getattr(e, 'response', None), 'status_code', None)
+            if status is not None:
+                logger.error("Forecast API error: %s status=%d", type(e).__name__, status)
+            else:
+                logger.error("Forecast API error: %s", type(e).__name__)
+            return {"error": "Unable to fetch forecast data"}
+        except Exception as e:
+            logger.error(
+                "Forecast error: %s: %s", type(e).__name__, e,
+                exc_info=logger.isEnabledFor(logging.DEBUG),
+            )
+            return {"error": "Forecast service unavailable"}
+
+
+def _cache_key(location, unit, days_ahead=0):
+    # JSON-encode the triple to avoid collisions when location contains ':'.
+    encoded = json.dumps([location, unit, days_ahead], separators=(",", ":"))
     return f"weather:{encoded}"
 
 
@@ -70,11 +135,21 @@ def process(user_input, route, s):
 
         location = route['location']
         unit = route['unit']
+        days_ahead = int(route.get('days_ahead', 0))
+
+        if days_ahead > 5:
+            return "I can only forecast up to 5 days ahead."
+
         refresh_only = route.get('refresh_only', False)
         cache = getattr(s, 'cache', None)
-        cache_key = _cache_key(location, unit)
-        ttl_s = route.get('ttl_s', s.config.cache_weather_ttl_s)
-        max_stale_s = route.get('max_stale_s', s.config.cache_weather_max_stale_s)
+        cache_key = _cache_key(location, unit, days_ahead)
+
+        if days_ahead >= 1:
+            ttl_s = route.get('ttl_s', s.config.cache_weather_forecast_ttl_s)
+            max_stale_s = route.get('max_stale_s', s.config.cache_weather_forecast_max_stale_s)
+        else:
+            ttl_s = route.get('ttl_s', s.config.cache_weather_ttl_s)
+            max_stale_s = route.get('max_stale_s', s.config.cache_weather_max_stale_s)
 
         # Skip live fetch during warmup if the cached entry is still fresh
         if refresh_only and cache is not None:
@@ -105,28 +180,57 @@ def process(user_input, route, s):
 
         # Fetch live data
         weather = OpenWeatherReader(location, unit, s.config.api_timeout)
-        current_weather = weather.get_current_weather()
 
         response_text = None
-        if "error" not in current_weather:
-            response = s.ai.generate_response(
-                user_input,
-                f"You can answer questions about weather. This is the information of the weather the user asked: {str(current_weather)}. You are a voice bot, don't mention it, but keep the answer in an appropriate amount of words for such case. Also use correct punctuation, because your answer will be translated TTS. Don't overwhelm the user with a lot of information, they want to know how is the weather.\n",
-            )
-            response_text = response.content
+        if days_ahead >= 1:
+            forecast_slots = weather.get_forecast(days_ahead)
+            if "error" not in (forecast_slots if isinstance(forecast_slots, dict) else {}):
+                response = s.ai.generate_response(
+                    user_input,
+                    f"You can answer questions about weather forecasts. The user asked about weather "
+                    f"{days_ahead} day(s) from now. Here is the forecast data: {str(forecast_slots)}. "
+                    f"Summarize the expected conditions for that day in a natural, voice-friendly way.",
+                )
+                response_text = response.content
+            else:
+                # Forecast fetch returned an error dict — generate a response without caching
+                response = s.ai.generate_response(
+                    user_input,
+                    f"You can answer questions about weather. This is the information of the weather the user asked: {str(forecast_slots)}\n",
+                )
+                if refresh_only:
+                    return None
+                return response.content
+        else:
+            current_weather = weather.get_current_weather()
+            if "error" not in current_weather:
+                response = s.ai.generate_response(
+                    user_input,
+                    f"You can answer questions about weather. This is the information of the weather the user asked: {str(current_weather)}. You are a voice bot, don't mention it, but keep the answer in an appropriate amount of words for such case. Also use correct punctuation, because your answer will be translated TTS. Don't overwhelm the user with a lot of information, they want to know how is the weather.\n",
+                )
+                response_text = response.content
+            else:
+                # Fetch returned an error dict — generate a response without caching
+                response = s.ai.generate_response(
+                    user_input,
+                    f"You can answer questions about weather. This is the information of the weather the user asked: {str(current_weather)}\n",
+                )
+                if refresh_only:
+                    return None
+                return response.content
 
-            # Cache the full response text so future hits skip the LLM call entirely
-            if cache is not None:
-                try:
-                    cache.set(
-                        cache_key,
-                        response_text,
-                        ttl_s=ttl_s,
-                        max_stale_s=max_stale_s,
-                    )
-                    logger.debug("Weather cache updated: key=%r", cache_key)
-                except Exception as e:
-                    logger.warning("Weather cache write failed for key=%r: %s", cache_key, e)
+        # Cache the full response text so future hits skip the LLM call entirely
+        if response_text is not None and cache is not None:
+            try:
+                cache.set(
+                    cache_key,
+                    response_text,
+                    ttl_s=ttl_s,
+                    max_stale_s=max_stale_s,
+                )
+                logger.debug("Weather cache updated: key=%r", cache_key)
+            except Exception as e:
+                logger.warning("Weather cache write failed for key=%r: %s", cache_key, e)
 
         if refresh_only:
             return None
@@ -134,12 +238,7 @@ def process(user_input, route, s):
         if response_text is not None:
             return response_text
 
-        # Fetch returned an error dict — generate a response without caching
-        response = s.ai.generate_response(
-            user_input,
-            f"You can answer questions about weather. This is the information of the weather the user asked: {str(current_weather)}\n",
-        )
-        return response.content
+        return "Unable to fetch weather information. Please try again later."
     except ValueError as e:
         logger.error("Weather plugin configuration error: %s", e)
         if route.get('refresh_only', False):
