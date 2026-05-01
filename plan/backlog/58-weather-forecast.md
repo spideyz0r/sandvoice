@@ -1,4 +1,4 @@
-# Plan 52: Weather Forecast — 5-Day / Future Date Queries
+# Plan 58: Weather Forecast — 5-Day / Future Date Queries
 
 ## Status
 📋 Backlog
