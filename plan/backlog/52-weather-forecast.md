@@ -11,17 +11,14 @@ Extend the weather plugin to route future-date questions to the OpenWeatherMap *
 
 ## Approach
 
-### Routing changes (`routes.yaml`)
-Add a `days_ahead` parameter to the weather route so the AI can signal that a future date was requested:
+### Routing changes (`plugins/weather/plugin.yaml`)
+The weather plugin's routing metadata lives in `plugins/weather/plugin.yaml`, not `routes.yaml`. Update it to support `days_ahead`:
 
-```yaml
-- name: weather
-  description: "Answer questions about current or future weather conditions"
-  parameters:
-    location: string (optional, defaults to configured location)
-    unit: string (optional, defaults to configured unit)
-    days_ahead: integer (optional, 0 = today/current, 1–5 = forecast N days from now)
-```
+- Add `days_ahead` to `route_extra_keys` so the router includes it in the JSON output.
+- Update `route_description` to cover both current and future weather questions, instructing the model to:
+  - Omit `days_ahead` (or set it to `0`) for present-tense queries.
+  - Set `days_ahead` to an integer from `1` to `5` for future-date queries.
+  - Values above `5` are outside the API range — the plugin returns a graceful degradation message.
 
 The AI sets `days_ahead` to `0` (or omits it) for present-tense queries, and to a positive integer for future queries. Values above 5 are outside the API's range and will receive a graceful degradation message (see Acceptance Criteria).
 
