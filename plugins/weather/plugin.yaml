@@ -5,16 +5,16 @@ route_description: >
   The user is asking about the weather, either current conditions or a future
   date (e.g. "How is the weather outside now?", "Will it rain tomorrow?",
   "What's the weather on Saturday?").
-  The JSON answer must include the keys location, unit, and days_ahead.
   If no location is defined, consider {{ location }}. Add a key "location"
   to the json with the location. Convert the location to the following
   convention: City name, state code (only for the US) and country code
   divided by comma. Also add a key called "unit". The key unit, if not
   informed, is "metric" by default, the other option is "imperial". Trim
   all spaces. Please use ISO 3166 country codes. For example: Toronto,ON,CA.
-  Always include a key "days_ahead" with an integer value: use 0 for
-  present-tense queries, and 1 to 5 for future-date queries (1 = tomorrow,
-  2 = day after tomorrow, etc.). Do not set days_ahead above 5.
+  Always include a key "days_ahead" with an integer value: 0 for
+  present-tense queries (e.g. "what's the weather now?", "how is it outside?"),
+  and 1 to 5 for future-date queries (1 = tomorrow, 2 = day after tomorrow,
+  etc.). Do not set days_ahead above 5. days_ahead must always be present.
   Example of result for a current weather query:
   {"route": "weather", "reason": "The user asked for the weather",
   "location": "Toronto,ON,CA", "unit": "metric", "days_ahead": 0}
