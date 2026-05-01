@@ -27,8 +27,9 @@ table, giving them a shared, durable conversation history.
   channel runs as a background thread within the same process, not a separate process,
   so no multi-process SQLite guarantees are required.
 - History search, export, or summarisation — future work.
-- Pruning old entries beyond the startup load window — simple mtime/rowid pruning on
-  startup is sufficient.
+- Pruning old entries — rows accumulate indefinitely; a future plan can add a cleanup
+  job. The startup load window (`history_max_entries`) limits memory use without
+  touching the DB.
 
 ## Design
 
@@ -85,16 +86,18 @@ history = None
 if config.history_enabled:
     history = ConversationHistory(config.scheduler_db_path)
     atexit.register(history.close)
-# AI is constructed via its existing factory; history is seeded after construction:
-ai = AI.from_config(config)
-if history is not None:
-    ai.conversation_history = history.load_recent(config.history_max_entries)
+# Extend AI.from_config to accept optional history; it seeds conversation_history
+# and stores the reference so append_to_history() persists every future turn:
+ai = AI.from_config(config, history=history)
 ```
 
-Alternatively, `AI.from_config` can be extended to accept an optional `history`
-parameter so seeding is encapsulated inside the factory — either approach is valid.
-The key constraint is that `AI.__init__` takes provider objects (`llm`, `tts`, `stt`,
-`config`), not a raw config, so callers must go through `from_config`.
+`AI.from_config` passes `history` into `AI.__init__`, which:
+1. Seeds `self.conversation_history` from `history.load_recent(config.history_max_entries)`.
+2. Stores `self._history = history` so `append_to_history()` calls `history.append()`
+   on every subsequent turn.
+
+This keeps seeding **and** ongoing persistence inside `AI`, preventing double-writes
+from external callers.
 
 ## Acceptance Criteria
 - [ ] Each user/assistant turn is written to `conversation_history` table after it completes

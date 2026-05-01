@@ -22,7 +22,9 @@ history with the wake-word session so context carries across channels seamlessly
 - Single-user bot: `telegram_allowed_user_ids` whitelist; all other senders are silently
   ignored.
 - Runs as a background thread within the existing `SandVoice` process — same instance,
-  same `AI`, same `VoiceCache`, same `ConversationHistory`.
+  same `VoiceCache`, shared `ConversationHistory` (SQLite). `AI` is **not** shared
+  directly; the Telegram thread uses a separate `AI` instance seeded from the same DB
+  to avoid concurrent mutation of `AI.conversation_history`.
 - Works alongside wake-word mode and CLI mode. Enabling Telegram does not affect either.
 
 **Out of scope:**
@@ -38,10 +40,15 @@ pattern:
 
 ```python
 class TelegramChannel:
-    def __init__(self, config, ai, plugins, cache, history): ...
-    def start(self) -> None: ...   # launches daemon thread
+    def __init__(self, config, plugins, cache, history): ...
+    def start(self) -> None: ...   # launches daemon thread; creates own AI instance
     def close(self) -> None: ...   # signals thread to stop
 ```
+
+`TelegramChannel` creates its own `AI` instance (via `AI.from_config(config, history=history)`)
+inside the background thread, avoiding shared mutable state with the main thread's `AI`.
+Both AI instances persist turns through the same `ConversationHistory` (SQLite with
+`threading.Lock`, same as `VoiceCache`).
 
 The thread runs a `polling` loop using `python-telegram-bot` in its own asyncio event
 loop (`asyncio.new_event_loop()` + `loop.run_until_complete()`), isolating async code
@@ -58,22 +65,19 @@ async lifecycle methods directly) to avoid this.
 Telegram message arrives
   → check sender user ID against whitelist → ignore if not allowed
   → user_input = message.text
-  → recent_history = history.load_recent(config.route_history_depth)
-  → route = ai.define_route(user_input, history=recent_history)
+  → route = telegram_ai.define_route(user_input)
   → route_name = route["route"]
   → if route_name in plugins: response = plugins[route_name](user_input, route, ctx)
-  → else: response = ai.generate_response(user_input).content
+  → else: response = telegram_ai.generate_response(user_input).content
   → bot.send_message(chat_id, response)
-  → history.append("user", user_input)
-  → history.append("assistant", response)
 ```
 
-History is written directly to `ConversationHistory` (Plan 54). The in-memory
-`AI.conversation_history` list is not shared with the Telegram thread — each turn
-appends to the SQLite DB via `ConversationHistory`, and context is loaded fresh from DB
-per turn if needed. No turn lock — per the design decision, occasional context interleave
-from parallel wake-word + Telegram turns is acceptable for a non-mission-critical
-assistant. SQLite WAL mode handles concurrent writes safely.
+`telegram_ai` is the thread's own `AI` instance (created via `AI.from_config(config,
+history=history)`). History writes happen inside `AI.append_to_history()` — the same
+path as the main thread — so there is a single source of truth and no double-writes.
+`ConversationHistory` uses a `threading.Lock` (same pattern as `VoiceCache`) to make
+concurrent SQLite writes from both threads safe. No additional turn lock needed at the
+`TelegramChannel` level.
 
 ### New config keys (`config.yaml` / `configuration.py`)
 | Key | Default | Description |
@@ -89,9 +93,14 @@ All follow the 4-step config pattern. Startup validation: if `telegram_enabled` 
 ```python
 telegram = None
 if config.telegram_enabled:
-    telegram = TelegramChannel(config, s.ai, s.plugins, s.cache, history)
-    telegram.start()
-    atexit.register(telegram.close)
+    if not config.history_enabled:
+        logger.warning(
+            "telegram_enabled requires history_enabled; disabling Telegram channel"
+        )
+    else:
+        telegram = TelegramChannel(config, s.plugins, s.cache, history)
+        telegram.start()
+        atexit.register(telegram.close)
 ```
 
 ### New file: `common/telegram_channel.py`
