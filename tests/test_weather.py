@@ -440,9 +440,13 @@ class TestCacheKeyForecast(unittest.TestCase):
         from plugins.weather import _cache_key
         utc = dt_mod.timezone.utc
         fixed_now = dt_mod.datetime(2026, 5, 31, 12, 0, 0, tzinfo=utc)
-        key_invalid = _cache_key("London", "metric", 1, timezone="NOT_A_TZ", _now=fixed_now)
+        with patch('plugins.weather.plugin.logger') as mock_logger:
+            key_invalid = _cache_key("London", "metric", 1, timezone="NOT_A_TZ", _now=fixed_now)
         key_utc = _cache_key("London", "metric", 1, timezone="UTC", _now=fixed_now)
         self.assertEqual(key_invalid, key_utc)
+        # Invalid timezone must log a warning so misconfiguration is visible
+        warning_calls = [str(c) for c in mock_logger.warning.call_args_list]
+        self.assertTrue(any("NOT_A_TZ" in c for c in warning_calls))
 
     def test_cache_key_zero_differs_from_legacy(self):
         from plugins.weather import _cache_key
