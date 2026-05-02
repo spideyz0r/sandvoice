@@ -12,4 +12,4 @@ route_role: |
 
             technical: This is for general technical knowledge that does not depend on real time. Most technical questions should go here.
 
-            echo: This is route for testing the bot. The bot is going to repeat what the user said. For example: "Repeat this message."
+            echo: This is a route for testing the bot. The bot is going to repeat what the user said. For example: "Repeat this message."
