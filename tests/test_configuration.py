@@ -395,9 +395,9 @@ class TestConfigurationValidation(unittest.TestCase):
         config = Config()
 
         self.assertTrue(config.wake_word_enabled)
-        self.assertEqual(config.wake_phrase, "hey sandvoice")
-        self.assertEqual(config.wake_word_sensitivity, 0.5)
-        self.assertEqual(config.porcupine_access_key, "")
+        self.assertEqual(config.wake_phrase, "hey jarvis")
+        self.assertEqual(config.wake_word_sensitivity, 0.35)
+        self.assertEqual(config.openwakeword_model, "hey_jarvis")
         self.assertTrue(config.vad_enabled)
         self.assertEqual(config.vad_aggressiveness, 3)
         self.assertEqual(config.vad_silence_duration, 1.5)
@@ -494,7 +494,7 @@ class TestConfigurationValidation(unittest.TestCase):
             "wake_word_enabled": "enabled",
             "wake_phrase": "hey assistant",
             "wake_word_sensitivity": 0.7,
-            "porcupine_access_key": "test_key_123",
+            "openwakeword_model": "alexa",
             "vad_enabled": "disabled",
             "vad_aggressiveness": 1,
             "vad_silence_duration": 2.0,
@@ -510,7 +510,7 @@ class TestConfigurationValidation(unittest.TestCase):
         self.assertTrue(config.wake_word_enabled)
         self.assertEqual(config.wake_phrase, "hey assistant")
         self.assertEqual(config.wake_word_sensitivity, 0.7)
-        self.assertEqual(config.porcupine_access_key, "test_key_123")
+        self.assertEqual(config.openwakeword_model, "alexa")
         self.assertFalse(config.vad_enabled)
         self.assertEqual(config.vad_aggressiveness, 1)
         self.assertEqual(config.vad_silence_duration, 2.0)

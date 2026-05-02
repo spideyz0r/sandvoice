@@ -1,14 +1,43 @@
 #import re, os, pyaudio, wave
 #from pydub import AudioSegment
 import contextlib
-import os, platform, time, threading, pyaudio, wave, lameenc, logging, queue
-from pynput import keyboard
+import os, platform, time, threading, pyaudio, wave, lameenc, logging, queue, re
 from common.error_handling import handle_file_error
 
 logger = logging.getLogger(__name__)
 
 # this is necessary to mute some outputs from pygame
 os.environ['PYGAME_HIDE_SUPPORT_PROMPT'] = "hide"
+
+# On Linux, SDL defaults to the first ALSA device which may not be the USB audio device.
+# Point SDL at the first real hardware output device (name contains "hw:N,M").
+# Prefer a combined in+out device (USB headset) over output-only.
+# Falls back to "default" if no hardware device is found.
+# Users can override by setting SDL_AUDIODRIVER / AUDIODEV in their environment.
+if platform.system().lower() == "linux" and "SDL_AUDIODRIVER" not in os.environ:
+    os.environ["SDL_AUDIODRIVER"] = "alsa"
+    try:
+        _pa = pyaudio.PyAudio()
+        try:
+            _audiodev = None
+            _fallback = None
+            for _i in range(_pa.get_device_count()):
+                _dev = _pa.get_device_info_by_index(_i)
+                _m = re.search(r'hw:(\d+),(\d+)', _dev.get("name", ""))
+                if not _m:
+                    continue
+                _plug = f"plughw:{_m.group(1)},{_m.group(2)}"
+                if _dev.get("maxOutputChannels", 0) > 0 and _dev.get("maxInputChannels", 0) > 0:
+                    _audiodev = _plug
+                    break
+                if _fallback is None and _dev.get("maxOutputChannels", 0) > 0:
+                    _fallback = _plug
+            os.environ["AUDIODEV"] = _audiodev or _fallback or "default"
+        finally:
+            _pa.terminate()
+    except Exception:
+        os.environ["AUDIODEV"] = "default"
+
 import pygame
 
 
@@ -55,6 +84,7 @@ class Audio:
             logger.debug(">>> MIXER STATE [%s]: Error getting state: %s", context, e)
 
     def init_recording(self):
+        from pynput import keyboard
         listener = keyboard.Listener(on_press=self.on_press)
         listener.start()
         self.start_recording()

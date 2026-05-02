@@ -97,10 +97,9 @@ class Config:
             "stream_tts_first_chunk_target_s": 6,
             # Wake word mode settings (only active with --wake-word flag)
             "wake_word_enabled": "enabled",
-            "wake_phrase": "hey sandvoice",
-            "wake_word_sensitivity": 0.5,
-            "porcupine_access_key": "",
-            "porcupine_keyword_paths": None,
+            "wake_phrase": "hey jarvis",
+            "wake_word_sensitivity": 0.35,
+            "openwakeword_model": "hey_jarvis",
             # Voice Activity Detection
             "vad_enabled": "enabled",
             "vad_aggressiveness": 3,
@@ -248,8 +247,7 @@ class Config:
         self.wake_word_enabled = self.get("wake_word_enabled").lower() == "enabled"
         self.wake_phrase = self.get("wake_phrase")
         self.wake_word_sensitivity = self.get("wake_word_sensitivity")
-        self.porcupine_access_key = self.get("porcupine_access_key")
-        self.porcupine_keyword_paths = self.get("porcupine_keyword_paths")
+        self.openwakeword_model = self.get("openwakeword_model")
         # Voice Activity Detection
         self.vad_enabled = self.get("vad_enabled").lower() == "enabled"
         self.vad_aggressiveness = self.get("vad_aggressiveness")
@@ -506,8 +504,8 @@ class Config:
         if not self.wake_phrase or not isinstance(self.wake_phrase, str):
             errors.append("wake_phrase must be a non-empty string")
 
-        if not isinstance(self.porcupine_access_key, str):
-            errors.append("porcupine_access_key must be a string")
+        if not isinstance(self.openwakeword_model, str) or not self.openwakeword_model.strip():
+            errors.append("openwakeword_model must be a non-empty string")
 
         # Validate VAD settings
         if not isinstance(self.vad_aggressiveness, int) or not (0 <= self.vad_aggressiveness <= 3):
