@@ -425,16 +425,15 @@ class TestCacheKeyForecast(unittest.TestCase):
         self.assertNotEqual(new_key, legacy_key)
 
     def test_forecast_cache_key_includes_date(self):
-        # Forecast keys must embed today's UTC date so cached "tomorrow" entries
-        # are not served after midnight when the target day has shifted.
-        import datetime as dt_mod
+        # Forecast keys must embed a UTC date (YYYY-MM-DD) so a cached "tomorrow"
+        # entry is never served on a different calendar day after midnight.
+        import re
         from plugins.weather import _cache_key
-        today = dt_mod.date.today().isoformat()
         key = _cache_key("London", "metric", 1)
-        self.assertIn(today, key)
-        # Current-weather key must NOT include a date (no cross-day issue).
+        self.assertRegex(key, r'\d{4}-\d{2}-\d{2}', "forecast key should contain a date")
+        # Current-weather key must NOT include a date (no cross-day issue for point-in-time data).
         key0 = _cache_key("London", "metric", 0)
-        self.assertNotIn(today, key0)
+        self.assertNotRegex(key0, r'\d{4}-\d{2}-\d{2}')
 
 
 class TestWeatherForecastProcess(unittest.TestCase):
@@ -571,6 +570,39 @@ class TestGetForecast(unittest.TestCase):
         # Request days_ahead=5; slot is today so filtering finds nothing → full list returned
         result = reader.get_forecast(5, _now=fixed_now)
         self.assertEqual(result, [slot])
+
+    @patch('plugins.weather.plugin.requests.get')
+    def test_get_forecast_filters_by_local_date_non_utc_offset(self, mock_get):
+        # Validate timezone-aware filtering with a non-zero city.timezone offset.
+        # tz_offset = +36000s (UTC+10, e.g. Sydney).
+        # _now is 2026-06-01 22:00 UTC = 2026-06-02 08:00 local.
+        # days_ahead=1 → target local date = 2026-06-03.
+        import datetime as dt_mod
+        utc = dt_mod.timezone.utc
+        fixed_now_utc = dt_mod.datetime(2026, 6, 1, 22, 0, 0, tzinfo=utc)
+        tz_offset_s = 36000  # UTC+10
+        local_tz = dt_mod.timezone(dt_mod.timedelta(seconds=tz_offset_s))
+
+        # Slot on 2026-06-03 local (2026-06-02 14:00 UTC) — should be included
+        target_local = dt_mod.datetime(2026, 6, 3, 10, 0, 0, tzinfo=local_tz)
+        match_slot = self._make_slot(int(target_local.timestamp()), temp=22, desc="sunny")
+        # Slot on 2026-06-02 local (today) — should be excluded
+        today_local = dt_mod.datetime(2026, 6, 2, 10, 0, 0, tzinfo=local_tz)
+        other_slot = self._make_slot(int(today_local.timestamp()), temp=15, desc="cloudy")
+
+        payload = self._make_forecast_payload([match_slot, other_slot], tz_offset=tz_offset_s)
+
+        mock_resp = Mock()
+        mock_resp.json.return_value = payload
+        mock_resp.raise_for_status.return_value = None
+        mock_get.return_value = mock_resp
+
+        from plugins.weather import OpenWeatherReader
+        reader = OpenWeatherReader("Sydney,AU", "metric", timeout=5)
+        result = reader.get_forecast(1, _now=fixed_now_utc)
+
+        self.assertEqual(len(result), 1)
+        self.assertEqual(result[0]["dt"], match_slot["dt"])
 
     @patch('plugins.weather.plugin.requests.get')
     def test_get_forecast_returns_error_on_request_exception(self, mock_get):

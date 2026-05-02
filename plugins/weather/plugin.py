@@ -111,7 +111,7 @@ def _cache_key(location, unit, days_ahead=0):
     # Forecast keys include today's UTC date so a cached "tomorrow" entry is
     # never served on a different calendar day after midnight.
     if days_ahead >= 1:
-        today = datetime.date.today().isoformat()
+        today = datetime.datetime.now(datetime.timezone.utc).date().isoformat()
         encoded = json.dumps([location, unit, days_ahead, today], separators=(",", ":"))
     else:
         encoded = json.dumps([location, unit, days_ahead], separators=(",", ":"))
@@ -153,10 +153,12 @@ def process(user_input, route, s):
             logger.warning("Negative days_ahead %d in route; defaulting to 0", days_ahead)
             days_ahead = 0
 
-        if days_ahead > 5:
-            return "I can only forecast up to 5 days ahead."
-
         refresh_only = route.get('refresh_only', False)
+
+        if days_ahead > 5:
+            if refresh_only:
+                return None
+            return "I can only forecast up to 5 days ahead."
         cache = getattr(s, 'cache', None)
         cache_key = _cache_key(location, unit, days_ahead)
 
