@@ -7,8 +7,8 @@ import threading
 import time
 from enum import Enum
 
-import pvporcupine
 import pyaudio
+from common.openwakeword_detector import OpenWakeWordDetector
 
 from common.beep_generator import create_confirmation_beep, create_ack_earcon
 from common.ai import pop_streaming_chunk
@@ -18,6 +18,27 @@ from common.vad_recorder import VadRecorder
 from common.utils import _is_enabled_flag
 
 logger = logging.getLogger(__name__)
+
+
+def _find_hw_input_device(pa):
+    """Return the index of the first real hardware input device (name contains 'hw:N,M').
+
+    On Linux the PyAudio default input is often a virtual 'default' device that
+    may not deliver audio from the actual USB mic. Explicitly picking the first
+    hw: input device ensures we use the real hardware.
+
+    Returns None on macOS/non-Linux (let PyAudio pick the system default).
+    """
+    import re
+    import platform
+    if platform.system().lower() != "linux":
+        return None
+    for i in range(pa.get_device_count()):
+        dev = pa.get_device_info_by_index(i)
+        if dev.get("maxInputChannels", 0) > 0 and re.search(r'hw:\d+,\d+', dev.get("name", "")):
+            logger.debug("Wake word: selected hw input device index=%s name=%s", i, dev["name"])
+            return i
+    return None
 
 
 class State(Enum):
@@ -32,7 +53,7 @@ class WakeWordMode:
     """Wake word mode with state machine for hands-free interaction.
 
     States:
-    - IDLE: Listening for wake word using Porcupine
+    - IDLE: Listening for wake word using OpenWakeWord
     - LISTENING: Recording user command with VAD
     - PROCESSING: Transcribing and routing to plugin
     - RESPONDING: Playing TTS response
@@ -79,7 +100,7 @@ class WakeWordMode:
         self.state = State.IDLE
         self.running = False
 
-        self.porcupine = None
+        self.detector = None
         self.confirmation_beep_path = None
         self.ack_earcon_path = None
         self.recorded_audio_path = None
@@ -138,23 +159,14 @@ class WakeWordMode:
             self._cleanup()
 
     def _initialize(self):
-        """Initialize Porcupine, VAD, and confirmation beep.
+        """Initialize wake word detector, VAD, and confirmation beep.
 
         Raises:
-            RuntimeError: If Porcupine access key is missing or invalid; if any of
-                vad_enabled, bot_voice, stream_responses, or stream_tts is
-                disabled; or if the Porcupine instance cannot be created.
+            RuntimeError: If any of vad_enabled, bot_voice, stream_responses,
+                or stream_tts is disabled; or if the detector instance cannot
+                be created.
         """
         logger.debug("Initializing wake word detection and VAD")
-
-        if not self.config.porcupine_access_key:
-            error_msg = (
-                "Porcupine access key is required for wake word mode. "
-                "Get your free key at https://console.picovoice.ai/ and add it to your config: "
-                "porcupine_access_key: YOUR_KEY_HERE"
-            )
-            print(f"Error: {error_msg}")
-            raise RuntimeError(error_msg)
 
         self._require_config_enabled(
             getattr(self.config, "vad_enabled", False),
@@ -178,39 +190,14 @@ class WakeWordMode:
         )
 
         try:
-            keyword_paths = getattr(self.config, "porcupine_keyword_paths", None)
-
-            if not keyword_paths:
-                wake_keyword = self.config.wake_phrase.lower()
-
-                if hasattr(pvporcupine, "KEYWORDS") and wake_keyword not in pvporcupine.KEYWORDS:
-                    supported = ", ".join(sorted(pvporcupine.KEYWORDS)) if hasattr(pvporcupine, "KEYWORDS") else "unknown"
-                    error_msg = (
-                        f"Invalid Porcupine wake phrase '{self.config.wake_phrase}'. "
-                        f"When using built-in keywords, wake_phrase must be one of: {supported}. "
-                        "For a custom wake phrase, create a .ppn model at https://console.picovoice.ai/ "
-                        "and configure its path via 'porcupine_keyword_paths' in your config."
-                    )
-                    logger.error(error_msg)
-                    print(f"Error: {error_msg}")
-                    raise RuntimeError(error_msg)
-
-            # Create main Porcupine instance
-            self.porcupine = self._create_porcupine_instance()
-
-            if keyword_paths:
-                logger.debug("Porcupine initialized with custom keyword paths: %s", keyword_paths)
-            else:
-                logger.debug("Porcupine initialized with built-in wake phrase: '%s'", self.config.wake_phrase)
-
-            logger.debug("Porcupine sample rate: %s", self.porcupine.sample_rate)
-            logger.debug("Porcupine frame length: %s", self.porcupine.frame_length)
+            self.detector = self._create_detector_instance()
+            logger.debug("Wake word detector sample rate: %s", self.detector.sample_rate)
+            logger.debug("Wake word detector frame length: %s", self.detector.frame_length)
 
             # Create barge-in detector now that config is validated.
             self.barge_in = BargeInDetector(
-                access_key=self.config.porcupine_access_key,
-                keyword_paths=getattr(self.config, "porcupine_keyword_paths", None),
-                sensitivity=self.config.wake_word_sensitivity,
+                model_name=getattr(self.config, "openwakeword_model", "hey_jarvis"),
+                threshold=self.config.wake_word_sensitivity,
                 audio_lock=self._audio_lock,
                 audio=self.audio,
                 config=self.config,
@@ -258,37 +245,13 @@ class WakeWordMode:
             pop_streaming_chunk, self.config, ui=self.ui,
         )
 
-    def _create_porcupine_instance(self):
-        """Create a new Porcupine instance with current config.
-
-        Returns:
-            Porcupine instance
-
-        Raises:
-            RuntimeError: If initialization fails
-        """
-        keyword_paths = getattr(self.config, "porcupine_keyword_paths", None)
-
-        if keyword_paths:
-            if not isinstance(keyword_paths, (list, tuple)):
-                keyword_paths = [keyword_paths]
-
-            base_sensitivity = self.config.wake_word_sensitivity
-            sensitivities = [base_sensitivity] * len(keyword_paths)
-
-            return pvporcupine.create(
-                access_key=self.config.porcupine_access_key,
-                keyword_paths=keyword_paths,
-                sensitivities=sensitivities
-            )
-        else:
-            wake_keyword = self.config.wake_phrase.lower()
-
-            return pvporcupine.create(
-                access_key=self.config.porcupine_access_key,
-                keywords=[wake_keyword],
-                sensitivities=[self.config.wake_word_sensitivity]
-            )
+    def _create_detector_instance(self):
+        """Create a new OpenWakeWordDetector with current config."""
+        return OpenWakeWordDetector(
+            model_name=getattr(self.config, "openwakeword_model", "hey_jarvis"),
+            threshold=self.config.wake_word_sensitivity,
+            device_sample_rate=self.config.rate,
+        )
 
     def _require_config_enabled(self, flag_value, error_msg):
         """Raise RuntimeError if flag_value is not considered enabled by _is_enabled_flag()."""
@@ -308,7 +271,7 @@ class WakeWordMode:
         self.recorded_audio_path = None
 
     def _state_idle(self):
-        """IDLE state: Listen for wake word using Porcupine.
+        """IDLE state: Listen for wake word using OpenWakeWord.
 
         Listens for wake word in a blocking loop until detected.
         Plays confirmation beep and transitions to LISTENING.
@@ -318,24 +281,27 @@ class WakeWordMode:
         elif self.config.visual_state_indicator:
             print(f"⏸️  Waiting for wake word ('{self.config.wake_phrase}')...")
 
+        self.detector.reset()
         pa = None
         audio_stream = None
 
         try:
             pa = pyaudio.PyAudio()
+            input_device_index = _find_hw_input_device(pa)
             audio_stream = pa.open(
-                rate=self.porcupine.sample_rate,
+                rate=self.detector.device_sample_rate,
                 channels=1,
                 format=pyaudio.paInt16,
                 input=True,
-                frames_per_buffer=self.porcupine.frame_length
+                frames_per_buffer=self.detector.frame_length,
+                input_device_index=input_device_index,
             )
 
             while self.running and self.state == State.IDLE:
-                pcm = audio_stream.read(self.porcupine.frame_length, exception_on_overflow=False)
-                pcm = struct.unpack_from("h" * self.porcupine.frame_length, pcm)
+                pcm = audio_stream.read(self.detector.frame_length, exception_on_overflow=False)
+                pcm = struct.unpack_from("h" * self.detector.frame_length, pcm)
 
-                keyword_index = self.porcupine.process(pcm)
+                keyword_index = self.detector.process(pcm)
 
                 if keyword_index >= 0:
                     logger.info("Wake word detected: '%s'", self.config.wake_phrase)
@@ -343,8 +309,6 @@ class WakeWordMode:
                         self._req_seq += 1
                         self._req_filler_s = None
                     self._req_t_start = time.monotonic()
-
-                    self._play_confirmation_beep()
 
                     self.state = State.LISTENING
                     break
@@ -356,6 +320,10 @@ class WakeWordMode:
             self.running = False
         finally:
             self._cleanup_pyaudio(audio_stream, pa)
+
+        # Play beep after PyAudio stream is closed so both don't compete for the device
+        if self.state == State.LISTENING:
+            self._play_confirmation_beep()
 
     def _state_listening(self):
         """LISTENING state: Record audio with VAD until silence detected.
@@ -785,18 +753,18 @@ class WakeWordMode:
         logger.info(" ".join(parts))
 
     def _cleanup(self):
-        """Clean up Porcupine, VAD, barge-in thread, and audio resources."""
+        """Clean up wake word detector, VAD, barge-in thread, and audio resources."""
         logger.info("Cleaning up wake word mode")
 
         # Clean up barge-in thread if running
         self._cleanup_barge_in(timeout=0.5)
 
-        if self.porcupine is not None:
+        if self.detector is not None:
             try:
-                self.porcupine.delete()
+                self.detector.delete()
             except Exception as e:
-                logger.warning("Failed to delete Porcupine instance: %s", e)
+                logger.debug("Failed to delete wake word detector instance: %s", e)
             finally:
-                self.porcupine = None
+                self.detector = None
 
         self.running = False

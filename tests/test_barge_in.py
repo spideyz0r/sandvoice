@@ -11,19 +11,18 @@ class TestBargeInDetectorInit(unittest.TestCase):
     def setUp(self):
         logging.disable(logging.CRITICAL)
         self.mock_config = Mock()
-        self.mock_config.wake_phrase = "porcupine"
-        self.mock_config.porcupine_access_key = "test-key"
-        self.mock_config.porcupine_keyword_paths = None
+        self.mock_config.wake_phrase = "hey jarvis"
         self.mock_config.wake_word_sensitivity = 0.5
+        self.mock_config.openwakeword_model = "hey_jarvis"
+        self.mock_config.rate = 16000
 
     def tearDown(self):
         logging.disable(logging.NOTSET)
 
     def _make_detector(self, **kwargs):
         defaults = dict(
-            access_key="test-key",
-            keyword_paths=None,
-            sensitivity=0.5,
+            model_name="hey_jarvis",
+            threshold=0.5,
             audio_lock=None,
             audio=Mock(),
             config=self.mock_config,
@@ -34,9 +33,8 @@ class TestBargeInDetectorInit(unittest.TestCase):
     def test_init_stores_params(self):
         lock = threading.Lock()
         mock_audio = Mock()
-        d = self._make_detector(access_key="key123", sensitivity=0.7, audio_lock=lock, audio=mock_audio)
-        self.assertEqual(d._access_key, "key123")
-        self.assertIsNone(d._keyword_paths)
+        d = self._make_detector(model_name="alexa", threshold=0.7, audio_lock=lock, audio=mock_audio)
+        self.assertEqual(d._model_name, "alexa")
         self.assertEqual(d._sensitivity, 0.7)
         self.assertIs(d._audio_lock, lock)
         self.assertIs(d._audio, mock_audio)
@@ -60,16 +58,16 @@ class TestBargeInDetectorStartStop(unittest.TestCase):
     def setUp(self):
         logging.disable(logging.CRITICAL)
         self.mock_config = Mock()
-        self.mock_config.wake_phrase = "porcupine"
+        self.mock_config.wake_phrase = "hey jarvis"
+        self.mock_config.rate = 16000
 
     def tearDown(self):
         logging.disable(logging.NOTSET)
 
     def _make_detector(self, **kwargs):
         defaults = dict(
-            access_key="test-key",
-            keyword_paths=None,
-            sensitivity=0.5,
+            model_name="hey_jarvis",
+            threshold=0.5,
             audio_lock=None,
             audio=Mock(),
             config=self.mock_config,
@@ -77,18 +75,16 @@ class TestBargeInDetectorStartStop(unittest.TestCase):
         defaults.update(kwargs)
         return BargeInDetector(**defaults)
 
-    @patch('common.barge_in.pvporcupine.create')
+    @patch('common.barge_in.OpenWakeWordDetector')
     @patch('common.barge_in.pyaudio.PyAudio')
-    def test_start_creates_and_starts_thread(self, mock_pyaudio_class, mock_porcupine_create):
-        mock_porcupine = Mock()
-        mock_porcupine.sample_rate = 16000
-        mock_porcupine.frame_length = 512
-        # Keep thread blocked until we stop it
-        mock_porcupine.process.return_value = -1
-        mock_porcupine_create.return_value = mock_porcupine
+    def test_start_creates_and_starts_thread(self, mock_pyaudio_class, mock_detector_class):
+        mock_detector = Mock()
+        mock_detector.sample_rate = 16000
+        mock_detector.frame_length = 1280
+        mock_detector.process.return_value = -1
+        mock_detector_class.return_value = mock_detector
 
         mock_stream = Mock()
-        # Block on read so thread stays alive
         stop_event = threading.Event()
         def blocking_read(n, exception_on_overflow=False):
             stop_event.wait(timeout=5)
@@ -116,13 +112,11 @@ class TestBargeInDetectorStartStop(unittest.TestCase):
 
         d.start()
 
-        # Should not replace the existing thread
         self.assertIs(d._thread, mock_thread)
 
     def test_stop_signals_thread_and_clears_state(self):
         d = self._make_detector()
         mock_thread = Mock()
-        # Simulate thread alive before join, dead after join
         mock_thread.is_alive.side_effect = [True, False]
         d._thread = mock_thread
         d._event.set()
@@ -135,8 +129,6 @@ class TestBargeInDetectorStartStop(unittest.TestCase):
         self.assertFalse(d._event.is_set())
 
     def test_stop_nonblocking_when_timeout_zero(self):
-        # timeout=0 signals the stop flag but does not join; since the thread
-        # is still alive, internal state is NOT reset (prevents duplicate threads).
         d = self._make_detector()
         mock_thread = Mock()
         mock_thread.is_alive.return_value = True
@@ -145,26 +137,21 @@ class TestBargeInDetectorStartStop(unittest.TestCase):
         d.stop(timeout=0)
 
         mock_thread.join.assert_not_called()
-        self.assertIsNotNone(d._thread)  # thread ref kept until it actually exits
-        self.assertTrue(d._stop_flag.is_set())  # stop was signaled
+        self.assertIsNotNone(d._thread)
+        self.assertTrue(d._stop_flag.is_set())
 
     def test_stop_suppresses_runtime_error_on_join(self):
-        # RuntimeError from join() is suppressed; since the thread is still alive
-        # after the failed join, internal state is not reset.
         d = self._make_detector()
         mock_thread = Mock()
         mock_thread.is_alive.return_value = True
         mock_thread.join.side_effect = RuntimeError("cannot join")
         d._thread = mock_thread
-        # Should not raise
         d.stop(timeout=0.1)
-        # Thread still alive after failed join — ref and stop flag kept set
         self.assertIsNotNone(d._thread)
         self.assertTrue(d._stop_flag.is_set())
 
     def test_stop_before_start_does_not_crash(self):
         d = self._make_detector()
-        # Should not raise
         d.stop()
 
     def test_double_start_does_not_spawn_extra_threads(self):
@@ -184,16 +171,15 @@ class TestBargeInDetectorIsTriggered(unittest.TestCase):
     def setUp(self):
         logging.disable(logging.CRITICAL)
         self.mock_config = Mock()
-        self.mock_config.wake_phrase = "porcupine"
+        self.mock_config.rate = 16000
 
     def tearDown(self):
         logging.disable(logging.NOTSET)
 
     def _make_detector(self):
         return BargeInDetector(
-            access_key="test-key",
-            keyword_paths=None,
-            sensitivity=0.5,
+            model_name="hey_jarvis",
+            threshold=0.5,
             audio_lock=None,
             audio=Mock(),
             config=self.mock_config,
@@ -220,16 +206,15 @@ class TestBargeInDetectorRunWithPolling(unittest.TestCase):
     def setUp(self):
         logging.disable(logging.CRITICAL)
         self.mock_config = Mock()
-        self.mock_config.wake_phrase = "porcupine"
+        self.mock_config.rate = 16000
 
     def tearDown(self):
         logging.disable(logging.NOTSET)
 
     def _make_detector(self):
         return BargeInDetector(
-            access_key="test-key",
-            keyword_paths=None,
-            sensitivity=0.5,
+            model_name="hey_jarvis",
+            threshold=0.5,
             audio_lock=None,
             audio=Mock(),
             config=self.mock_config,
@@ -279,26 +264,22 @@ class TestBargeInDetectorRunWithPolling(unittest.TestCase):
         polling_thread = threading.Thread(target=run_polling)
         polling_thread.start()
 
-        # Wait for operation to start, then trigger barge-in
         operation_started.wait(timeout=2.0)
         d._event.set()
 
-        # Polling should return quickly (not wait for the slow operation)
         polling_thread.join(timeout=1.0)
         self.assertFalse(polling_thread.is_alive(), "Polling should exit quickly on barge-in")
         self.assertIs(result_holder[0], _BARGE_IN)
 
-        # Clean up slow operation
         operation_completed.wait(timeout=1.0)
 
     def test_barge_in_sentinel_is_unique_object(self):
         from common.barge_in import _BARGE_IN as sentinel
-        # Sentinel must be a distinct object — not None, True, False, 0, or any other singleton
         self.assertIsNot(sentinel, None)
         self.assertIsNot(sentinel, True)
         self.assertIsNot(sentinel, False)
         self.assertIsNot(sentinel, 0)
-        self.assertIs(sentinel, _BARGE_IN)  # identity is stable
+        self.assertIs(sentinel, _BARGE_IN)
 
     def test_lead_fn_fires_after_delay_when_operation_slow(self):
         """lead_fn is called once the delay elapses while operation is still running."""
@@ -343,7 +324,6 @@ class TestBargeInDetectorRunWithPolling(unittest.TestCase):
             return "done"
 
         d.run_with_polling(slow_op, "test", lead_delay_s=0.05, lead_fn=lead)
-        # Give the lead thread a moment to finish
         time.sleep(0.1)
         with lock:
             self.assertEqual(call_count[0], 1)
@@ -359,7 +339,6 @@ class TestBargeInDetectorRunWithPolling(unittest.TestCase):
             time.sleep(0.2)
             return "result"
 
-        # Should not raise, and should return the operation result
         result = d.run_with_polling(slow_op, "test", lead_delay_s=0.05, lead_fn=bad_lead)
         self.assertEqual(result, "result")
 
@@ -368,33 +347,29 @@ class TestBargeInDetectorDetectionLoop(unittest.TestCase):
     def setUp(self):
         logging.disable(logging.CRITICAL)
         self.mock_config = Mock()
-        self.mock_config.wake_phrase = "porcupine"
-        self.mock_config.porcupine_access_key = "test-key"
-        self.mock_config.porcupine_keyword_paths = None
-        self.mock_config.wake_word_sensitivity = 0.5
+        self.mock_config.rate = 16000
 
     def tearDown(self):
         logging.disable(logging.NOTSET)
 
     def _make_detector(self):
         return BargeInDetector(
-            access_key="test-key",
-            keyword_paths=None,
-            sensitivity=0.5,
+            model_name="hey_jarvis",
+            threshold=0.5,
             audio_lock=None,
             audio=Mock(),
             config=self.mock_config,
         )
 
-    @patch('common.barge_in.pvporcupine.create')
+    @patch('common.barge_in.OpenWakeWordDetector')
     @patch('common.barge_in.pyaudio.PyAudio')
-    def test_detection_loop_sets_event_on_wake_word(self, mock_pyaudio_class, mock_porcupine_create):
-        """When Porcupine detects the wake word, _event is set."""
-        mock_porcupine = Mock()
-        mock_porcupine.sample_rate = 16000
-        mock_porcupine.frame_length = 512
-        mock_porcupine.process.side_effect = [-1, -1, 0]  # wake word on 3rd call
-        mock_porcupine_create.return_value = mock_porcupine
+    def test_detection_loop_sets_event_on_wake_word(self, mock_pyaudio_class, mock_detector_class):
+        """When OpenWakeWord detects the wake word, _event is set."""
+        mock_detector = Mock()
+        mock_detector.sample_rate = 16000
+        mock_detector.frame_length = 1280
+        mock_detector.process.side_effect = [-1, -1, 0]  # wake word on 3rd call
+        mock_detector_class.return_value = mock_detector
 
         def fake_read(n, exception_on_overflow=False):
             return b'\x00' * (n * 2)
@@ -402,30 +377,28 @@ class TestBargeInDetectorDetectionLoop(unittest.TestCase):
         mock_stream.read = fake_read
 
         import struct
-        with patch('common.barge_in.struct.unpack_from', return_value=[0] * 512):
+        with patch('common.barge_in.struct.unpack_from', return_value=[0] * 1280):
             mock_pa = Mock()
             mock_pa.open.return_value = mock_stream
             mock_pyaudio_class.return_value = mock_pa
 
             d = self._make_detector()
             d.start()
-            # Wait for the event to be set
             detected = d._event.wait(timeout=2.0)
             d.stop(timeout=0.5)
 
         self.assertTrue(detected, "Expected wake word to be detected and event set")
 
-    @patch('common.barge_in.pvporcupine.create')
+    @patch('common.barge_in.OpenWakeWordDetector')
     @patch('common.barge_in.pyaudio.PyAudio')
-    def test_detection_loop_stops_on_stop_flag(self, mock_pyaudio_class, mock_porcupine_create):
+    def test_detection_loop_stops_on_stop_flag(self, mock_pyaudio_class, mock_detector_class):
         """When stop_flag is set, the detection loop exits without triggering barge-in."""
-        mock_porcupine = Mock()
-        mock_porcupine.sample_rate = 16000
-        mock_porcupine.frame_length = 512
-        mock_porcupine.process.return_value = -1  # never detect
-        mock_porcupine_create.return_value = mock_porcupine
+        mock_detector = Mock()
+        mock_detector.sample_rate = 16000
+        mock_detector.frame_length = 1280
+        mock_detector.process.return_value = -1
+        mock_detector_class.return_value = mock_detector
 
-        # Block on read until stop_flag is set
         stop_read = threading.Event()
         def blocking_read(n, exception_on_overflow=False):
             stop_read.wait(timeout=5)
@@ -441,104 +414,33 @@ class TestBargeInDetectorDetectionLoop(unittest.TestCase):
         d.start()
         self.assertTrue(d._thread.is_alive())
 
-        # Signal stop and unblock read
         stop_read.set()
         d.stop(timeout=1.0)
 
         self.assertIsNone(d._thread)
         self.assertFalse(d.is_triggered)
 
-    @patch('common.barge_in.pvporcupine.create')
+    @patch('common.barge_in.OpenWakeWordDetector')
     @patch('common.barge_in.pyaudio.PyAudio')
-    def test_detection_loop_handles_porcupine_init_error(self, mock_pyaudio_class, mock_porcupine_create):
-        """If Porcupine cannot be created, the thread logs an error and exits cleanly."""
-        mock_porcupine_create.side_effect = Exception("Porcupine init failed")
+    def test_detection_loop_handles_detector_init_error(self, mock_pyaudio_class, mock_detector_class):
+        """If OpenWakeWordDetector cannot be created, the thread logs an error and exits cleanly."""
+        mock_detector_class.side_effect = Exception("detector init failed")
 
         d = self._make_detector()
         d.start()
-        # Thread should exit quickly after the error
         if d._thread is not None:
             d._thread.join(timeout=2.0)
 
         self.assertFalse(d.is_triggered)
 
-    @patch('common.barge_in.pvporcupine.create')
+    @patch('common.barge_in.OpenWakeWordDetector')
     @patch('common.barge_in.pyaudio.PyAudio')
-    def test_detection_loop_uses_built_in_keyword_when_no_paths(self, mock_pyaudio_class, mock_porcupine_create):
-        """Without keyword_paths, Porcupine is created with keywords=[wake_phrase]."""
-        mock_porcupine = Mock()
-        mock_porcupine.sample_rate = 16000
-        mock_porcupine.frame_length = 512
-        mock_porcupine.process.return_value = -1
-        mock_porcupine_create.return_value = mock_porcupine
-
-        stop_read = threading.Event()
-        def blocking_read(n, exception_on_overflow=False):
-            stop_read.wait(timeout=2)
-            raise Exception("done")
-        mock_stream = Mock()
-        mock_stream.read = blocking_read
-        mock_pa = Mock()
-        mock_pa.open.return_value = mock_stream
-        mock_pyaudio_class.return_value = mock_pa
-
-        d = self._make_detector()
-        d.start()
-        stop_read.set()
-        d.stop(timeout=1.0)
-
-        mock_porcupine_create.assert_called_with(
-            access_key="test-key",
-            keywords=["porcupine"],
-            sensitivities=[0.5],
-        )
-
-    @patch('common.barge_in.pvporcupine.create')
-    @patch('common.barge_in.pyaudio.PyAudio')
-    def test_detection_loop_uses_keyword_paths_when_provided(self, mock_pyaudio_class, mock_porcupine_create):
-        """With keyword_paths, Porcupine is created with keyword_paths and sensitivities."""
-        mock_porcupine = Mock()
-        mock_porcupine.sample_rate = 16000
-        mock_porcupine.frame_length = 512
-        mock_porcupine.process.return_value = -1
-        mock_porcupine_create.return_value = mock_porcupine
-
-        stop_read = threading.Event()
-        def blocking_read(n, exception_on_overflow=False):
-            stop_read.wait(timeout=2)
-            raise Exception("done")
-        mock_stream = Mock()
-        mock_stream.read = blocking_read
-        mock_pa = Mock()
-        mock_pa.open.return_value = mock_stream
-        mock_pyaudio_class.return_value = mock_pa
-
-        d = BargeInDetector(
-            access_key="test-key",
-            keyword_paths=["/path/to/model.ppn"],
-            sensitivity=0.6,
-            audio_lock=None,
-            audio=Mock(),
-            config=self.mock_config,
-        )
-        d.start()
-        stop_read.set()
-        d.stop(timeout=1.0)
-
-        mock_porcupine_create.assert_called_with(
-            access_key="test-key",
-            keyword_paths=["/path/to/model.ppn"],
-            sensitivities=[0.6],
-        )
-
-    @patch('common.barge_in.pvporcupine.create')
-    @patch('common.barge_in.pyaudio.PyAudio')
-    def test_detection_loop_handles_audio_read_error(self, mock_pyaudio_class, mock_porcupine_create):
+    def test_detection_loop_handles_audio_read_error(self, mock_pyaudio_class, mock_detector_class):
         """An error reading audio is caught and the loop exits cleanly."""
-        mock_porcupine = Mock()
-        mock_porcupine.sample_rate = 16000
-        mock_porcupine.frame_length = 512
-        mock_porcupine_create.return_value = mock_porcupine
+        mock_detector = Mock()
+        mock_detector.sample_rate = 16000
+        mock_detector.frame_length = 1280
+        mock_detector_class.return_value = mock_detector
 
         mock_stream = Mock()
         mock_stream.read.side_effect = Exception("hw error")
@@ -551,19 +453,18 @@ class TestBargeInDetectorDetectionLoop(unittest.TestCase):
         if d._thread is not None:
             d._thread.join(timeout=2.0)
 
-        # Event should not be set (error before detection)
         self.assertFalse(d.is_triggered)
 
-    @patch('common.barge_in.pvporcupine.create')
+    @patch('common.barge_in.OpenWakeWordDetector')
     @patch('common.barge_in.pyaudio.PyAudio')
     def test_detection_loop_audio_read_error_during_shutdown_logs_debug(
-        self, mock_pyaudio_class, mock_porcupine_create
+        self, mock_pyaudio_class, mock_detector_class
     ):
         """Audio read error during shutdown (stop_flag set) is logged at DEBUG, not WARNING."""
-        mock_porcupine = Mock()
-        mock_porcupine.sample_rate = 16000
-        mock_porcupine.frame_length = 512
-        mock_porcupine_create.return_value = mock_porcupine
+        mock_detector = Mock()
+        mock_detector.sample_rate = 16000
+        mock_detector.frame_length = 1280
+        mock_detector_class.return_value = mock_detector
 
         mock_stream = Mock()
         mock_stream.read.side_effect = Exception("stream closed")
@@ -572,7 +473,7 @@ class TestBargeInDetectorDetectionLoop(unittest.TestCase):
         mock_pyaudio_class.return_value = mock_pa
 
         d = self._make_detector()
-        d._stop_flag.set()  # simulate shutdown in progress
+        d._stop_flag.set()
         d._thread = threading.Thread(target=d._detection_loop, daemon=True)
         d._thread.start()
         d._thread.join(timeout=2.0)
@@ -586,16 +487,15 @@ class TestBargeInCleanupPyAudio(unittest.TestCase):
     def setUp(self):
         logging.disable(logging.CRITICAL)
         self.mock_config = Mock()
-        self.mock_config.wake_phrase = "porcupine"
+        self.mock_config.rate = 16000
 
     def tearDown(self):
         logging.disable(logging.NOTSET)
 
     def _make_detector(self):
         return BargeInDetector(
-            access_key="test-key",
-            keyword_paths=None,
-            sensitivity=0.5,
+            model_name="hey_jarvis",
+            threshold=0.5,
             audio_lock=None,
             audio=Mock(),
             config=self.mock_config,
@@ -606,7 +506,6 @@ class TestBargeInCleanupPyAudio(unittest.TestCase):
         mock_stream = Mock()
         mock_stream.stop_stream.side_effect = Exception("hw error")
         mock_pa = Mock()
-        # Should not raise; close() and pa.terminate() must still be called
         d._cleanup_pyaudio(mock_stream, mock_pa)
         mock_stream.close.assert_called_once()
         mock_pa.terminate.assert_called_once()
@@ -624,104 +523,17 @@ class TestBargeInCleanupPyAudio(unittest.TestCase):
         mock_stream = Mock()
         mock_pa = Mock()
         mock_pa.terminate.side_effect = Exception("terminate error")
-        # Should not raise
         d._cleanup_pyaudio(mock_stream, mock_pa)
 
     def test_cleanup_pyaudio_handles_both_none(self):
         d = self._make_detector()
-        # Should not raise
         d._cleanup_pyaudio(None, None)
-
-
-class TestBargeInKeywordPaths(unittest.TestCase):
-    """Tests for keyword_paths handling in _create_porcupine_instance."""
-
-    def setUp(self):
-        logging.disable(logging.CRITICAL)
-        self.mock_config = Mock()
-        self.mock_config.wake_phrase = "porcupine"
-
-    def tearDown(self):
-        logging.disable(logging.NOTSET)
-
-    @patch('common.barge_in.pvporcupine.create')
-    @patch('common.barge_in.pyaudio.PyAudio')
-    def test_single_string_keyword_path_wrapped_in_list(self, mock_pyaudio_class, mock_porcupine_create):
-        """A string keyword_path (not a list) should be wrapped in a list."""
-        mock_porcupine = Mock()
-        mock_porcupine.sample_rate = 16000
-        mock_porcupine.frame_length = 512
-        mock_porcupine.process.return_value = -1
-        mock_porcupine_create.return_value = mock_porcupine
-
-        stop_read = threading.Event()
-        def blocking_read(n, exception_on_overflow=False):
-            stop_read.wait(timeout=2)
-            raise Exception("done")
-        mock_stream = Mock()
-        mock_stream.read = blocking_read
-        mock_pa = Mock()
-        mock_pa.open.return_value = mock_stream
-        mock_pyaudio_class.return_value = mock_pa
-
-        d = BargeInDetector(
-            access_key="test-key",
-            keyword_paths="/path/to/model.ppn",  # string, not list
-            sensitivity=0.6,
-            audio_lock=None,
-            audio=Mock(),
-            config=self.mock_config,
-        )
-        d.start()
-        stop_read.set()
-        d.stop(timeout=1.0)
-
-        mock_porcupine_create.assert_called_with(
-            access_key="test-key",
-            keyword_paths=["/path/to/model.ppn"],
-            sensitivities=[0.6],
-        )
-
-    @patch('common.barge_in.pvporcupine.create')
-    @patch('common.barge_in.pyaudio.PyAudio')
-    def test_porcupine_delete_exception_suppressed(self, mock_pyaudio_class, mock_porcupine_create):
-        """If porcupine_instance.delete() raises, the exception is suppressed."""
-        mock_porcupine = Mock()
-        mock_porcupine.sample_rate = 16000
-        mock_porcupine.frame_length = 512
-        mock_porcupine.process.return_value = -1
-        mock_porcupine.delete.side_effect = Exception("delete error")
-        mock_porcupine_create.return_value = mock_porcupine
-
-        stop_read = threading.Event()
-        def blocking_read(n, exception_on_overflow=False):
-            stop_read.wait(timeout=2)
-            raise Exception("done")
-        mock_stream = Mock()
-        mock_stream.read = blocking_read
-        mock_pa = Mock()
-        mock_pa.open.return_value = mock_stream
-        mock_pyaudio_class.return_value = mock_pa
-
-        d = BargeInDetector(
-            access_key="test-key",
-            keyword_paths=None,
-            sensitivity=0.5,
-            audio_lock=None,
-            audio=Mock(),
-            config=self.mock_config,
-        )
-        d.start()
-        stop_read.set()
-        # Should not raise even though delete() fails
-        d.stop(timeout=1.0)
 
 
 class TestBargeInSentinel(unittest.TestCase):
     """Tests for the _BARGE_IN sentinel object."""
 
     def test_barge_in_sentinel_is_unique(self):
-        """_BARGE_IN is a unique object identity sentinel."""
         from common.barge_in import _BARGE_IN as s1
         from common.barge_in import _BARGE_IN as s2
         self.assertIs(s1, s2)
@@ -733,7 +545,6 @@ class TestBargeInSentinel(unittest.TestCase):
         self.assertIsNot(_BARGE_IN, False)
 
     def test_barge_in_sentinel_identity_check(self):
-        """Confirm identity semantics (not equality)."""
         self.assertIs(_BARGE_IN, _BARGE_IN)
         self.assertIsNot(_BARGE_IN, object())
 

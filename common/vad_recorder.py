@@ -80,6 +80,7 @@ class VadRecorder:
         audio_stream = None
         frames = []
         silence_start = None
+        speech_detected = False
         recording_start = time.time()
 
         try:
@@ -119,15 +120,17 @@ class VadRecorder:
                     is_speech = True  # Assume speech on error
 
                 if is_speech:
+                    speech_detected = True
                     silence_start = None
                 else:
-                    if silence_start is None:
-                        silence_start = time.time()
-                    else:
-                        silence_duration = time.time() - silence_start
-                        if silence_duration >= self._config.vad_silence_duration:
-                            logger.debug("Silence detected (%.2fs)", silence_duration)
-                            break
+                    if speech_detected:
+                        if silence_start is None:
+                            silence_start = time.time()
+                        else:
+                            silence_duration = time.time() - silence_start
+                            if silence_duration >= self._config.vad_silence_duration:
+                                logger.debug("Silence detected (%.2fs)", silence_duration)
+                                break
 
             if not frames:
                 return None

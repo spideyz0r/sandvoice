@@ -17,7 +17,7 @@ class TestWakeWordModeInitialization(unittest.TestCase):
         self.mock_config.wake_word_enabled = True
         self.mock_config.wake_phrase = "hey sandvoice"
         self.mock_config.wake_word_sensitivity = 0.5
-        self.mock_config.porcupine_access_key = "test-key-123"
+        self.mock_config.openwakeword_model = "hey_jarvis"
         self.mock_config.wake_confirmation_beep = True
         self.mock_config.wake_confirmation_beep_freq = 800
         self.mock_config.wake_confirmation_beep_duration = 0.1
@@ -36,7 +36,7 @@ class TestWakeWordModeInitialization(unittest.TestCase):
 
         self.assertEqual(mode.state, State.IDLE)
         self.assertFalse(mode.running)
-        self.assertIsNone(mode.porcupine)
+        self.assertIsNone(mode.detector)
         self.assertIsNone(mode.confirmation_beep_path)
 
     def test_init_stores_dependencies(self):
@@ -68,10 +68,9 @@ class TestWakeWordModeInitialize(unittest.TestCase):
 
         self.mock_config = Mock()
         self.mock_config.debug = False
-        self.mock_config.wake_phrase = "porcupine"
+        self.mock_config.wake_phrase = "hey jarvis"
         self.mock_config.wake_word_sensitivity = 0.5
-        self.mock_config.porcupine_access_key = "test-key-123"
-        self.mock_config.porcupine_keyword_paths = None
+        self.mock_config.openwakeword_model = "hey_jarvis"
         self.mock_config.wake_confirmation_beep = True
         self.mock_config.wake_confirmation_beep_freq = 800
         self.mock_config.wake_confirmation_beep_duration = 0.1
@@ -88,32 +87,32 @@ class TestWakeWordModeInitialize(unittest.TestCase):
     def tearDown(self):
         logging.disable(logging.NOTSET)
 
-    @patch('common.wake_word.pvporcupine.create')
+    @patch('common.wake_word.OpenWakeWordDetector')
     @patch('common.wake_word.create_confirmation_beep')
-    def test_initialize_creates_porcupine(self, mock_beep, mock_porcupine_create):
-        mock_porcupine = Mock()
-        mock_porcupine.sample_rate = 16000
-        mock_porcupine.frame_length = 512
-        mock_porcupine_create.return_value = mock_porcupine
+    def test_initialize_creates_detector(self, mock_beep, mock_detector_class):
+        mock_detector = Mock()
+        mock_detector.sample_rate = 16000
+        mock_detector.frame_length = 1280
+        mock_detector_class.return_value = mock_detector
         mock_beep.return_value = "/tmp/test/beep.mp3"
 
         mode = WakeWordMode(self.mock_config, self.mock_ai, self.mock_audio, route_message=self.mock_route_message)
         mode._initialize()
 
-        mock_porcupine_create.assert_called_once_with(
-            access_key="test-key-123",
-            keywords=["porcupine"],
-            sensitivities=[0.5]
+        mock_detector_class.assert_called_once_with(
+            model_name="hey_jarvis",
+            threshold=0.5,
+            device_sample_rate=self.mock_config.rate,
         )
-        self.assertEqual(mode.porcupine, mock_porcupine)
+        self.assertEqual(mode.detector, mock_detector)
 
-    @patch('common.wake_word.pvporcupine.create')
+    @patch('common.wake_word.OpenWakeWordDetector')
     @patch('common.wake_word.create_confirmation_beep')
-    def test_initialize_creates_confirmation_beep(self, mock_beep, mock_porcupine_create):
-        mock_porcupine = Mock()
-        mock_porcupine.sample_rate = 16000
-        mock_porcupine.frame_length = 512
-        mock_porcupine_create.return_value = mock_porcupine
+    def test_initialize_creates_confirmation_beep(self, mock_beep, mock_detector_class):
+        mock_detector = Mock()
+        mock_detector.sample_rate = 16000
+        mock_detector.frame_length = 1280
+        mock_detector_class.return_value = mock_detector
         mock_beep.return_value = "/tmp/test/beep.mp3"
 
         mode = WakeWordMode(self.mock_config, self.mock_ai, self.mock_audio, route_message=self.mock_route_message)
@@ -126,19 +125,19 @@ class TestWakeWordModeInitialize(unittest.TestCase):
         )
         self.assertEqual(mode.confirmation_beep_path, "/tmp/test/beep.mp3")
 
-    @patch('common.wake_word.pvporcupine.create')
+    @patch('common.wake_word.OpenWakeWordDetector')
     @patch('common.wake_word.create_ack_earcon')
     @patch('common.wake_word.create_confirmation_beep')
-    def test_initialize_creates_ack_earcon_when_enabled(self, mock_beep, mock_ack, mock_porcupine_create):
+    def test_initialize_creates_ack_earcon_when_enabled(self, mock_beep, mock_ack, mock_detector_class):
         self.mock_config.bot_voice = True
         self.mock_config.voice_ack_earcon = True
         self.mock_config.voice_ack_earcon_freq = 600
         self.mock_config.voice_ack_earcon_duration = 0.06
 
-        mock_porcupine = Mock()
-        mock_porcupine.sample_rate = 16000
-        mock_porcupine.frame_length = 512
-        mock_porcupine_create.return_value = mock_porcupine
+        mock_detector = Mock()
+        mock_detector.sample_rate = 16000
+        mock_detector.frame_length = 1280
+        mock_detector_class.return_value = mock_detector
         mock_beep.return_value = "/tmp/test/beep.mp3"
         mock_ack.return_value = "/tmp/test/ack.mp3"
 
@@ -188,21 +187,10 @@ class TestWakeWordModeInitialize(unittest.TestCase):
 
         self.assertIn("stream_tts", str(context.exception))
 
-    @patch('common.wake_word.pvporcupine.create')
-    def test_initialize_raises_on_missing_access_key(self, mock_porcupine_create):
-        self.mock_config.porcupine_access_key = ""
-
-        mode = WakeWordMode(self.mock_config, self.mock_ai, self.mock_audio, route_message=self.mock_route_message)
-
-        with self.assertRaises(RuntimeError) as context:
-            mode._initialize()
-
-        self.assertIn("access key is required", str(context.exception).lower())
-
-    @patch('common.wake_word.pvporcupine.create')
+    @patch('common.wake_word.OpenWakeWordDetector')
     @patch('common.wake_word.create_confirmation_beep')
-    def test_initialize_handles_porcupine_error(self, mock_beep, mock_porcupine_create):
-        mock_porcupine_create.side_effect = Exception("Porcupine init failed")
+    def test_initialize_handles_detector_error(self, mock_beep, mock_detector_class):
+        mock_detector_class.side_effect = Exception("detector init failed")
 
         mode = WakeWordMode(self.mock_config, self.mock_ai, self.mock_audio, route_message=self.mock_route_message)
 
@@ -211,13 +199,13 @@ class TestWakeWordModeInitialize(unittest.TestCase):
 
         self.assertIn("Failed to initialize wake-word mode", str(context.exception))
 
-    @patch('common.wake_word.pvporcupine.create')
+    @patch('common.wake_word.OpenWakeWordDetector')
     @patch('common.wake_word.create_confirmation_beep')
-    def test_initialize_handles_beep_creation_error(self, mock_beep, mock_porcupine_create):
-        mock_porcupine = Mock()
-        mock_porcupine.sample_rate = 16000
-        mock_porcupine.frame_length = 512
-        mock_porcupine_create.return_value = mock_porcupine
+    def test_initialize_handles_beep_creation_error(self, mock_beep, mock_detector_class):
+        mock_detector = Mock()
+        mock_detector.sample_rate = 16000
+        mock_detector.frame_length = 1280
+        mock_detector_class.return_value = mock_detector
         mock_beep.side_effect = Exception("Beep creation failed")
 
         mode = WakeWordMode(self.mock_config, self.mock_ai, self.mock_audio, route_message=self.mock_route_message)
@@ -260,19 +248,19 @@ class TestWakeWordModeStateIdle(unittest.TestCase):
     def test_state_idle_detects_wake_word(self, mock_unpack, mock_pyaudio_class):
         mock_porcupine = Mock()
         mock_porcupine.sample_rate = 16000
-        mock_porcupine.frame_length = 512
+        mock_porcupine.frame_length = 1280
         mock_porcupine.process.side_effect = [-1, -1, 0]
 
         mock_stream = Mock()
-        mock_stream.read.return_value = b'\x00' * 1024
-        mock_unpack.return_value = [0] * 512
+        mock_stream.read.return_value = b'\x00' * 2560
+        mock_unpack.return_value = [0] * 1280
 
         mock_pa = Mock()
         mock_pa.open.return_value = mock_stream
         mock_pyaudio_class.return_value = mock_pa
 
         mode = WakeWordMode(self.mock_config, self.mock_ai, self.mock_audio, route_message=self.mock_route_message)
-        mode.porcupine = mock_porcupine
+        mode.detector = mock_porcupine
         mode.confirmation_beep_path = "/tmp/beep.mp3"
         mode.running = True
         mode.state = State.IDLE
@@ -293,19 +281,19 @@ class TestWakeWordModeStateIdle(unittest.TestCase):
 
         mock_porcupine = Mock()
         mock_porcupine.sample_rate = 16000
-        mock_porcupine.frame_length = 512
+        mock_porcupine.frame_length = 1280
         mock_porcupine.process.return_value = 0
 
         mock_stream = Mock()
-        mock_stream.read.return_value = b'\x00' * 1024
-        mock_unpack.return_value = [0] * 512
+        mock_stream.read.return_value = b'\x00' * 2560
+        mock_unpack.return_value = [0] * 1280
 
         mock_pa = Mock()
         mock_pa.open.return_value = mock_stream
         mock_pyaudio_class.return_value = mock_pa
 
         mode = WakeWordMode(self.mock_config, self.mock_ai, self.mock_audio, route_message=self.mock_route_message)
-        mode.porcupine = mock_porcupine
+        mode.detector = mock_porcupine
         mode.confirmation_beep_path = "/tmp/beep.mp3"
         mode.running = True
         mode.state = State.IDLE
@@ -319,7 +307,7 @@ class TestWakeWordModeStateIdle(unittest.TestCase):
     def test_state_idle_handles_stream_error(self, mock_unpack, mock_pyaudio_class):
         mock_porcupine = Mock()
         mock_porcupine.sample_rate = 16000
-        mock_porcupine.frame_length = 512
+        mock_porcupine.frame_length = 1280
 
         mock_stream = Mock()
         mock_stream.read.side_effect = Exception("Stream error")
@@ -329,7 +317,7 @@ class TestWakeWordModeStateIdle(unittest.TestCase):
         mock_pyaudio_class.return_value = mock_pa
 
         mode = WakeWordMode(self.mock_config, self.mock_ai, self.mock_audio, route_message=self.mock_route_message)
-        mode.porcupine = mock_porcupine
+        mode.detector = mock_porcupine
         mode.running = True
         mode.state = State.IDLE
 
@@ -360,17 +348,17 @@ class TestWakeWordModeRun(unittest.TestCase):
     def tearDown(self):
         logging.disable(logging.NOTSET)
 
-    @patch('common.wake_word.pvporcupine.create')
+    @patch('common.wake_word.OpenWakeWordDetector')
     @patch('common.wake_word.create_confirmation_beep')
-    def test_run_transitions_through_states(self, mock_beep, mock_porcupine_create):
-        mock_porcupine = Mock()
-        mock_porcupine.sample_rate = 16000
-        mock_porcupine.frame_length = 512
-        mock_porcupine_create.return_value = mock_porcupine
+    def test_run_transitions_through_states(self, mock_beep, mock_detector_class):
+        mock_detector = Mock()
+        mock_detector.sample_rate = 16000
+        mock_detector.frame_length = 1280
+        mock_detector_class.return_value = mock_detector
         mock_beep.return_value = "/tmp/beep.mp3"
 
-        self.mock_config.porcupine_access_key = "test-key"
-        self.mock_config.wake_phrase = "porcupine"
+        self.mock_config.openwakeword_model = "hey_jarvis"
+        self.mock_config.wake_phrase = "hey jarvis"
         self.mock_config.wake_word_sensitivity = 0.5
         self.mock_config.wake_confirmation_beep = True
 
@@ -406,17 +394,17 @@ class TestWakeWordModeRun(unittest.TestCase):
         self.assertEqual(call_count['idle'], 2)
         self.assertFalse(mode.running)
 
-    @patch('common.wake_word.pvporcupine.create')
+    @patch('common.wake_word.OpenWakeWordDetector')
     @patch('common.wake_word.create_confirmation_beep')
-    def test_run_handles_keyboard_interrupt(self, mock_beep, mock_porcupine_create):
-        mock_porcupine = Mock()
-        mock_porcupine.sample_rate = 16000
-        mock_porcupine.frame_length = 512
-        mock_porcupine_create.return_value = mock_porcupine
+    def test_run_handles_keyboard_interrupt(self, mock_beep, mock_detector_class):
+        mock_detector = Mock()
+        mock_detector.sample_rate = 16000
+        mock_detector.frame_length = 1280
+        mock_detector_class.return_value = mock_detector
         mock_beep.return_value = "/tmp/beep.mp3"
 
-        self.mock_config.porcupine_access_key = "test-key"
-        self.mock_config.wake_phrase = "porcupine"
+        self.mock_config.openwakeword_model = "hey_jarvis"
+        self.mock_config.wake_phrase = "hey jarvis"
         self.mock_config.wake_word_sensitivity = 0.5
         self.mock_config.wake_confirmation_beep = True
 
@@ -431,7 +419,7 @@ class TestWakeWordModeRun(unittest.TestCase):
         mode.run()
 
         # Cleanup should have been called
-        self.assertIsNone(mode.porcupine)
+        self.assertIsNone(mode.detector)
         self.assertFalse(mode.running)
 
 
@@ -516,22 +504,22 @@ class TestWakeWordModeCleanup(unittest.TestCase):
     def tearDown(self):
         logging.disable(logging.NOTSET)
 
-    def test_cleanup_deletes_porcupine(self):
-        mock_porcupine = Mock()
+    def test_cleanup_deletes_detector(self):
+        mock_detector = Mock()
 
         mode = WakeWordMode(self.mock_config, self.mock_ai, self.mock_audio, route_message=self.mock_route_message)
-        mode.porcupine = mock_porcupine
+        mode.detector = mock_detector
         mode.running = True
 
         mode._cleanup()
 
-        mock_porcupine.delete.assert_called_once()
-        self.assertIsNone(mode.porcupine)
+        mock_detector.delete.assert_called_once()
+        self.assertIsNone(mode.detector)
         self.assertFalse(mode.running)
 
-    def test_cleanup_handles_none_porcupine(self):
+    def test_cleanup_handles_none_detector(self):
         mode = WakeWordMode(self.mock_config, self.mock_ai, self.mock_audio, route_message=self.mock_route_message)
-        mode.porcupine = None
+        mode.detector = None
         mode.running = True
 
         mode._cleanup()
@@ -902,7 +890,7 @@ class TestBargeIn(unittest.TestCase):
 
         self.mock_ai = Mock()
         self.mock_audio = Mock()
-        self.mock_porcupine = Mock()  # Mock porcupine for consistency
+        self.mock_detector = Mock()  # Mock detector for consistency
         self.mock_route_message = Mock()
 
     def tearDown(self):
@@ -1438,20 +1426,20 @@ class TestRequestTimingSummary(unittest.TestCase):
     def test_state_idle_sets_req_t_start_on_wake_word(self):
         """_req_t_start is set when wake word is detected."""
         mode = self._make_mode()
-        mode.porcupine = Mock()
-        mode.porcupine.sample_rate = 16000
-        mode.porcupine.frame_length = 512
+        mode.detector = Mock()
+        mode.detector.sample_rate = 16000
+        mode.detector.frame_length = 1280
         mode.running = True
         mode.state = State.IDLE
 
         # Simulate: first frame no wake word, second frame detects wake word
         call_count = [0]
 
-        def porcupine_process(pcm):
+        def detector_process(pcm):
             call_count[0] += 1
             return 0 if call_count[0] >= 2 else -1
 
-        mode.porcupine.process.side_effect = porcupine_process
+        mode.detector.process.side_effect = detector_process
         mode._play_confirmation_beep = Mock()
 
         with patch("common.wake_word.pyaudio.PyAudio") as mock_pa_cls:
@@ -1459,7 +1447,7 @@ class TestRequestTimingSummary(unittest.TestCase):
             mock_pa_cls.return_value = mock_pa
             mock_stream = Mock()
             mock_pa.open.return_value = mock_stream
-            mock_stream.read.return_value = b"\x00" * (512 * 2)  # 512 int16 samples
+            mock_stream.read.return_value = b"\x00" * (1280 * 2)  # 1280 int16 samples
             mode._state_idle()
 
         self.assertIsNotNone(mode._req_t_start)
@@ -1552,20 +1540,20 @@ class TestTerminalUIIntegration(unittest.TestCase):
     def test_state_idle_calls_ui_set_state_waiting(self):
         mode = _build_mode_for_idle(self.mock_config, self.mock_ai, self.mock_audio,
                                      self.mock_route_message, self.mock_ui)
-        # Simulate one idle cycle by calling _state_idle with a mocked porcupine
-        mode.porcupine = Mock()
-        mode.porcupine.frame_length = 512
-        mode.porcupine.sample_rate = 16000
-        mode.porcupine.process.return_value = -1  # no keyword
+        # Simulate one idle cycle by calling _state_idle with a mocked detector
+        mode.detector = Mock()
+        mode.detector.frame_length = 1280
+        mode.detector.sample_rate = 16000
+        mode.detector.process.return_value = -1  # no keyword
         mode.running = True
         # Force state to leave IDLE after one iteration while returning "no keyword"
         def stop_after_one(*args, **kwargs):
             mode.running = False
             return -1
-        mode.porcupine.process.side_effect = stop_after_one
+        mode.detector.process.side_effect = stop_after_one
 
         mock_stream = Mock()
-        mock_stream.read.return_value = b"\x00" * 1024
+        mock_stream.read.return_value = b"\x00" * 2560
         mock_pa = Mock()
         mock_pa.open.return_value = mock_stream
 

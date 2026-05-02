@@ -9,10 +9,16 @@ Jinja2
 lameenc
 numpy
 openai
-pvporcupine==4.0.1
+# onnxruntime: hard-pinned — 1.21+ crashes on Pi 3B (aarch64 STL vector assertion).
+# Do not bump without testing on Pi 3B first.
+onnxruntime==1.20.0
+# openwakeword: on Raspberry Pi install with --no-deps before this file (tflite-runtime
+# has no aarch64 wheel for Python 3.13): pip install openwakeword>=0.6.0 --no-deps && pip install scipy
+openwakeword>=0.6.0
 PyAudio
 pygame
 pynput
 PyYAML
 Requests
+scipy
 webrtcvad==2.0.10

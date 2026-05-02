@@ -51,10 +51,9 @@ bot_voice: enabled
 stream_responses: enabled
 stream_tts: enabled
 vad_enabled: enabled
-porcupine_access_key: "YOUR_KEY_HERE"   # free key at https://console.picovoice.ai/
 ```
 
-The wake phrase defaults to `hey sandvoice`. Change it with `wake_phrase` in config (must be a built-in Porcupine keyword, or provide a custom `.ppn` model via `porcupine_keyword_paths`).
+The wake phrase defaults to `hey jarvis`. Change it with `wake_phrase` and `openwakeword_model` in config. The model name must be a built-in openWakeWord model (e.g. `hey_jarvis`, `alexa`) or an absolute path to a custom `.onnx` file.
 
 ## API keys
 
@@ -62,7 +61,6 @@ The wake phrase defaults to `hey sandvoice`. Change it with `wake_phrase` in con
 |---|---|---|
 | `OPENAI_API_KEY` | Always | All AI features |
 | `OPENWEATHERMAP_API_KEY` | Weather plugin only | `weather` plugin |
-| `porcupine_access_key` (in config) | Wake word mode only | Wake word, barge-in |
 
 ## Configuration
 
@@ -131,10 +129,9 @@ rss_news_max_items: "5"
 
 # Wake word (--wake-word mode)
 wake_word_enabled: enabled   # global toggle; --wake-word flag is still required to start the mode
-wake_phrase: hey sandvoice
-wake_word_sensitivity: 0.5   # 0.0-1.0; higher = more sensitive
-porcupine_access_key: ""
-porcupine_keyword_paths: null   # path(s) to custom .ppn model(s), or null
+wake_phrase: hey jarvis
+wake_word_sensitivity: 0.35  # 0.0-1.0; higher = more sensitive
+openwakeword_model: hey_jarvis  # built-in model name or absolute path to a custom .onnx file
 
 # Voice activity detection (required in --wake-word mode)
 vad_enabled: enabled

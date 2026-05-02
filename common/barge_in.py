@@ -3,7 +3,7 @@ import struct
 import threading
 import time
 
-import pvporcupine
+from common.openwakeword_detector import OpenWakeWordDetector
 import pyaudio
 
 logger = logging.getLogger(__name__)
@@ -13,7 +13,7 @@ _BARGE_IN = object()
 
 
 class BargeInDetector:
-    """Encapsulates barge-in detection using Porcupine wake-word engine.
+    """Encapsulates barge-in detection using OpenWakeWord wake word engine.
 
     Runs a background thread that listens for the wake word while other
     operations are in progress (e.g. TTS playback, API calls). When the
@@ -23,7 +23,7 @@ class BargeInDetector:
     Usage::
 
         detector = BargeInDetector(
-            access_key=..., keyword_paths=..., sensitivity=...,
+            model_name=..., threshold=...,
             audio_lock=..., audio=..., config=...
         )
         detector.start()
@@ -33,24 +33,21 @@ class BargeInDetector:
         detector.stop()
     """
 
-    def __init__(self, access_key, keyword_paths, sensitivity, audio_lock, audio, config):
+    def __init__(self, model_name, threshold, audio_lock, audio, config):
         """Initialise the detector.
 
         Args:
-            access_key: Porcupine access key string.
-            keyword_paths: List of .ppn file paths, or None to use built-in
-                keywords derived from ``config.wake_phrase``.
-            sensitivity: Float sensitivity for wake-word detection (0.0–1.0).
+            model_name: OpenWakeWord model name string.
+            threshold: Float sensitivity for wake-word detection (0.0–1.0).
             audio_lock: threading.Lock (or None) acquired around playback
                 calls inside the host WakeWordMode.  Not used by the detector
                 itself; stored so callers can pass it along if needed.
             audio: Audio instance (stored for future use; not used internally).
-            config: Config instance; used to read ``wake_phrase`` when
-                creating Porcupine instances with built-in keywords.
+            config: Config instance; used to read ``rate`` when
+                creating OpenWakeWordDetector instances.
         """
-        self._access_key = access_key
-        self._keyword_paths = keyword_paths
-        self._sensitivity = sensitivity
+        self._model_name = model_name
+        self._sensitivity = threshold
         self._audio_lock = audio_lock
         self._audio = audio
         self._config = config
@@ -208,25 +205,13 @@ class BargeInDetector:
     # Internal
     # ------------------------------------------------------------------
 
-    def _create_porcupine_instance(self):
-        """Create a fresh Porcupine instance for this thread."""
-        if self._keyword_paths:
-            paths = self._keyword_paths
-            if not isinstance(paths, (list, tuple)):
-                paths = [paths]
-            sensitivities = [self._sensitivity] * len(paths)
-            return pvporcupine.create(
-                access_key=self._access_key,
-                keyword_paths=paths,
-                sensitivities=sensitivities,
-            )
-        else:
-            wake_keyword = self._config.wake_phrase.lower()
-            return pvporcupine.create(
-                access_key=self._access_key,
-                keywords=[wake_keyword],
-                sensitivities=[self._sensitivity],
-            )
+    def _create_detector_instance(self):
+        """Create a fresh OpenWakeWordDetector for this detection thread."""
+        return OpenWakeWordDetector(
+            model_name=self._model_name,
+            threshold=self._sensitivity,
+            device_sample_rate=self._config.rate,
+        )
 
     def _cleanup_pyaudio(self, stream, pa):
         """Stop and close a PyAudio stream, then terminate the PyAudio instance."""
@@ -248,26 +233,26 @@ class BargeInDetector:
     def _detection_loop(self):
         """Background thread body: listen for barge-in wake word.
 
-        Creates its own Porcupine instance to avoid thread-safety issues with
-        the main Porcupine instance used in IDLE state.
+        Creates its own OpenWakeWord detector instance to avoid thread-safety
+        issues with the main detector instance used in IDLE state.
         """
-        porcupine_instance = None
+        detector_instance = None
         pa = None
         audio_stream = None
 
         try:
-            logger.debug("Barge-in thread: Creating Porcupine instance...")
-            porcupine_instance = self._create_porcupine_instance()
-            logger.debug("Barge-in thread: Porcupine created successfully")
+            logger.debug("Barge-in thread: Creating OpenWakeWord detector instance...")
+            detector_instance = self._create_detector_instance()
+            logger.debug("Barge-in thread: OpenWakeWord detector created successfully")
 
             logger.debug("Barge-in thread: Opening PyAudio stream...")
             pa = pyaudio.PyAudio()
             audio_stream = pa.open(
-                rate=porcupine_instance.sample_rate,
+                rate=detector_instance.sample_rate,
                 channels=1,
                 format=pyaudio.paInt16,
                 input=True,
-                frames_per_buffer=porcupine_instance.frame_length,
+                frames_per_buffer=detector_instance.frame_length,
             )
 
             logger.debug("Barge-in thread: Audio stream opened, listening for wake word...")
@@ -275,12 +260,12 @@ class BargeInDetector:
             while not self._event.is_set() and not self._stop_flag.is_set():
                 try:
                     pcm = audio_stream.read(
-                        porcupine_instance.frame_length,
+                        detector_instance.frame_length,
                         exception_on_overflow=False,
                     )
-                    pcm = struct.unpack_from("h" * porcupine_instance.frame_length, pcm)
+                    pcm = struct.unpack_from("h" * detector_instance.frame_length, pcm)
 
-                    keyword_index = porcupine_instance.process(pcm)
+                    keyword_index = detector_instance.process(pcm)
 
                     if keyword_index >= 0:
                         logger.info("Barge-in: Wake word detected! Interrupting...")
@@ -300,8 +285,8 @@ class BargeInDetector:
             logger.error("Barge-in detection thread error: %s", e)
         finally:
             self._cleanup_pyaudio(audio_stream, pa)
-            if porcupine_instance is not None:
+            if detector_instance is not None:
                 try:
-                    porcupine_instance.delete()
+                    detector_instance.delete()
                 except Exception as e:
-                    logger.warning("Failed to delete barge-in Porcupine instance: %s", e)
+                    logger.debug("Failed to delete barge-in OpenWakeWord detector instance: %s", e)
