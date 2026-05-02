@@ -94,7 +94,10 @@ class OpenWakeWordDetector:
         audio = np.array(pcm, dtype=np.int16)
         if self._resample_up is not None:
             from scipy.signal import resample_poly
-            audio = resample_poly(audio, self._resample_up, self._resample_down).astype(np.int16)
+            audio = np.clip(
+                resample_poly(audio, self._resample_up, self._resample_down),
+                -32768, 32767,
+            ).astype(np.int16)
 
         prediction = self._model.predict(audio)
         score = prediction.get(self._prediction_key, 0.0)

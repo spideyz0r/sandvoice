@@ -85,6 +85,7 @@ class Audio:
 
     def init_recording(self):
         from pynput import keyboard
+        self._keyboard = keyboard
         listener = keyboard.Listener(on_press=self.on_press)
         listener.start()
         self.start_recording()
@@ -106,7 +107,8 @@ class Audio:
             self.audio = None
 
     def on_press(self, key):
-        if key == keyboard.Key.esc:
+        _kb = getattr(self, '_keyboard', None)
+        if _kb is not None and key == _kb.Key.esc:
             self.is_recording = False
 
     def start_recording(self):

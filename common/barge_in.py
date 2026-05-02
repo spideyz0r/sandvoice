@@ -1,4 +1,6 @@
 import logging
+import platform
+import re
 import struct
 import threading
 import time
@@ -7,6 +9,23 @@ from common.openwakeword_detector import OpenWakeWordDetector
 import pyaudio
 
 logger = logging.getLogger(__name__)
+
+
+def _find_hw_input_device(pa):
+    """Return the index of the first real hardware input device on Linux.
+
+    Mirrors the same helper in wake_word.py. Kept separate to avoid a
+    circular import (wake_word imports barge_in).
+    Returns None on non-Linux platforms or when no hw: device is found.
+    """
+    if platform.system().lower() != "linux":
+        return None
+    for i in range(pa.get_device_count()):
+        dev = pa.get_device_info_by_index(i)
+        if dev.get("maxInputChannels", 0) > 0 and re.search(r'hw:\d+,\d+', dev.get("name", "")):
+            logger.debug("Barge-in: selected hw input device index=%s name=%s", i, dev["name"])
+            return i
+    return None
 
 # Sentinel returned by run_with_polling when barge-in interrupted the operation.
 _BARGE_IN = object()
@@ -247,12 +266,14 @@ class BargeInDetector:
 
             logger.debug("Barge-in thread: Opening PyAudio stream...")
             pa = pyaudio.PyAudio()
+            input_device_index = _find_hw_input_device(pa)
             audio_stream = pa.open(
-                rate=detector_instance.sample_rate,
+                rate=detector_instance.device_sample_rate,
                 channels=1,
                 format=pyaudio.paInt16,
                 input=True,
                 frames_per_buffer=detector_instance.frame_length,
+                input_device_index=input_device_index,
             )
 
             logger.debug("Barge-in thread: Audio stream opened, listening for wake word...")

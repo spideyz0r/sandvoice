@@ -131,8 +131,14 @@ class VadRecorder:
                             if silence_duration >= self._config.vad_silence_duration:
                                 logger.debug("Silence detected (%.2fs)", silence_duration)
                                 break
+                    else:
+                        # No speech yet: bail out after vad_silence_duration of sustained
+                        # silence so a missed wake-word doesn't hold the mic for 30s.
+                        if (time.time() - recording_start) >= self._config.vad_silence_duration:
+                            logger.debug("No speech detected within %.2fs, discarding", self._config.vad_silence_duration)
+                            break
 
-            if not frames:
+            if not frames or not speech_detected:
                 return None
 
             elapsed = time.time() - recording_start
