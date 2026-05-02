@@ -232,8 +232,10 @@ class TestWeatherPluginWithCache(unittest.TestCase):
         MockReader.return_value.get_current_weather.return_value = {"error": "bad"}
         s = _make_sandvoice(cache=self.cache)
         from plugins.weather import process
-        process("weather", {}, s)
-        s.ai.generate_response.assert_called_once()
+        result = process("weather", {}, s)
+        # Error path skips LLM and returns deterministic message
+        s.ai.generate_response.assert_not_called()
+        self.assertIn("Unable to fetch", result)
         self.assertIsNone(self.cache.get(_CACHE_KEY))
 
     @patch('plugins.weather.plugin.OpenWeatherReader')

@@ -151,10 +151,11 @@ def _cache_key(location, unit, days_ahead=0, timezone=None, _now=None):
     # _now is an optional datetime used to override "now" in tests.
     if days_ahead >= 1:
         tz = _resolve_tz(timezone)
+        utc = datetime.timezone.utc
         if tz is not None:
             now = _now.astimezone(tz) if _now is not None else datetime.datetime.now(tz)
         else:
-            now = _now.astimezone(datetime.timezone.utc) if _now is not None else datetime.datetime.now(datetime.timezone.utc)
+            now = _now.astimezone(utc) if _now is not None else datetime.datetime.now(utc)
         today = now.date().isoformat()
         encoded = json.dumps([location, unit, days_ahead, today], separators=(",", ":"))
     else:
@@ -256,11 +257,8 @@ def process(user_input, route, s):
                 # Fetch returned an error dict or empty result — skip LLM on warmup, no caching
                 if refresh_only:
                     return None
-                response = s.ai.generate_response(
-                    user_input,
-                    f"You can answer questions about weather. This is the information of the weather the user asked: {str(forecast_slots)}\n",
-                )
-                return response.content
+                logger.warning("Forecast fetch failed or returned empty result: %s", forecast_slots)
+                return "Unable to fetch forecast data. Please try again later."
             else:
                 response = s.ai.generate_response(
                     user_input,
@@ -281,11 +279,8 @@ def process(user_input, route, s):
                 # Fetch returned an error dict — skip LLM on warmup, no caching
                 if refresh_only:
                     return None
-                response = s.ai.generate_response(
-                    user_input,
-                    f"You can answer questions about weather. This is the information of the weather the user asked: {str(current_weather)}\n",
-                )
-                return response.content
+                logger.warning("Current weather fetch failed: %s", current_weather)
+                return "Unable to fetch weather data. Please try again later."
 
         # Cache the full response text so future hits skip the LLM call entirely
         if response_text is not None and cache is not None:
