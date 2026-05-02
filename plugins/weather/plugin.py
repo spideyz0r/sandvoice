@@ -96,8 +96,14 @@ class OpenWeatherReader:
             response.raise_for_status()
             data = response.json()
 
-            # Derive target date using the city's UTC offset (seconds east of UTC)
-            tz_offset_s = data.get("city", {}).get("timezone", 0)
+            # Derive target date using the city's UTC offset (seconds east of UTC).
+            # Coerce to int to guard against null or unexpected string values from the API.
+            raw_offset = data.get("city", {}).get("timezone", 0)
+            try:
+                tz_offset_s = int(raw_offset)
+            except (TypeError, ValueError):
+                logger.debug("Forecast: invalid city.timezone value %r; using UTC offset=0", raw_offset)
+                tz_offset_s = 0
             tz = datetime.timezone(datetime.timedelta(seconds=tz_offset_s))
             now_local = _now.astimezone(tz) if _now is not None else datetime.datetime.now(tz)
             target_date = (now_local + datetime.timedelta(days=days_ahead)).date()
@@ -148,7 +154,7 @@ def _cache_key(location, unit, days_ahead=0, timezone=None, _now=None):
         if tz is not None:
             now = _now.astimezone(tz) if _now is not None else datetime.datetime.now(tz)
         else:
-            now = _now if _now is not None else datetime.datetime.now(datetime.timezone.utc)
+            now = _now.astimezone(datetime.timezone.utc) if _now is not None else datetime.datetime.now(datetime.timezone.utc)
         today = now.date().isoformat()
         encoded = json.dumps([location, unit, days_ahead, today], separators=(",", ":"))
     else:
@@ -240,16 +246,9 @@ def process(user_input, route, s):
         response_text = None
         if days_ahead >= 1:
             forecast_slots = weather.get_forecast(days_ahead)
-            if "error" not in (forecast_slots if isinstance(forecast_slots, dict) else {}):
-                response = s.ai.generate_response(
-                    user_input,
-                    f"You can answer questions about weather forecasts. The user asked about weather "
-                    f"{days_ahead} day(s) from now. Here is the forecast data: {str(forecast_slots)}. "
-                    f"Summarize the expected conditions for that day in a natural, voice-friendly way.",
-                )
-                response_text = response.content
-            else:
-                # Forecast fetch returned an error dict — skip LLM on warmup, no caching
+            forecast_error = (isinstance(forecast_slots, dict) and "error" in forecast_slots) or not forecast_slots
+            if forecast_error:
+                # Fetch returned an error dict or empty result — skip LLM on warmup, no caching
                 if refresh_only:
                     return None
                 response = s.ai.generate_response(
@@ -257,6 +256,14 @@ def process(user_input, route, s):
                     f"You can answer questions about weather. This is the information of the weather the user asked: {str(forecast_slots)}\n",
                 )
                 return response.content
+            else:
+                response = s.ai.generate_response(
+                    user_input,
+                    f"You can answer questions about weather forecasts. The user asked about weather "
+                    f"{days_ahead} day(s) from now. Here is the forecast data: {str(forecast_slots)}. "
+                    f"Summarize the expected conditions for that day in a natural, voice-friendly way.",
+                )
+                response_text = response.content
         else:
             current_weather = weather.get_current_weather()
             if "error" not in current_weather:
