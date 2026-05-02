@@ -474,9 +474,11 @@ class TestWeatherForecastProcess(unittest.TestCase):
             cache_weather_forecast_max_stale_s=7200,
         )
         from plugins.weather import _cache_key as ck, process
+        # Compute expected_key before process() so both use the same UTC date
+        # (avoids a theoretical mismatch if the test straddles a UTC midnight).
+        expected_key = ck("London", "metric", 1)
         with patch.object(self.cache, 'set', wraps=self.cache.set) as mock_set:
             process("weather tomorrow", {"days_ahead": 1}, s)
-        expected_key = ck("London", "metric", 1)
         mock_set.assert_called_once_with(
             expected_key,
             "It is 20°C in London.",
@@ -490,10 +492,11 @@ class TestWeatherForecastProcess(unittest.TestCase):
         MockReader.return_value.get_forecast.return_value = forecast_slots
         s = _make_sandvoice(cache=self.cache)
         from plugins.weather import _cache_key as ck, process
+        # Compute expected_key before process() so both use the same UTC date.
+        expected_key = ck("London", "metric", 1)
         with patch.object(self.cache, 'get', wraps=self.cache.get) as mock_get, \
              patch.object(self.cache, 'set', wraps=self.cache.set) as mock_set:
             process("weather tomorrow", {"days_ahead": 1}, s)
-        expected_key = ck("London", "metric", 1)
         mock_get.assert_called_with(expected_key)
         mock_set.assert_called_once()
         call_args = mock_set.call_args
@@ -606,7 +609,7 @@ class TestGetForecast(unittest.TestCase):
 
     @patch('plugins.weather.plugin.requests.get')
     def test_get_forecast_returns_error_on_request_exception(self, mock_get):
-        mock_get.side_effect = ConnectionError("network down")
+        mock_get.side_effect = req_lib.exceptions.ConnectionError("network down")
         from plugins.weather import OpenWeatherReader
         reader = OpenWeatherReader("London", "metric", timeout=5)
         result = reader.get_forecast(1)
