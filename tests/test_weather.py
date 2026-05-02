@@ -421,21 +421,27 @@ class TestCacheKeyForecast(unittest.TestCase):
         self.assertNotEqual(key0, key2)
 
     def test_forecast_cache_key_uses_user_timezone(self):
-        # Keys for the same location/unit/days_ahead but different timezones should
-        # differ when the local dates differ (e.g. UTC-12 vs UTC+12 around midnight).
+        # At 23:30 UTC, UTC+12 is already the next calendar day.
+        # Keys for the same location/days_ahead but different timezones must differ.
+        import datetime as dt_mod
         from plugins.weather import _cache_key
-        key_utc = _cache_key("London", "metric", 1, timezone="UTC")
-        key_no_tz = _cache_key("London", "metric", 1)
-        # Both should contain a date
-        import re
-        self.assertRegex(key_utc, r'\d{4}-\d{2}-\d{2}')
-        # Without timezone falls back to UTC, so keys are equal
-        self.assertEqual(key_utc, key_no_tz)
+        utc = dt_mod.timezone.utc
+        # 2026-05-31 23:30 UTC = 2026-06-01 11:30 in UTC+12 (Etc/GMT-12)
+        fixed_now = dt_mod.datetime(2026, 5, 31, 23, 30, 0, tzinfo=utc)
+        key_utc = _cache_key("London", "metric", 1, timezone="UTC", _now=fixed_now)
+        key_plus12 = _cache_key("London", "metric", 1, timezone="Etc/GMT-12", _now=fixed_now)
+        # UTC is still 2026-05-31; UTC+12 is already 2026-06-01 — keys must differ
+        self.assertNotEqual(key_utc, key_plus12)
+        self.assertIn("2026-05-31", key_utc)
+        self.assertIn("2026-06-01", key_plus12)
 
     def test_forecast_cache_key_invalid_timezone_falls_back_to_utc(self):
+        import datetime as dt_mod
         from plugins.weather import _cache_key
-        key_invalid = _cache_key("London", "metric", 1, timezone="NOT_A_TZ")
-        key_utc = _cache_key("London", "metric", 1, timezone="UTC")
+        utc = dt_mod.timezone.utc
+        fixed_now = dt_mod.datetime(2026, 5, 31, 12, 0, 0, tzinfo=utc)
+        key_invalid = _cache_key("London", "metric", 1, timezone="NOT_A_TZ", _now=fixed_now)
+        key_utc = _cache_key("London", "metric", 1, timezone="UTC", _now=fixed_now)
         self.assertEqual(key_invalid, key_utc)
 
     def test_cache_key_zero_differs_from_legacy(self):
