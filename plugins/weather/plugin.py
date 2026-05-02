@@ -19,6 +19,9 @@ def _resolve_tz(tz_name):
     """Return a ZoneInfo for tz_name, or None if unavailable or invalid."""
     if not tz_name or ZoneInfo is None:
         return None
+    tz_name = tz_name.strip()
+    if not tz_name:
+        return None
     if tz_name in _TZ_CACHE:
         return _TZ_CACHE[tz_name]
     try:
