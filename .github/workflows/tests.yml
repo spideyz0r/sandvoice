@@ -31,6 +31,7 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install "setuptools<81"  # Required for pkg_resources used by webrtcvad (removed in v81+)
+          pip install openwakeword>=0.6.0 --no-deps  # tflite-runtime has no Linux wheel for Python 3.10-3.12
           pip install -r requirements.txt
 
       - name: Run tests with coverage
