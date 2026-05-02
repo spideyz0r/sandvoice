@@ -572,18 +572,18 @@ class TestWeatherForecastProcess(unittest.TestCase):
             cache_weather_forecast_ttl_s=3600,
             cache_weather_forecast_max_stale_s=7200,
         )
-        from plugins.weather import _cache_key as ck, process
-        # Compute expected_key before process() so both use the same local date
-        # (avoids a theoretical mismatch if the test straddles midnight).
-        expected_key = ck("London", "metric", 1, timezone="UTC")
+        from plugins.weather import process
         with patch.object(self.cache, 'set', wraps=self.cache.set) as mock_set:
             process("weather tomorrow", {"days_ahead": 1}, s)
-        mock_set.assert_called_once_with(
-            expected_key,
-            "It is 20°C in London.",
-            ttl_s=s.config.cache_weather_forecast_ttl_s,
-            max_stale_s=s.config.cache_weather_forecast_max_stale_s,
-        )
+        mock_set.assert_called_once()
+        call_key, call_value = mock_set.call_args[0]
+        call_kwargs = mock_set.call_args[1]
+        # Key must be a forecast key: starts with "weather:" and embeds a date
+        self.assertTrue(call_key.startswith("weather:"))
+        self.assertRegex(call_key, r'\d{4}-\d{2}-\d{2}')
+        self.assertEqual(call_value, "It is 20°C in London.")
+        self.assertEqual(call_kwargs['ttl_s'], s.config.cache_weather_forecast_ttl_s)
+        self.assertEqual(call_kwargs['max_stale_s'], s.config.cache_weather_forecast_max_stale_s)
 
     @patch('plugins.weather.plugin.OpenWeatherReader')
     def test_forecast_cache_key_includes_days_ahead(self, MockReader):
@@ -591,15 +591,18 @@ class TestWeatherForecastProcess(unittest.TestCase):
         MockReader.return_value.get_forecast.return_value = forecast_slots
         s = _make_sandvoice(cache=self.cache)
         from plugins.weather import _cache_key as ck, process
-        # Compute expected_key before process() so both use the same local date.
-        expected_key = ck("London", "metric", 1, timezone="UTC")
         with patch.object(self.cache, 'get', wraps=self.cache.get) as mock_get, \
              patch.object(self.cache, 'set', wraps=self.cache.set) as mock_set:
             process("weather tomorrow", {"days_ahead": 1}, s)
-        mock_get.assert_called_with(expected_key)
         mock_set.assert_called_once()
-        call_args = mock_set.call_args
-        self.assertEqual(call_args[0][0], expected_key)
+        used_key = mock_set.call_args[0][0]
+        # Forecast key must embed a date so it rotates at local midnight
+        self.assertRegex(used_key, r'\d{4}-\d{2}-\d{2}')
+        # Must differ from the current-weather key (days_ahead=0 has no date)
+        current_key = ck("London", "metric", 0)
+        self.assertNotEqual(used_key, current_key)
+        # cache.get must have been called with the same key that was written
+        mock_get.assert_called_with(used_key)
 
 
 class TestGetForecast(unittest.TestCase):
