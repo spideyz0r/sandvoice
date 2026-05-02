@@ -123,7 +123,12 @@ def _cache_key(location, unit, days_ahead=0, timezone=None, _now=None):
                 tz = zoneinfo.ZoneInfo(timezone)
                 now = _now.astimezone(tz) if _now is not None else datetime.datetime.now(tz)
                 today = now.date().isoformat()
-            except Exception:
+            except Exception as exc:
+                logger.warning(
+                    "Weather: timezone %r could not be resolved (%s); falling back to UTC for cache key.",
+                    timezone,
+                    exc,
+                )
                 fallback = _now if _now is not None else datetime.datetime.now(datetime.timezone.utc)
                 today = fallback.date().isoformat()
         else:
