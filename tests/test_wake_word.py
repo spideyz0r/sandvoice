@@ -256,6 +256,7 @@ class TestWakeWordModeStateIdle(unittest.TestCase):
         mock_unpack.return_value = [0] * 1280
 
         mock_pa = Mock()
+        mock_pa.get_device_count.return_value = 0  # avoid Linux hw: scan on Mock
         mock_pa.open.return_value = mock_stream
         mock_pyaudio_class.return_value = mock_pa
 
@@ -289,6 +290,7 @@ class TestWakeWordModeStateIdle(unittest.TestCase):
         mock_unpack.return_value = [0] * 1280
 
         mock_pa = Mock()
+        mock_pa.get_device_count.return_value = 0  # avoid Linux hw: scan on Mock
         mock_pa.open.return_value = mock_stream
         mock_pyaudio_class.return_value = mock_pa
 
@@ -313,6 +315,7 @@ class TestWakeWordModeStateIdle(unittest.TestCase):
         mock_stream.read.side_effect = Exception("Stream error")
 
         mock_pa = Mock()
+        mock_pa.get_device_count.return_value = 0  # avoid Linux hw: scan on Mock
         mock_pa.open.return_value = mock_stream
         mock_pyaudio_class.return_value = mock_pa
 
@@ -1444,6 +1447,7 @@ class TestRequestTimingSummary(unittest.TestCase):
 
         with patch("common.wake_word.pyaudio.PyAudio") as mock_pa_cls:
             mock_pa = Mock()
+            mock_pa.get_device_count.return_value = 0  # avoid Linux hw: scan on Mock
             mock_pa_cls.return_value = mock_pa
             mock_stream = Mock()
             mock_pa.open.return_value = mock_stream
@@ -1555,6 +1559,7 @@ class TestTerminalUIIntegration(unittest.TestCase):
         mock_stream = Mock()
         mock_stream.read.return_value = b"\x00" * 2560
         mock_pa = Mock()
+        mock_pa.get_device_count.return_value = 0  # avoid Linux hw: scan on Mock
         mock_pa.open.return_value = mock_stream
 
         with patch("common.wake_word.pyaudio.PyAudio", return_value=mock_pa):
