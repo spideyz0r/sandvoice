@@ -82,7 +82,7 @@ tmp_files_path: /home/user/.sandvoice/tmp/   # must end with /
 
 # Identity and locale
 botname: SandVoice
-timezone: EST                # timezone name (e.g. EST, America/New_York)
+timezone: America/Toronto    # IANA timezone name (e.g. America/New_York, Europe/London)
 location: Toronto, ON, CA    # used by weather and routing
 unit: metric                 # metric or imperial
 language: English
