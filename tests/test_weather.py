@@ -18,7 +18,8 @@ def _make_sandvoice(cache=None, debug=False, location="London", unit="metric",
                     api_timeout=10, cache_weather_ttl_s=10800,
                     cache_weather_max_stale_s=21600,
                     cache_weather_forecast_ttl_s=3600,
-                    cache_weather_forecast_max_stale_s=7200):
+                    cache_weather_forecast_max_stale_s=7200,
+                    timezone="UTC"):
     """Build a minimal SandVoice-like mock for weather plugin tests."""
     s = MagicMock()
     s.config.debug = debug
@@ -29,6 +30,7 @@ def _make_sandvoice(cache=None, debug=False, location="London", unit="metric",
     s.config.cache_weather_max_stale_s = cache_weather_max_stale_s
     s.config.cache_weather_forecast_ttl_s = cache_weather_forecast_ttl_s
     s.config.cache_weather_forecast_max_stale_s = cache_weather_forecast_max_stale_s
+    s.config.timezone = timezone
     s.cache = cache
 
     # ai.generate_response returns an object with .content
@@ -418,6 +420,24 @@ class TestCacheKeyForecast(unittest.TestCase):
         key2 = _cache_key("London", "metric", 2)
         self.assertNotEqual(key0, key2)
 
+    def test_forecast_cache_key_uses_user_timezone(self):
+        # Keys for the same location/unit/days_ahead but different timezones should
+        # differ when the local dates differ (e.g. UTC-12 vs UTC+12 around midnight).
+        from plugins.weather import _cache_key
+        key_utc = _cache_key("London", "metric", 1, timezone="UTC")
+        key_no_tz = _cache_key("London", "metric", 1)
+        # Both should contain a date
+        import re
+        self.assertRegex(key_utc, r'\d{4}-\d{2}-\d{2}')
+        # Without timezone falls back to UTC, so keys are equal
+        self.assertEqual(key_utc, key_no_tz)
+
+    def test_forecast_cache_key_invalid_timezone_falls_back_to_utc(self):
+        from plugins.weather import _cache_key
+        key_invalid = _cache_key("London", "metric", 1, timezone="NOT_A_TZ")
+        key_utc = _cache_key("London", "metric", 1, timezone="UTC")
+        self.assertEqual(key_invalid, key_utc)
+
     def test_cache_key_zero_differs_from_legacy(self):
         from plugins.weather import _cache_key
         new_key = _cache_key("London", "metric", 0)
@@ -425,11 +445,11 @@ class TestCacheKeyForecast(unittest.TestCase):
         self.assertNotEqual(new_key, legacy_key)
 
     def test_forecast_cache_key_includes_date(self):
-        # Forecast keys must embed a UTC date (YYYY-MM-DD) so a cached "tomorrow"
-        # entry is never served on a different calendar day after midnight.
+        # Forecast keys must embed a date (YYYY-MM-DD) so a cached "tomorrow"
+        # entry is never served on a different calendar day after local midnight.
         import re
         from plugins.weather import _cache_key
-        key = _cache_key("London", "metric", 1)
+        key = _cache_key("London", "metric", 1, timezone="UTC")
         self.assertRegex(key, r'\d{4}-\d{2}-\d{2}', "forecast key should contain a date")
         # Current-weather key must NOT include a date (no cross-day issue for point-in-time data).
         key0 = _cache_key("London", "metric", 0)
@@ -485,9 +505,9 @@ class TestWeatherForecastProcess(unittest.TestCase):
             cache_weather_forecast_max_stale_s=7200,
         )
         from plugins.weather import _cache_key as ck, process
-        # Compute expected_key before process() so both use the same UTC date
-        # (avoids a theoretical mismatch if the test straddles a UTC midnight).
-        expected_key = ck("London", "metric", 1)
+        # Compute expected_key before process() so both use the same local date
+        # (avoids a theoretical mismatch if the test straddles midnight).
+        expected_key = ck("London", "metric", 1, timezone="UTC")
         with patch.object(self.cache, 'set', wraps=self.cache.set) as mock_set:
             process("weather tomorrow", {"days_ahead": 1}, s)
         mock_set.assert_called_once_with(
@@ -503,8 +523,8 @@ class TestWeatherForecastProcess(unittest.TestCase):
         MockReader.return_value.get_forecast.return_value = forecast_slots
         s = _make_sandvoice(cache=self.cache)
         from plugins.weather import _cache_key as ck, process
-        # Compute expected_key before process() so both use the same UTC date.
-        expected_key = ck("London", "metric", 1)
+        # Compute expected_key before process() so both use the same local date.
+        expected_key = ck("London", "metric", 1, timezone="UTC")
         with patch.object(self.cache, 'get', wraps=self.cache.get) as mock_get, \
              patch.object(self.cache, 'set', wraps=self.cache.set) as mock_set:
             process("weather tomorrow", {"days_ahead": 1}, s)

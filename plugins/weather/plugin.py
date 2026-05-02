@@ -106,12 +106,21 @@ class OpenWeatherReader:
             return {"error": "Forecast service unavailable"}
 
 
-def _cache_key(location, unit, days_ahead=0):
+def _cache_key(location, unit, days_ahead=0, timezone=None):
     # JSON-encode to avoid collisions when location contains ':'.
-    # Forecast keys include today's UTC date so a cached "tomorrow" entry is
-    # never served on a different calendar day after midnight.
+    # Forecast keys include today's local date (in the user's configured timezone)
+    # so a cached "tomorrow" entry is never served on a different calendar day
+    # after local midnight.  Falls back to UTC if timezone is missing or invalid.
     if days_ahead >= 1:
-        today = datetime.datetime.now(datetime.timezone.utc).date().isoformat()
+        if timezone:
+            try:
+                import zoneinfo
+                tz = zoneinfo.ZoneInfo(timezone)
+                today = datetime.datetime.now(tz).date().isoformat()
+            except Exception:
+                today = datetime.datetime.now(datetime.timezone.utc).date().isoformat()
+        else:
+            today = datetime.datetime.now(datetime.timezone.utc).date().isoformat()
         encoded = json.dumps([location, unit, days_ahead, today], separators=(",", ":"))
     else:
         encoded = json.dumps([location, unit, days_ahead], separators=(",", ":"))
@@ -160,7 +169,7 @@ def process(user_input, route, s):
                 return None
             return "I can only forecast up to 5 days ahead."
         cache = getattr(s, 'cache', None)
-        cache_key = _cache_key(location, unit, days_ahead)
+        cache_key = _cache_key(location, unit, days_ahead, timezone=getattr(s.config, 'timezone', None))
 
         if days_ahead >= 1:
             ttl_s = route.get('ttl_s', s.config.cache_weather_forecast_ttl_s)
