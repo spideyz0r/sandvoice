@@ -106,21 +106,29 @@ class OpenWeatherReader:
             return {"error": "Forecast service unavailable"}
 
 
-def _cache_key(location, unit, days_ahead=0, timezone=None):
+def _cache_key(location, unit, days_ahead=0, timezone=None, _now=None):
     # JSON-encode to avoid collisions when location contains ':'.
     # Forecast keys include today's local date (in the user's configured timezone)
     # so a cached "tomorrow" entry is never served on a different calendar day
     # after local midnight.  Falls back to UTC if timezone is missing or invalid.
+    # Note: uses s.config.timezone (the user's own timezone) as a best approximation.
+    # For queries about a location in a different timezone, the date anchor may
+    # drift by up to one day around the location's local midnight; the 1 h TTL
+    # bounds any resulting stale-serve window.
+    # _now is an optional datetime used to override "now" in tests.
     if days_ahead >= 1:
         if timezone:
             try:
                 import zoneinfo
                 tz = zoneinfo.ZoneInfo(timezone)
-                today = datetime.datetime.now(tz).date().isoformat()
+                now = _now.astimezone(tz) if _now is not None else datetime.datetime.now(tz)
+                today = now.date().isoformat()
             except Exception:
-                today = datetime.datetime.now(datetime.timezone.utc).date().isoformat()
+                fallback = _now if _now is not None else datetime.datetime.now(datetime.timezone.utc)
+                today = fallback.date().isoformat()
         else:
-            today = datetime.datetime.now(datetime.timezone.utc).date().isoformat()
+            fallback = _now if _now is not None else datetime.datetime.now(datetime.timezone.utc)
+            today = fallback.date().isoformat()
         encoded = json.dumps([location, unit, days_ahead, today], separators=(",", ":"))
     else:
         encoded = json.dumps([location, unit, days_ahead], separators=(",", ":"))
