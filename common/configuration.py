@@ -48,7 +48,7 @@ class Config:
             "chunk": 1024,
             "tmp_files_path": os.path.join(os.path.expanduser("~"), ".sandvoice", "tmp") + os.sep,
             "botname": "SandVoice",
-            "timezone": "EST",
+            "timezone": "America/Toronto",
             "location": "Toronto, ON, CA",
             "unit": "metric",
             "language": "English",
