@@ -456,6 +456,17 @@ class TestWeatherForecastProcess(unittest.TestCase):
         self.assertIn("5 days", result)
 
     @patch('plugins.weather.plugin.OpenWeatherReader')
+    def test_forecast_refresh_only_skips_llm_on_api_error(self, MockReader):
+        # When refresh_only=True and the forecast API returns an error,
+        # process() must return None without calling the LLM.
+        MockReader.return_value.get_forecast.return_value = {"error": "network down"}
+        s = _make_sandvoice(cache=None)
+        from plugins.weather import process
+        result = process("weather tomorrow", {"days_ahead": 1, "refresh_only": True}, s)
+        self.assertIsNone(result)
+        s.ai.generate_response.assert_not_called()
+
+    @patch('plugins.weather.plugin.OpenWeatherReader')
     def test_forecast_called_when_days_ahead_1(self, MockReader):
         forecast_slots = [{"dt": 1700000000, "main": {"temp": 15}, "weather": [{"description": "rain"}]}]
         MockReader.return_value.get_forecast.return_value = forecast_slots

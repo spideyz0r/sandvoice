@@ -211,13 +211,13 @@ def process(user_input, route, s):
                 )
                 response_text = response.content
             else:
-                # Forecast fetch returned an error dict — generate a response without caching
+                # Forecast fetch returned an error dict — skip LLM on warmup, no caching
+                if refresh_only:
+                    return None
                 response = s.ai.generate_response(
                     user_input,
                     f"You can answer questions about weather. This is the information of the weather the user asked: {str(forecast_slots)}\n",
                 )
-                if refresh_only:
-                    return None
                 return response.content
         else:
             current_weather = weather.get_current_weather()
@@ -228,13 +228,13 @@ def process(user_input, route, s):
                 )
                 response_text = response.content
             else:
-                # Fetch returned an error dict — generate a response without caching
+                # Fetch returned an error dict — skip LLM on warmup, no caching
+                if refresh_only:
+                    return None
                 response = s.ai.generate_response(
                     user_input,
                     f"You can answer questions about weather. This is the information of the weather the user asked: {str(current_weather)}\n",
                 )
-                if refresh_only:
-                    return None
                 return response.content
 
         # Cache the full response text so future hits skip the LLM call entirely
