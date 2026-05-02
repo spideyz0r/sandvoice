@@ -187,11 +187,16 @@ def process(user_input, route, s):
 
         location = route['location']
         unit = route['unit']
-        try:
-            days_ahead = int(route.get('days_ahead', 0))
-        except (TypeError, ValueError):
-            logger.warning("Invalid days_ahead value %r in route; defaulting to 0", route.get('days_ahead'))
+        raw_days_ahead = route.get('days_ahead', 0)
+        if isinstance(raw_days_ahead, bool):
+            logger.warning("Invalid days_ahead value %r in route; defaulting to 0", raw_days_ahead)
             days_ahead = 0
+        else:
+            try:
+                days_ahead = int(raw_days_ahead)
+            except (TypeError, ValueError):
+                logger.warning("Invalid days_ahead value %r in route; defaulting to 0", raw_days_ahead)
+                days_ahead = 0
 
         if days_ahead < 0:
             logger.warning("Negative days_ahead %d in route; defaulting to 0", days_ahead)

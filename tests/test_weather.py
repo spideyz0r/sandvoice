@@ -514,6 +514,16 @@ class TestWeatherForecastProcess(unittest.TestCase):
         MockReader.return_value.get_current_weather.assert_called_once()
         MockReader.return_value.get_forecast.assert_not_called()
 
+    def test_days_ahead_bool_true_defaults_to_zero(self):
+        # bool is a subclass of int; True would cast to 1 and route to forecast path
+        s = _make_sandvoice(cache=None)
+        from plugins.weather import process
+        with patch('plugins.weather.plugin.OpenWeatherReader') as MockReader:
+            MockReader.return_value.get_current_weather.return_value = _WEATHER_DATA
+            process("weather", {"days_ahead": True}, s)
+        MockReader.return_value.get_current_weather.assert_called_once()
+        MockReader.return_value.get_forecast.assert_not_called()
+
     @patch('plugins.weather.plugin.OpenWeatherReader')
     def test_forecast_refresh_only_skips_llm_on_api_error(self, MockReader):
         # When refresh_only=True and the forecast API returns an error,
