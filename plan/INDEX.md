@@ -248,16 +248,20 @@ plan/
 **Description**: Only start the VAD silence countdown after at least one speech frame has been detected. Prevents the 1.5 s silence window from cutting off the recording before the user has had time to start speaking after the wake word beep.
 
 ### Priority 56: Conversation History Persistence (SQLite)
-**Document**: [backlog/54-conversation-history-sqlite.md](./backlog/54-conversation-history-sqlite.md)
+**Document**: [backlog/56-conversation-history-sqlite.md](./backlog/56-conversation-history-sqlite.md)
 **Description**: Persist each conversation turn to a `conversation_history` SQLite table in the existing DB file. On startup, seed the in-memory list from the last `history_max_entries` rows so sessions resume naturally. Required foundation for multi-channel history sharing (Plan 57).
 
 ### Priority 57: Telegram Channel
-**Document**: [backlog/55-telegram-channel.md](./backlog/55-telegram-channel.md)
+**Document**: [backlog/57-telegram-channel.md](./backlog/57-telegram-channel.md)
 **Description**: Add an always-on Telegram channel as a background thread within the SandVoice process. Text messages from whitelisted user IDs are routed through the same AI, plugins, and conversation history as wake-word mode. Adds `telegram_enabled`, `telegram_bot_token`, and `telegram_allowed_user_ids` config keys. Phase 1 is text only; Phase 2 adds voice message support.
 
-### Priority 58: Weather Forecast — 5-Day / Future Date Queries 🚧
-**Document**: [backlog/58-weather-forecast.md](./backlog/58-weather-forecast.md)
+### Priority 58: Weather Forecast — 5-Day / Future Date Queries ✅
+**Document**: [completed/58-weather-forecast.md](./completed/58-weather-forecast.md)
 **Description**: Extend the weather plugin to handle future-date queries ("will it rain tomorrow?", "what's the weather on Saturday?") by routing to the OpenWeatherMap 5-day/3-hour forecast endpoint. Adds `days_ahead` route parameter (0–5), separate cache keys and TTL config for forecast entries. Days beyond 5 return a graceful degradation message.
+
+### Priority 59: Drop Python < 3.9 zoneinfo Fallback 📋
+**Document**: [backlog/59-drop-zoneinfo-fallback.md](./backlog/59-drop-zoneinfo-fallback.md)
+**Description**: Remove the `try/except ImportError` guard around `from zoneinfo import ZoneInfo` in `plugins/weather/plugin.py` and `plugins/greeting/plugin.py`. Both target platforms (macOS M1, Raspberry Pi OS Bullseye+) ship Python 3.9+; the fallback is dead code that adds noise and a silent failure mode.
 
 ### Future Enhancements
 **Document**: [backlog/FUTURE.md](./backlog/FUTURE.md)
