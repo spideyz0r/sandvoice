@@ -424,6 +424,18 @@ class TestCacheKeyForecast(unittest.TestCase):
         legacy_key = 'weather:["London","metric"]'
         self.assertNotEqual(new_key, legacy_key)
 
+    def test_forecast_cache_key_includes_date(self):
+        # Forecast keys must embed today's UTC date so cached "tomorrow" entries
+        # are not served after midnight when the target day has shifted.
+        import datetime as dt_mod
+        from plugins.weather import _cache_key
+        today = dt_mod.date.today().isoformat()
+        key = _cache_key("London", "metric", 1)
+        self.assertIn(today, key)
+        # Current-weather key must NOT include a date (no cross-day issue).
+        key0 = _cache_key("London", "metric", 0)
+        self.assertNotIn(today, key0)
+
 
 class TestWeatherForecastProcess(unittest.TestCase):
     """Tests for forecast code paths in process()."""

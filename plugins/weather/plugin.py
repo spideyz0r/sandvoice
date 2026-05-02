@@ -107,8 +107,14 @@ class OpenWeatherReader:
 
 
 def _cache_key(location, unit, days_ahead=0):
-    # JSON-encode the triple to avoid collisions when location contains ':'.
-    encoded = json.dumps([location, unit, days_ahead], separators=(",", ":"))
+    # JSON-encode to avoid collisions when location contains ':'.
+    # Forecast keys include today's UTC date so a cached "tomorrow" entry is
+    # never served on a different calendar day after midnight.
+    if days_ahead >= 1:
+        today = datetime.date.today().isoformat()
+        encoded = json.dumps([location, unit, days_ahead, today], separators=(",", ":"))
+    else:
+        encoded = json.dumps([location, unit, days_ahead], separators=(",", ":"))
     return f"weather:{encoded}"
 
 
