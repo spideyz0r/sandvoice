@@ -5,7 +5,34 @@ import os
 
 import requests
 
+try:
+    from zoneinfo import ZoneInfo
+except ImportError:
+    ZoneInfo = None  # Python < 3.9 fallback
+
 logger = logging.getLogger(__name__)
+
+_TZ_CACHE = {}  # tz_name → ZoneInfo or None; avoids repeated resolution and duplicate warnings
+
+
+def _resolve_tz(tz_name):
+    """Return a ZoneInfo for tz_name, or None if unavailable or invalid."""
+    if not tz_name or ZoneInfo is None:
+        return None
+    if tz_name in _TZ_CACHE:
+        return _TZ_CACHE[tz_name]
+    try:
+        tz = ZoneInfo(tz_name)
+        _TZ_CACHE[tz_name] = tz
+        return tz
+    except Exception as exc:
+        logger.warning(
+            "Weather: timezone %r could not be resolved (%s); falling back to UTC for cache key.",
+            tz_name,
+            exc,
+        )
+        _TZ_CACHE[tz_name] = None
+        return None
 
 
 class OpenWeatherReader:
@@ -117,23 +144,12 @@ def _cache_key(location, unit, days_ahead=0, timezone=None, _now=None):
     # bounds any resulting stale-serve window.
     # _now is an optional datetime used to override "now" in tests.
     if days_ahead >= 1:
-        if timezone:
-            try:
-                import zoneinfo
-                tz = zoneinfo.ZoneInfo(timezone)
-                now = _now.astimezone(tz) if _now is not None else datetime.datetime.now(tz)
-                today = now.date().isoformat()
-            except Exception as exc:
-                logger.warning(
-                    "Weather: timezone %r could not be resolved (%s); falling back to UTC for cache key.",
-                    timezone,
-                    exc,
-                )
-                fallback = _now if _now is not None else datetime.datetime.now(datetime.timezone.utc)
-                today = fallback.date().isoformat()
+        tz = _resolve_tz(timezone)
+        if tz is not None:
+            now = _now.astimezone(tz) if _now is not None else datetime.datetime.now(tz)
         else:
-            fallback = _now if _now is not None else datetime.datetime.now(datetime.timezone.utc)
-            today = fallback.date().isoformat()
+            now = _now if _now is not None else datetime.datetime.now(datetime.timezone.utc)
+        today = now.date().isoformat()
         encoded = json.dumps([location, unit, days_ahead, today], separators=(",", ":"))
     else:
         encoded = json.dumps([location, unit, days_ahead], separators=(",", ":"))

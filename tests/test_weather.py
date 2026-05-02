@@ -421,8 +421,9 @@ class TestCacheKeyForecast(unittest.TestCase):
         self.assertNotEqual(key0, key2)
 
     def test_forecast_cache_key_uses_user_timezone(self):
-        # At 23:30 UTC, UTC+12 is already the next calendar day.
-        # Keys for the same location/days_ahead but different timezones must differ.
+        # At 23:30 UTC, the local date in UTC+12 is already the next calendar day.
+        # Keys must differ because their local date anchors differ, not merely
+        # because their timezone names differ.
         import datetime as dt_mod
         from plugins.weather import _cache_key
         utc = dt_mod.timezone.utc
@@ -430,7 +431,7 @@ class TestCacheKeyForecast(unittest.TestCase):
         fixed_now = dt_mod.datetime(2026, 5, 31, 23, 30, 0, tzinfo=utc)
         key_utc = _cache_key("London", "metric", 1, timezone="UTC", _now=fixed_now)
         key_plus12 = _cache_key("London", "metric", 1, timezone="Etc/GMT-12", _now=fixed_now)
-        # UTC is still 2026-05-31; UTC+12 is already 2026-06-01 — keys must differ
+        # UTC date anchor = 2026-05-31; UTC+12 date anchor = 2026-06-01
         self.assertNotEqual(key_utc, key_plus12)
         self.assertIn("2026-05-31", key_utc)
         self.assertIn("2026-06-01", key_plus12)
@@ -440,7 +441,9 @@ class TestCacheKeyForecast(unittest.TestCase):
         from plugins.weather import _cache_key
         utc = dt_mod.timezone.utc
         fixed_now = dt_mod.datetime(2026, 5, 31, 12, 0, 0, tzinfo=utc)
-        with patch('plugins.weather.plugin.logger') as mock_logger:
+        # Clear the tz cache so the warning fires even if this tz was seen before
+        with patch.dict('plugins.weather.plugin._TZ_CACHE', {}, clear=True), \
+             patch('plugins.weather.plugin.logger') as mock_logger:
             key_invalid = _cache_key("London", "metric", 1, timezone="NOT_A_TZ", _now=fixed_now)
         key_utc = _cache_key("London", "metric", 1, timezone="UTC", _now=fixed_now)
         self.assertEqual(key_invalid, key_utc)
@@ -484,6 +487,32 @@ class TestWeatherForecastProcess(unittest.TestCase):
         from plugins.weather import process
         result = process("weather saturday", {"days_ahead": 6}, s)
         self.assertIn("5 days", result)
+
+    def test_days_ahead_gt_5_refresh_only_returns_none(self):
+        s = _make_sandvoice(cache=None)
+        from plugins.weather import process
+        result = process("weather", {"days_ahead": 6, "refresh_only": True}, s)
+        self.assertIsNone(result)
+
+    def test_days_ahead_non_int_defaults_to_zero(self):
+        # Router may occasionally return a non-integer; plugin should default to 0
+        s = _make_sandvoice(cache=None)
+        from plugins.weather import process
+        with patch('plugins.weather.plugin.OpenWeatherReader') as MockReader:
+            MockReader.return_value.get_current_weather.return_value = _WEATHER_DATA
+            process("weather", {"days_ahead": "tomorrow"}, s)
+        # Should have called get_current_weather (days_ahead=0 path), not get_forecast
+        MockReader.return_value.get_current_weather.assert_called_once()
+        MockReader.return_value.get_forecast.assert_not_called()
+
+    def test_days_ahead_negative_defaults_to_zero(self):
+        s = _make_sandvoice(cache=None)
+        from plugins.weather import process
+        with patch('plugins.weather.plugin.OpenWeatherReader') as MockReader:
+            MockReader.return_value.get_current_weather.return_value = _WEATHER_DATA
+            process("weather", {"days_ahead": -1}, s)
+        MockReader.return_value.get_current_weather.assert_called_once()
+        MockReader.return_value.get_forecast.assert_not_called()
 
     @patch('plugins.weather.plugin.OpenWeatherReader')
     def test_forecast_refresh_only_skips_llm_on_api_error(self, MockReader):
