@@ -469,7 +469,6 @@ class TestCacheKeyForecast(unittest.TestCase):
     def test_forecast_cache_key_includes_date(self):
         # Forecast keys must embed a date (YYYY-MM-DD) so a cached "tomorrow"
         # entry is never served on a different calendar day after local midnight.
-        import re
         from plugins.weather import _cache_key
         key = _cache_key("London", "metric", 1, timezone="UTC")
         self.assertRegex(key, r'\d{4}-\d{2}-\d{2}', "forecast key should contain a date")
