@@ -438,6 +438,13 @@ class TestCacheKeyForecast(unittest.TestCase):
         self.assertIn("2026-05-31", key_utc)
         self.assertIn("2026-06-01", key_plus12)
 
+    def test_resolve_tz_non_string_timezone_returns_none(self):
+        # If config.timezone is a non-string (e.g. YAML number), _resolve_tz must not raise
+        from plugins.weather.plugin import _resolve_tz
+        self.assertIsNone(_resolve_tz(123))
+        self.assertIsNone(_resolve_tz(True))
+        self.assertIsNone(_resolve_tz(None))
+
     def test_forecast_cache_key_invalid_timezone_falls_back_to_utc(self):
         import datetime as dt_mod
         from plugins.weather import _cache_key
@@ -523,6 +530,16 @@ class TestWeatherForecastProcess(unittest.TestCase):
         with patch('plugins.weather.plugin.OpenWeatherReader') as MockReader:
             MockReader.return_value.get_current_weather.return_value = _WEATHER_DATA
             process("weather", {"days_ahead": True}, s)
+        MockReader.return_value.get_current_weather.assert_called_once()
+        MockReader.return_value.get_forecast.assert_not_called()
+
+    def test_days_ahead_non_integer_float_defaults_to_zero(self):
+        # Non-integer floats (e.g. 1.9) must not silently truncate to 1 and hit the forecast path
+        s = _make_sandvoice(cache=None)
+        from plugins.weather import process
+        with patch('plugins.weather.plugin.OpenWeatherReader') as MockReader:
+            MockReader.return_value.get_current_weather.return_value = _WEATHER_DATA
+            process("weather", {"days_ahead": 1.9}, s)
         MockReader.return_value.get_current_weather.assert_called_once()
         MockReader.return_value.get_forecast.assert_not_called()
 

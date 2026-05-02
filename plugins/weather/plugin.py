@@ -17,11 +17,9 @@ _TZ_CACHE = {}  # tz_name → ZoneInfo or None; avoids repeated resolution and d
 
 def _resolve_tz(tz_name):
     """Return a ZoneInfo for tz_name, or None if unavailable or invalid."""
-    if not tz_name or ZoneInfo is None:
+    if not isinstance(tz_name, str) or not tz_name.strip() or ZoneInfo is None:
         return None
     tz_name = tz_name.strip()
-    if not tz_name:
-        return None
     if tz_name in _TZ_CACHE:
         return _TZ_CACHE[tz_name]
     try:
@@ -149,8 +147,8 @@ def _cache_key(location, unit, days_ahead=0, timezone=None, _now=None):
     # after local midnight.  Falls back to UTC if timezone is missing or invalid.
     # Note: uses s.config.timezone (the user's own timezone) as a best approximation.
     # For queries about a location in a different timezone, the date anchor may
-    # drift by up to one day around the location's local midnight; the 1 h TTL
-    # bounds any resulting stale-serve window.
+    # drift by up to one day around the location's local midnight; the configured
+    # forecast TTL bounds any resulting stale-serve window.
     # _now is an optional datetime used to override "now" in tests.
     if days_ahead >= 1:
         tz = _resolve_tz(timezone)
@@ -194,6 +192,9 @@ def process(user_input, route, s):
         raw_days_ahead = route.get('days_ahead', 0)
         if isinstance(raw_days_ahead, bool):
             logger.warning("Invalid days_ahead value %r in route; defaulting to 0", raw_days_ahead)
+            days_ahead = 0
+        elif isinstance(raw_days_ahead, float) and not raw_days_ahead.is_integer():
+            logger.warning("Non-integer float days_ahead %r in route; defaulting to 0", raw_days_ahead)
             days_ahead = 0
         else:
             try:
