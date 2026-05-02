@@ -92,6 +92,7 @@ class TestBargeInDetectorStartStop(unittest.TestCase):
         mock_stream.read = blocking_read
 
         mock_pa = Mock()
+        mock_pa.get_device_count.return_value = 0
         mock_pa.open.return_value = mock_stream
         mock_pyaudio_class.return_value = mock_pa
 
@@ -379,6 +380,7 @@ class TestBargeInDetectorDetectionLoop(unittest.TestCase):
         import struct
         with patch('common.barge_in.struct.unpack_from', return_value=[0] * 1280):
             mock_pa = Mock()
+            mock_pa.get_device_count.return_value = 0
             mock_pa.open.return_value = mock_stream
             mock_pyaudio_class.return_value = mock_pa
 
@@ -407,6 +409,7 @@ class TestBargeInDetectorDetectionLoop(unittest.TestCase):
         mock_stream = Mock()
         mock_stream.read = blocking_read
         mock_pa = Mock()
+        mock_pa.get_device_count.return_value = 0
         mock_pa.open.return_value = mock_stream
         mock_pyaudio_class.return_value = mock_pa
 
@@ -445,6 +448,7 @@ class TestBargeInDetectorDetectionLoop(unittest.TestCase):
         mock_stream = Mock()
         mock_stream.read.side_effect = Exception("hw error")
         mock_pa = Mock()
+        mock_pa.get_device_count.return_value = 0
         mock_pa.open.return_value = mock_stream
         mock_pyaudio_class.return_value = mock_pa
 
@@ -469,6 +473,7 @@ class TestBargeInDetectorDetectionLoop(unittest.TestCase):
         mock_stream = Mock()
         mock_stream.read.side_effect = Exception("stream closed")
         mock_pa = Mock()
+        mock_pa.get_device_count.return_value = 0
         mock_pa.open.return_value = mock_stream
         mock_pyaudio_class.return_value = mock_pa
 
