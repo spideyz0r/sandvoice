@@ -31,15 +31,9 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install "setuptools<81"  # Required for pkg_resources used by webrtcvad (removed in v81+)
-          # openwakeword declares tflite-runtime as a Linux dep, but has no wheel for
+          # openwakeword declares tflite-runtime as a Linux dep but no wheel exists for
           # Python 3.10-3.12. We use ONNX inference only, so install a stub to satisfy pip.
-          python -c "
-import tempfile, os, subprocess, sys
-td = tempfile.mkdtemp()
-with open(os.path.join(td, 'setup.py'), 'w') as f:
-    f.write(\"from setuptools import setup; setup(name='tflite-runtime', version='2.14.0', packages=[])\")
-subprocess.run([sys.executable, '-m', 'pip', 'install', td], check=True)
-"
+          TD=$(mktemp -d) && echo "from setuptools import setup; setup(name='tflite-runtime', version='2.14.0', packages=[])" > $TD/setup.py && pip install $TD
           pip install -r requirements.txt
 
       - name: Run tests with coverage
