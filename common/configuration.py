@@ -506,8 +506,12 @@ class Config:
 
         if not isinstance(self.openwakeword_model, str) or not self.openwakeword_model.strip():
             errors.append("openwakeword_model must be a non-empty string")
-        elif self.openwakeword_model.endswith(".onnx") and not os.path.exists(self.openwakeword_model):
-            errors.append(f"openwakeword_model path does not exist: {self.openwakeword_model}")
+        elif self.openwakeword_model.endswith(".onnx"):
+            expanded = os.path.expandvars(os.path.expanduser(self.openwakeword_model))
+            if not os.path.exists(expanded):
+                errors.append(f"openwakeword_model path does not exist: {self.openwakeword_model}")
+            else:
+                self.openwakeword_model = expanded
 
         # Validate VAD settings
         if not isinstance(self.vad_aggressiveness, int) or not (0 <= self.vad_aggressiveness <= 3):
