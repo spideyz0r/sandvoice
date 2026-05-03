@@ -137,7 +137,7 @@ rss_news_max_items: "5"
 # Wake word (--wake-word mode)
 wake_word_enabled: enabled   # global toggle; --wake-word flag is still required to start the mode
 wake_phrase: hey jarvis
-wake_word_sensitivity: 0.35  # 0.0-1.0; higher = more sensitive
+wake_word_sensitivity: 0.35  # 0.0-1.0; higher = stricter (fewer false positives), lower = more sensitive
 openwakeword_model: hey_jarvis  # built-in model name or path to a .onnx file
 
 # Voice activity detection (required in --wake-word mode)
