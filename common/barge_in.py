@@ -3,7 +3,7 @@ import struct
 import threading
 import time
 
-from common.audio_devices import _find_hw_input_device
+from common.audio_devices import find_hw_input_device
 from common.openwakeword_detector import OpenWakeWordDetector
 import pyaudio
 
@@ -248,7 +248,7 @@ class BargeInDetector:
 
             logger.debug("Barge-in thread: Opening PyAudio stream...")
             pa = pyaudio.PyAudio()
-            input_device_index = _find_hw_input_device(pa)
+            input_device_index = find_hw_input_device(pa)
             audio_stream = pa.open(
                 rate=detector_instance.device_sample_rate,
                 channels=1,

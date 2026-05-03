@@ -5,7 +5,7 @@ import re
 logger = logging.getLogger(__name__)
 
 
-def _find_hw_input_device(pa):
+def find_hw_input_device(pa):
     """Return the index of the first real hardware input device on Linux.
 
     On Linux the PyAudio default input is often a virtual 'default' device
