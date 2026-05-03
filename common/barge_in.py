@@ -48,7 +48,7 @@ class BargeInDetector:
                 creating OpenWakeWordDetector instances.
         """
         self._model_name = model_name
-        self._sensitivity = threshold
+        self._threshold = threshold
         self._audio_lock = audio_lock
         self._audio = audio
         self._config = config
@@ -210,7 +210,7 @@ class BargeInDetector:
         """Create a fresh OpenWakeWordDetector for this detection thread."""
         return OpenWakeWordDetector(
             model_name=self._model_name,
-            threshold=self._sensitivity,
+            threshold=self._threshold,
             device_sample_rate=self._config.rate,
         )
 
