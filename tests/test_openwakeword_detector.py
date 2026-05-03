@@ -18,10 +18,9 @@ class TestOpenWakeWordDetectorInit(unittest.TestCase):
         mock_model.predict.return_value = {"hey_jarvis": 0.0}
         return mock_model
 
-    @patch('common.openwakeword_detector.OpenWakeWordDetector.__init__', return_value=None)
-    def test_import_succeeds(self, _):
+    def test_import_succeeds(self):
         from common.openwakeword_detector import OpenWakeWordDetector
-        self.assertTrue(True)
+        self.assertIsNotNone(OpenWakeWordDetector)
 
     def test_sample_rate_constant(self):
         from common.openwakeword_detector import _SAMPLE_RATE

@@ -28,16 +28,20 @@ def _find_hw_input_device(pa):
     hw: input device ensures we use the real hardware.
 
     Returns None on macOS/non-Linux (let PyAudio pick the system default).
+    Returns None (and logs a warning) if device enumeration fails.
     """
     import re
     import platform
     if platform.system().lower() != "linux":
         return None
-    for i in range(pa.get_device_count()):
-        dev = pa.get_device_info_by_index(i)
-        if dev.get("maxInputChannels", 0) > 0 and re.search(r'hw:\d+,\d+', dev.get("name", "")):
-            logger.debug("Wake word: selected hw input device index=%s name=%s", i, dev["name"])
-            return i
+    try:
+        for i in range(pa.get_device_count()):
+            dev = pa.get_device_info_by_index(i)
+            if dev.get("maxInputChannels", 0) > 0 and re.search(r'hw:\d+,\d+', dev.get("name", "")):
+                logger.debug("Wake word: selected hw input device index=%s name=%s", i, dev.get("name", ""))
+                return i
+    except Exception as e:
+        logger.warning("Wake word: failed to enumerate audio devices, using default: %s", e)
     return None
 
 

@@ -55,6 +55,13 @@ vad_enabled: enabled
 
 The wake phrase defaults to `hey jarvis`. Change it with `wake_phrase` and `openwakeword_model` in config. The model name must be a built-in openWakeWord model (e.g. `hey_jarvis`, `alexa`) or a path to a `.onnx` file.
 
+**Raspberry Pi / Linux install note:** `tflite-runtime` (a transitive dependency of openWakeWord) has no wheels for Python 3.10–3.12 on Linux. Install a no-op stub before running `pip install -r requirements.txt`:
+
+```bash
+TD=$(mktemp -d) && echo "from setuptools import setup; setup(name='tflite-runtime', version='2.14.0', packages=[])" > $TD/setup.py && pip install $TD
+pip install -r requirements.txt
+```
+
 ## API keys
 
 | Key | Required | Used by |

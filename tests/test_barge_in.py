@@ -80,6 +80,7 @@ class TestBargeInDetectorStartStop(unittest.TestCase):
     def test_start_creates_and_starts_thread(self, mock_pyaudio_class, mock_detector_class):
         mock_detector = Mock()
         mock_detector.sample_rate = 16000
+        mock_detector.device_sample_rate = 16000
         mock_detector.frame_length = 1280
         mock_detector.process.return_value = -1
         mock_detector_class.return_value = mock_detector
@@ -368,6 +369,7 @@ class TestBargeInDetectorDetectionLoop(unittest.TestCase):
         """When OpenWakeWord detects the wake word, _event is set."""
         mock_detector = Mock()
         mock_detector.sample_rate = 16000
+        mock_detector.device_sample_rate = 16000
         mock_detector.frame_length = 1280
         mock_detector.process.side_effect = [-1, -1, 0]  # wake word on 3rd call
         mock_detector_class.return_value = mock_detector
@@ -397,6 +399,7 @@ class TestBargeInDetectorDetectionLoop(unittest.TestCase):
         """When stop_flag is set, the detection loop exits without triggering barge-in."""
         mock_detector = Mock()
         mock_detector.sample_rate = 16000
+        mock_detector.device_sample_rate = 16000
         mock_detector.frame_length = 1280
         mock_detector.process.return_value = -1
         mock_detector_class.return_value = mock_detector
@@ -442,6 +445,7 @@ class TestBargeInDetectorDetectionLoop(unittest.TestCase):
         """An error reading audio is caught and the loop exits cleanly."""
         mock_detector = Mock()
         mock_detector.sample_rate = 16000
+        mock_detector.device_sample_rate = 16000
         mock_detector.frame_length = 1280
         mock_detector_class.return_value = mock_detector
 
@@ -467,6 +471,7 @@ class TestBargeInDetectorDetectionLoop(unittest.TestCase):
         """Audio read error during shutdown (stop_flag set) is logged at DEBUG, not WARNING."""
         mock_detector = Mock()
         mock_detector.sample_rate = 16000
+        mock_detector.device_sample_rate = 16000
         mock_detector.frame_length = 1280
         mock_detector_class.return_value = mock_detector
 
