@@ -39,31 +39,35 @@ def _suppress_alsa_errors():
 # Falls back to "default" if no hardware device is found.
 # Users can override by setting SDL_AUDIODRIVER / AUDIODEV in their environment.
 if platform.system().lower() == "linux" and "SDL_AUDIODRIVER" not in os.environ:
-    os.environ["SDL_AUDIODRIVER"] = "alsa"
-    _suppress_alsa_errors()
-    try:
-        _pa = pyaudio.PyAudio()
+    # Only probe devices when libasound is present; skip silently otherwise
+    # (e.g. CI runners without ALSA hardware).
+    from ctypes.util import find_library as _find_library
+    if _find_library("asound") is not None:
+        os.environ["SDL_AUDIODRIVER"] = "alsa"
+        _suppress_alsa_errors()
         try:
-            _audiodev = None
-            _fallback = None
-            for _i in range(_pa.get_device_count()):
-                _dev = _pa.get_device_info_by_index(_i)
-                _m = re.search(r'hw:(\d+),(\d+)', _dev.get("name", ""))
-                if not _m:
-                    continue
-                _plug = f"plughw:{_m.group(1)},{_m.group(2)}"
-                if _dev.get("maxOutputChannels", 0) > 0 and _dev.get("maxInputChannels", 0) > 0:
-                    _audiodev = _plug
-                    break
-                if _fallback is None and _dev.get("maxOutputChannels", 0) > 0:
-                    _fallback = _plug
+            _pa = pyaudio.PyAudio()
+            try:
+                _audiodev = None
+                _fallback = None
+                for _i in range(_pa.get_device_count()):
+                    _dev = _pa.get_device_info_by_index(_i)
+                    _m = re.search(r'hw:(\d+),(\d+)', _dev.get("name", ""))
+                    if not _m:
+                        continue
+                    _plug = f"plughw:{_m.group(1)},{_m.group(2)}"
+                    if _dev.get("maxOutputChannels", 0) > 0 and _dev.get("maxInputChannels", 0) > 0:
+                        _audiodev = _plug
+                        break
+                    if _fallback is None and _dev.get("maxOutputChannels", 0) > 0:
+                        _fallback = _plug
+                if "AUDIODEV" not in os.environ:
+                    os.environ["AUDIODEV"] = _audiodev or _fallback or "default"
+            finally:
+                _pa.terminate()
+        except Exception:
             if "AUDIODEV" not in os.environ:
-                os.environ["AUDIODEV"] = _audiodev or _fallback or "default"
-        finally:
-            _pa.terminate()
-    except Exception:
-        if "AUDIODEV" not in os.environ:
-            os.environ["AUDIODEV"] = "default"
+                os.environ["AUDIODEV"] = "default"
 
 import pygame
 
