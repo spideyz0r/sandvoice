@@ -44,7 +44,6 @@ if platform.system().lower() == "linux" and "SDL_AUDIODRIVER" not in os.environ:
     from ctypes.util import find_library as _find_library
     if _find_library("asound") is not None:
         os.environ["SDL_AUDIODRIVER"] = "alsa"
-        _suppress_alsa_errors()
         try:
             _pa = pyaudio.PyAudio()
             try:
