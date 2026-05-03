@@ -113,7 +113,7 @@ class OpenWakeWordDetector:
                 self._model_name, score, self._threshold,
             )
         if score >= self._threshold:
-            logger.info("Wake word detected: model=%s score=%.3f", self._model_name, score)
+            logger.debug("Wake word detected: model=%s score=%.3f", self._model_name, score)
             return 0
         return -1
 

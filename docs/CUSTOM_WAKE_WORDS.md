@@ -1,199 +1,100 @@
 # Custom Wake Words Guide
 
-This guide shows you how to create and use custom wake words like "hey sandvoice" instead of built-in keywords.
+This guide shows you how to create and use custom wake words like "hey sandvoice" with openWakeWord.
 
 ## Overview
 
-SandVoice supports two types of wake words:
-1. **Built-in Keywords**: Pre-trained words like "computer", "jarvis", "porcupine"
-2. **Custom Wake Words**: Your own phrases trained on Picovoice Console
+SandVoice uses [openWakeWord](https://github.com/dscripka/openWakeWord) (MIT-licensed, no API key required).
+You can use any of the built-in models or train your own custom `.onnx` model.
 
-## Built-in Wake Words
+## Built-in Models
 
-Available without any setup:
-- alexa
-- americano
-- blueberry
-- bumblebee
-- computer
-- grapefruit
-- grasshopper
-- hey barista
-- hey google
-- hey siri
-- jarvis
-- ok google
-- pico clock
-- picovoice
-- porcupine
-- terminator
-
-**Quick Start with Built-in:**
-```yaml
-# ~/.sandvoice/config.yaml
-wake_phrase: "computer"
-porcupine_access_key: "YOUR_ACCESS_KEY"
-```
-
-## Creating Custom Wake Words
-
-### Step 1: Get Picovoice Access Key
-
-1. Visit [Picovoice Console](https://console.picovoice.ai/)
-2. Sign up (free tier available)
-3. Copy your **Access Key** from the dashboard
-
-**Free Tier Limits:**
-- ✅ 3 custom wake words
-- ✅ Unlimited API calls
-- ✅ Works offline after first download
-
-### Step 2: Train Your Custom Wake Word
-
-1. Go to **Porcupine Wake Word** section
-2. Click **"Train Custom Wake Word"**
-3. Enter your phrase (e.g., "hey sandvoice", "sand voice")
-4. Select **Language**: English
-5. Select **Platform(s)**:
-   - **macOS (x86_64)** for Intel Macs
-   - **macOS (arm64)** for M1/M2 Macs
-   - **Linux (ARM Cortex-A)** for Raspberry Pi
-   - You can train multiple platforms at once
-6. Click **"Train"** (takes 2-5 minutes)
-7. Download the `.ppn` file(s)
-
-### Step 3: Install the .ppn File
-
-```bash
-# Create directory for wake word models
-mkdir -p ~/.sandvoice/wake-words/
-
-# Move your downloaded .ppn file
-mv ~/Downloads/Sand-voice_en_mac_v4_0_0.ppn ~/.sandvoice/wake-words/
-```
-
-### Step 4: Configure SandVoice
-
-Edit `~/.sandvoice/config.yaml`:
+openWakeWord ships with a small set of pre-trained models. The default is `hey_jarvis`.
+Set `openwakeword_model` in `~/.sandvoice/config.yaml` to use one:
 
 ```yaml
-wake_phrase: "sand voice"
-porcupine_access_key: "YOUR_ACCESS_KEY_HERE"
-porcupine_keyword_paths: "/Users/username/.sandvoice/wake-words/Sand-voice_en_mac_v4_0_0.ppn"
+openwakeword_model: hey_jarvis   # default
+wake_phrase: "hey jarvis"
+wake_word_sensitivity: 0.35
+```
 
-# Optional: Adjust sensitivity (0.0 - 1.0)
+Other available built-in names (pass exact string as `openwakeword_model`):
+- `hey_jarvis`
+- `alexa`
+- `hey_mycroft`
+
+## Training a Custom Wake Word
+
+Custom models are `.onnx` files you train yourself. The easiest way is
+[openWakeWord's Colab notebook](https://github.com/dscripka/openWakeWord#training-new-models).
+
+### Quick Steps
+
+1. Open the openWakeWord training notebook in Google Colab (link in the repo above).
+2. In the **Target phrase** cell, enter your phrase (e.g. `hey sandvoice`).
+3. Run all cells. Training takes ~10–20 minutes on a free Colab GPU.
+4. Download the generated `.onnx` file from the Colab session.
+5. Copy it to your machine, e.g. `~/.sandvoice/wake-words/hey_sandvoice.onnx`.
+6. Point SandVoice at it:
+
+```yaml
+openwakeword_model: "/home/user/.sandvoice/wake-words/hey_sandvoice.onnx"
+wake_phrase: "hey sandvoice"
 wake_word_sensitivity: 0.5
 ```
 
-**Important:**
-- Use **absolute path** for `porcupine_keyword_paths`
-- Don't use `~` shorthand - use full `/Users/username/...` path
-- `wake_phrase` is for display only - actual detection uses the .ppn file
+**Notes:**
+- Use an absolute path for `openwakeword_model` when pointing to a custom `.onnx` file.
+- `wake_phrase` is for display/logging only; actual detection uses the model.
+- Train separate models per platform if needed — openWakeWord models are architecture-independent (ONNX), so the same file works on macOS M1 and Raspberry Pi.
 
-### Step 5: Test It
-
-```bash
-cd ~/path/to/sandvoice
-source env/bin/activate
-python sandvoice.py --wake-word
-```
-
-Say your custom phrase to activate!
-
-## Multi-Platform Setup
-
-If you use SandVoice on multiple devices, train separate models:
-
-**macOS Config:**
-```yaml
-porcupine_keyword_paths: "/Users/username/.sandvoice/wake-words/Sand-voice_en_mac_v4_0_0.ppn"
-```
-
-**Raspberry Pi Config:**
-```yaml
-porcupine_keyword_paths: "/home/pi/.sandvoice/wake-words/Sand-voice_en_linux_v4_0_0.ppn"
-```
-
-## Configuration Examples
-
-### Example 1: Single Custom Wake Word (TXT format)
-```yaml
-wake_phrase: "hey assistant"
-porcupine_access_key: "REDACTED"
-porcupine_keyword_paths: "/Users/john/.sandvoice/wake-words/hey-assistant_en_mac_v4_0_0.ppn"
-wake_word_sensitivity: 0.5
-```
-
-### Example 2: Single Custom Wake Word (JSON format)
-```yaml
-wake_phrase: "sand voice"
-porcupine_access_key: "REDACTED"
-porcupine_keyword_paths: "/Users/john/.sandvoice/wake-words/Sand-voice_en_mac_v4_0_0.ppn"
-wake_word_sensitivity: 0.7
-```
-
-### Example 3: Built-in Wake Word
-```yaml
-wake_phrase: "jarvis"
-porcupine_access_key: "REDACTED"
-# No porcupine_keyword_paths needed for built-in keywords
-wake_word_sensitivity: 0.5
-```
-
-## Troubleshooting
-
-For troubleshooting wake word detection issues, see the [official Porcupine documentation](https://picovoice.ai/docs/porcupine/).
-
-## Advanced Configuration
-
-### Adjusting VAD (Voice Activity Detection)
-
-Control how long SandVoice listens after wake word:
+## Configuration Reference
 
 ```yaml
-# How long to wait for silence before processing (seconds)
-vad_silence_duration: 1.5
+# Wake word settings
+openwakeword_model: hey_jarvis          # built-in name or absolute path to .onnx
+wake_phrase: "hey jarvis"               # display name shown in logs/terminal
+wake_word_sensitivity: 0.35            # detection threshold (0.0–1.0)
 
-# VAD aggressiveness (0-3, higher = more aggressive silence detection)
-vad_aggressiveness: 3
+# VAD settings (control how long to listen after wake word)
+vad_silence_duration: 1.5              # seconds of silence = end of utterance
+vad_aggressiveness: 3                  # 0–3, higher = more aggressive silence detection
+vad_timeout: 30                        # max recording length (seconds)
 
-# Maximum continuous speech duration (seconds)
-vad_timeout: 30
-```
-
-### Audio Feedback
-
-```yaml
-# Play beep when wake word detected
+# Audio feedback
 wake_confirmation_beep: enabled
-wake_confirmation_beep_freq: 800  # Hz
-wake_confirmation_beep_duration: 0.1  # seconds
-
-# Show visual state indicators in terminal
+wake_confirmation_beep_freq: 800       # Hz
+wake_confirmation_beep_duration: 0.1   # seconds
 visual_state_indicator: enabled
 ```
 
+## Raspberry Pi / Linux Install
+
+openWakeWord uses ONNX Runtime, not tflite. Install:
+
+```bash
+pip install openwakeword>=0.6.0 --no-deps
+pip install scipy
+```
+
+If `onnxruntime` is not already installed, add it:
+
+```bash
+pip install onnxruntime==1.20.0
+```
+
+(Pin to 1.20.0 — later versions have known issues on aarch64 Pi.)
+
 ## Tips for Best Results
 
-1. **Train with natural voice**: Say the phrase naturally, not robotically
-2. **Quiet environment**: Train in a quiet room
-3. **Unique phrases**: Avoid common words to reduce false positives
-4. **Repeat training**: If detection is poor, re-train the model
-5. **Test distances**: Test from 1m, 2m, 3m away to find optimal sensitivity
+1. **Train with natural voice**: Say the phrase naturally, not robotically.
+2. **Unique phrases**: Avoid common words to reduce false positives.
+3. **Adjust sensitivity**: Lower `wake_word_sensitivity` (e.g. 0.3) to catch more detections; raise it (e.g. 0.7) to reduce false positives.
+4. **Test distances**: Test from 1 m, 2 m, 3 m to find optimal placement.
 
-## Getting Help
+## Troubleshooting
 
-If you're still having issues:
-1. Enable debug mode: `debug: enabled` in config
-2. Check logs for error messages
-3. Report issues: https://github.com/spideyz0r/sandvoice/issues
-4. Include:
-   - Platform (macOS/Linux/Pi)
-   - Config file (remove access key)
-   - Error messages
-
-## References
-
-- [Picovoice Console](https://console.picovoice.ai/)
-- [Porcupine Documentation](https://picovoice.ai/docs/porcupine/)
-- [SandVoice GitHub](https://github.com/spideyz0r/sandvoice)
+1. Enable debug mode: `debug: enabled` in config.
+2. Check logs for `Wake word score:` lines to see raw scores for your phrase.
+3. If scores never reach threshold, lower `wake_word_sensitivity` or retrain.
+4. Report issues: https://github.com/spideyz0r/sandvoice/issues

@@ -8,7 +8,7 @@ import time
 from enum import Enum
 
 import pyaudio
-from common.audio_devices import _find_hw_input_device
+from common.audio_devices import find_hw_input_device
 from common.openwakeword_detector import OpenWakeWordDetector
 
 from common.beep_generator import create_confirmation_beep, create_ack_earcon
@@ -268,7 +268,7 @@ class WakeWordMode:
 
         try:
             pa = pyaudio.PyAudio()
-            input_device_index = _find_hw_input_device(pa)
+            input_device_index = find_hw_input_device(pa)
             audio_stream = pa.open(
                 rate=self.detector.device_sample_rate,
                 channels=1,
