@@ -506,7 +506,7 @@ class Config:
 
         if not isinstance(self.openwakeword_model, str) or not self.openwakeword_model.strip():
             errors.append("openwakeword_model must be a non-empty string")
-        elif self.openwakeword_model.endswith(".onnx"):
+        elif self.openwakeword_model.lower().endswith(".onnx"):
             expanded = os.path.expandvars(os.path.expanduser(self.openwakeword_model))
             if not os.path.exists(expanded):
                 errors.append(f"openwakeword_model path does not exist: {self.openwakeword_model}")
