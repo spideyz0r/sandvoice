@@ -35,7 +35,7 @@ class TestBargeInDetectorInit(unittest.TestCase):
         mock_audio = Mock()
         d = self._make_detector(model_name="alexa", threshold=0.7, audio_lock=lock, audio=mock_audio)
         self.assertEqual(d._model_name, "alexa")
-        self.assertEqual(d._sensitivity, 0.7)
+        self.assertEqual(d._threshold, 0.7)
         self.assertIs(d._audio_lock, lock)
         self.assertIs(d._audio, mock_audio)
 
