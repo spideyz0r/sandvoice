@@ -246,10 +246,10 @@ class TestWakeWordModeStateIdle(unittest.TestCase):
     @patch('common.wake_word.pyaudio.PyAudio')
     @patch('common.wake_word.struct.unpack_from')
     def test_state_idle_detects_wake_word(self, mock_unpack, mock_pyaudio_class):
-        mock_porcupine = Mock()
-        mock_porcupine.sample_rate = 16000
-        mock_porcupine.frame_length = 1280
-        mock_porcupine.process.side_effect = [-1, -1, 0]
+        mock_detector = Mock()
+        mock_detector.sample_rate = 16000
+        mock_detector.frame_length = 1280
+        mock_detector.process.side_effect = [-1, -1, 0]
 
         mock_stream = Mock()
         mock_stream.read.return_value = b'\x00' * 2560
@@ -261,7 +261,7 @@ class TestWakeWordModeStateIdle(unittest.TestCase):
         mock_pyaudio_class.return_value = mock_pa
 
         mode = WakeWordMode(self.mock_config, self.mock_ai, self.mock_audio, route_message=self.mock_route_message)
-        mode.detector = mock_porcupine
+        mode.detector = mock_detector
         mode.confirmation_beep_path = "/tmp/beep.mp3"
         mode.running = True
         mode.state = State.IDLE
@@ -269,7 +269,7 @@ class TestWakeWordModeStateIdle(unittest.TestCase):
         mode._state_idle()
 
         self.assertEqual(mode.state, State.LISTENING)
-        self.assertEqual(mock_porcupine.process.call_count, 3)
+        self.assertEqual(mock_detector.process.call_count, 3)
         mock_stream.stop_stream.assert_called_once()
         mock_stream.close.assert_called_once()
         mock_pa.terminate.assert_called_once()
@@ -280,10 +280,10 @@ class TestWakeWordModeStateIdle(unittest.TestCase):
     def test_state_idle_plays_confirmation_beep(self, mock_unpack, mock_pyaudio_class, mock_exists):
         mock_exists.return_value = True
 
-        mock_porcupine = Mock()
-        mock_porcupine.sample_rate = 16000
-        mock_porcupine.frame_length = 1280
-        mock_porcupine.process.return_value = 0
+        mock_detector = Mock()
+        mock_detector.sample_rate = 16000
+        mock_detector.frame_length = 1280
+        mock_detector.process.return_value = 0
 
         mock_stream = Mock()
         mock_stream.read.return_value = b'\x00' * 2560
@@ -295,7 +295,7 @@ class TestWakeWordModeStateIdle(unittest.TestCase):
         mock_pyaudio_class.return_value = mock_pa
 
         mode = WakeWordMode(self.mock_config, self.mock_ai, self.mock_audio, route_message=self.mock_route_message)
-        mode.detector = mock_porcupine
+        mode.detector = mock_detector
         mode.confirmation_beep_path = "/tmp/beep.mp3"
         mode.running = True
         mode.state = State.IDLE
@@ -307,9 +307,9 @@ class TestWakeWordModeStateIdle(unittest.TestCase):
     @patch('common.wake_word.pyaudio.PyAudio')
     @patch('common.wake_word.struct.unpack_from')
     def test_state_idle_handles_stream_error(self, mock_unpack, mock_pyaudio_class):
-        mock_porcupine = Mock()
-        mock_porcupine.sample_rate = 16000
-        mock_porcupine.frame_length = 1280
+        mock_detector = Mock()
+        mock_detector.sample_rate = 16000
+        mock_detector.frame_length = 1280
 
         mock_stream = Mock()
         mock_stream.read.side_effect = Exception("Stream error")
@@ -320,7 +320,7 @@ class TestWakeWordModeStateIdle(unittest.TestCase):
         mock_pyaudio_class.return_value = mock_pa
 
         mode = WakeWordMode(self.mock_config, self.mock_ai, self.mock_audio, route_message=self.mock_route_message)
-        mode.detector = mock_porcupine
+        mode.detector = mock_detector
         mode.running = True
         mode.state = State.IDLE
 

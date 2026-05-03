@@ -53,7 +53,7 @@ stream_tts: enabled
 vad_enabled: enabled
 ```
 
-The wake phrase defaults to `hey jarvis`. Change it with `wake_phrase` and `openwakeword_model` in config. The model name must be a built-in openWakeWord model (e.g. `hey_jarvis`, `alexa`) or an absolute path to a custom `.onnx` file.
+The wake phrase defaults to `hey jarvis`. Change it with `wake_phrase` and `openwakeword_model` in config. The model name must be a built-in openWakeWord model (e.g. `hey_jarvis`, `alexa`) or a path to a `.onnx` file.
 
 ## API keys
 
@@ -131,7 +131,7 @@ rss_news_max_items: "5"
 wake_word_enabled: enabled   # global toggle; --wake-word flag is still required to start the mode
 wake_phrase: hey jarvis
 wake_word_sensitivity: 0.35  # 0.0-1.0; higher = more sensitive
-openwakeword_model: hey_jarvis  # built-in model name or absolute path to a custom .onnx file
+openwakeword_model: hey_jarvis  # built-in model name or path to a .onnx file
 
 # Voice activity detection (required in --wake-word mode)
 vad_enabled: enabled
