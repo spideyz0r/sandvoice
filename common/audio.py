@@ -9,6 +9,30 @@ logger = logging.getLogger(__name__)
 # this is necessary to mute some outputs from pygame
 os.environ['PYGAME_HIDE_SUPPORT_PROMPT'] = "hide"
 
+# Kept at module scope so the ctypes callback is never garbage-collected
+# while ALSA may still invoke it (local variables would be GC'd on return).
+_ALSA_NOOP_HANDLER = None
+_alsa_suppression_attempted = False
+
+
+def _suppress_alsa_errors():
+    """Silence noisy ALSA error messages on Linux/Pi. Best-effort: no-op if libasound is not found."""
+    global _ALSA_NOOP_HANDLER, _alsa_suppression_attempted
+    if _alsa_suppression_attempted or platform.system() != "Linux":
+        return
+    _alsa_suppression_attempted = True
+    try:
+        from ctypes import CFUNCTYPE, cdll, c_char_p, c_int
+        from ctypes.util import find_library
+        lib_name = find_library("asound")
+        if lib_name is None:
+            return
+        _ALSA_NOOP_HANDLER = CFUNCTYPE(None, c_char_p, c_int, c_char_p, c_int, c_char_p)(lambda *_: None)
+        cdll.LoadLibrary(lib_name).snd_lib_error_set_handler(_ALSA_NOOP_HANDLER)
+    except Exception:
+        pass  # best-effort: never raise from a noise-suppression helper
+
+
 # On Linux, SDL defaults to the first ALSA device which may not be the USB audio device.
 # Point SDL at the first real hardware output device (name contains "hw:N,M").
 # Prefer a combined in+out device (USB headset) over output-only.
@@ -16,6 +40,7 @@ os.environ['PYGAME_HIDE_SUPPORT_PROMPT'] = "hide"
 # Users can override by setting SDL_AUDIODRIVER / AUDIODEV in their environment.
 if platform.system().lower() == "linux" and "SDL_AUDIODRIVER" not in os.environ:
     os.environ["SDL_AUDIODRIVER"] = "alsa"
+    _suppress_alsa_errors()
     try:
         _pa = pyaudio.PyAudio()
         try:
@@ -41,30 +66,6 @@ if platform.system().lower() == "linux" and "SDL_AUDIODRIVER" not in os.environ:
             os.environ["AUDIODEV"] = "default"
 
 import pygame
-
-
-# Kept at module scope so the ctypes callback is never garbage-collected
-# while ALSA may still invoke it (local variables would be GC'd on return).
-_ALSA_NOOP_HANDLER = None
-_alsa_suppression_attempted = False
-
-
-def _suppress_alsa_errors():
-    """Silence noisy ALSA error messages on Linux/Pi. Best-effort: no-op if libasound is not found."""
-    global _ALSA_NOOP_HANDLER, _alsa_suppression_attempted
-    if _alsa_suppression_attempted or platform.system() != "Linux":
-        return
-    _alsa_suppression_attempted = True
-    try:
-        from ctypes import CFUNCTYPE, cdll, c_char_p, c_int
-        from ctypes.util import find_library
-        lib_name = find_library("asound")
-        if lib_name is None:
-            return
-        _ALSA_NOOP_HANDLER = CFUNCTYPE(None, c_char_p, c_int, c_char_p, c_int, c_char_p)(lambda *_: None)
-        cdll.LoadLibrary(lib_name).snd_lib_error_set_handler(_ALSA_NOOP_HANDLER)
-    except Exception:
-        pass  # best-effort: never raise from a noise-suppression helper
 
 class Audio:
     def __init__(self, config):
