@@ -1,7 +1,7 @@
 import logging
 import unittest
 from math import gcd
-from unittest.mock import MagicMock, Mock, patch
+from unittest.mock import Mock, patch
 
 import numpy as np
 

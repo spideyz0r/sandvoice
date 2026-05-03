@@ -23,8 +23,8 @@ class OpenWakeWordDetector:
         """Initialise the detector.
 
         Args:
-            model_name: Short built-in name (e.g. "hey_jarvis") or absolute
-                path to a custom .onnx file.
+            model_name: Short built-in name (e.g. "hey_jarvis") or path
+                (absolute or relative) to a custom .onnx file.
             threshold: Detection score threshold (0.0–1.0).
             device_sample_rate: Sample rate of the audio device. When it
                 differs from 16000 Hz, each frame is resampled before
@@ -46,7 +46,8 @@ class OpenWakeWordDetector:
             self._resample_down = None
 
         with warnings.catch_warnings():
-            warnings.simplefilter("ignore")
+            warnings.simplefilter("ignore", DeprecationWarning)
+            warnings.simplefilter("ignore", UserWarning)
             if os.path.isabs(model_name) or model_name.endswith(".onnx"):
                 self._model = Model(wakeword_model_paths=[model_name], inference_framework="onnx")
                 self._prediction_key = os.path.splitext(os.path.basename(model_name))[0]
