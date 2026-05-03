@@ -32,11 +32,13 @@ if platform.system().lower() == "linux" and "SDL_AUDIODRIVER" not in os.environ:
                     break
                 if _fallback is None and _dev.get("maxOutputChannels", 0) > 0:
                     _fallback = _plug
-            os.environ["AUDIODEV"] = _audiodev or _fallback or "default"
+            if "AUDIODEV" not in os.environ:
+                os.environ["AUDIODEV"] = _audiodev or _fallback or "default"
         finally:
             _pa.terminate()
     except Exception:
-        os.environ["AUDIODEV"] = "default"
+        if "AUDIODEV" not in os.environ:
+            os.environ["AUDIODEV"] = "default"
 
 import pygame
 

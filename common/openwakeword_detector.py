@@ -79,7 +79,7 @@ class OpenWakeWordDetector:
         """Samples per frame at device_sample_rate (covers the same 80 ms window)."""
         if self._device_rate == _SAMPLE_RATE:
             return _FRAME_LENGTH
-        return int(_FRAME_LENGTH * self._device_rate / _SAMPLE_RATE)
+        return round(_FRAME_LENGTH * self._device_rate / _SAMPLE_RATE)
 
     def process(self, pcm):
         """Process one audio frame and return a detection result.
@@ -94,10 +94,15 @@ class OpenWakeWordDetector:
         audio = np.array(pcm, dtype=np.int16)
         if self._resample_up is not None:
             from scipy.signal import resample_poly
-            audio = np.clip(
+            resampled = np.clip(
                 resample_poly(audio, self._resample_up, self._resample_down),
                 -32768, 32767,
             ).astype(np.int16)
+            # Trim or zero-pad to exactly the model's expected frame length.
+            if len(resampled) >= _FRAME_LENGTH:
+                audio = resampled[:_FRAME_LENGTH]
+            else:
+                audio = np.pad(resampled, (0, _FRAME_LENGTH - len(resampled)))
 
         prediction = self._model.predict(audio)
         score = prediction.get(self._prediction_key, 0.0)
