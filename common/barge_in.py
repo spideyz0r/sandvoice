@@ -20,11 +20,14 @@ def _find_hw_input_device(pa):
     """
     if platform.system().lower() != "linux":
         return None
-    for i in range(pa.get_device_count()):
-        dev = pa.get_device_info_by_index(i)
-        if dev.get("maxInputChannels", 0) > 0 and re.search(r'hw:\d+,\d+', dev.get("name", "")):
-            logger.debug("Barge-in: selected hw input device index=%s name=%s", i, dev["name"])
-            return i
+    try:
+        for i in range(pa.get_device_count()):
+            dev = pa.get_device_info_by_index(i)
+            if dev.get("maxInputChannels", 0) > 0 and re.search(r'hw:\d+,\d+', dev.get("name", "")):
+                logger.debug("Barge-in: selected hw input device index=%s name=%s", i, dev.get("name", ""))
+                return i
+    except Exception as e:
+        logger.warning("Barge-in: failed to enumerate audio devices, using default: %s", e)
     return None
 
 # Sentinel returned by run_with_polling when barge-in interrupted the operation.

@@ -68,6 +68,7 @@ class TestWakeWordModeInitialize(unittest.TestCase):
 
         self.mock_config = Mock()
         self.mock_config.debug = False
+        self.mock_config.rate = 16000
         self.mock_config.wake_phrase = "hey jarvis"
         self.mock_config.wake_word_sensitivity = 0.5
         self.mock_config.openwakeword_model = "hey_jarvis"
@@ -93,6 +94,7 @@ class TestWakeWordModeInitialize(unittest.TestCase):
         mock_detector = Mock()
         mock_detector.sample_rate = 16000
         mock_detector.frame_length = 1280
+        mock_detector.device_sample_rate = 16000
         mock_detector_class.return_value = mock_detector
         mock_beep.return_value = "/tmp/test/beep.mp3"
 
@@ -112,6 +114,7 @@ class TestWakeWordModeInitialize(unittest.TestCase):
         mock_detector = Mock()
         mock_detector.sample_rate = 16000
         mock_detector.frame_length = 1280
+        mock_detector.device_sample_rate = 16000
         mock_detector_class.return_value = mock_detector
         mock_beep.return_value = "/tmp/test/beep.mp3"
 
@@ -137,6 +140,7 @@ class TestWakeWordModeInitialize(unittest.TestCase):
         mock_detector = Mock()
         mock_detector.sample_rate = 16000
         mock_detector.frame_length = 1280
+        mock_detector.device_sample_rate = 16000
         mock_detector_class.return_value = mock_detector
         mock_beep.return_value = "/tmp/test/beep.mp3"
         mock_ack.return_value = "/tmp/test/ack.mp3"
@@ -205,6 +209,7 @@ class TestWakeWordModeInitialize(unittest.TestCase):
         mock_detector = Mock()
         mock_detector.sample_rate = 16000
         mock_detector.frame_length = 1280
+        mock_detector.device_sample_rate = 16000
         mock_detector_class.return_value = mock_detector
         mock_beep.side_effect = Exception("Beep creation failed")
 
@@ -249,6 +254,7 @@ class TestWakeWordModeStateIdle(unittest.TestCase):
         mock_detector = Mock()
         mock_detector.sample_rate = 16000
         mock_detector.frame_length = 1280
+        mock_detector.device_sample_rate = 16000
         mock_detector.process.side_effect = [-1, -1, 0]
 
         mock_stream = Mock()
@@ -283,6 +289,7 @@ class TestWakeWordModeStateIdle(unittest.TestCase):
         mock_detector = Mock()
         mock_detector.sample_rate = 16000
         mock_detector.frame_length = 1280
+        mock_detector.device_sample_rate = 16000
         mock_detector.process.return_value = 0
 
         mock_stream = Mock()
@@ -310,6 +317,7 @@ class TestWakeWordModeStateIdle(unittest.TestCase):
         mock_detector = Mock()
         mock_detector.sample_rate = 16000
         mock_detector.frame_length = 1280
+        mock_detector.device_sample_rate = 16000
 
         mock_stream = Mock()
         mock_stream.read.side_effect = Exception("Stream error")
@@ -357,6 +365,7 @@ class TestWakeWordModeRun(unittest.TestCase):
         mock_detector = Mock()
         mock_detector.sample_rate = 16000
         mock_detector.frame_length = 1280
+        mock_detector.device_sample_rate = 16000
         mock_detector_class.return_value = mock_detector
         mock_beep.return_value = "/tmp/beep.mp3"
 
@@ -403,6 +412,7 @@ class TestWakeWordModeRun(unittest.TestCase):
         mock_detector = Mock()
         mock_detector.sample_rate = 16000
         mock_detector.frame_length = 1280
+        mock_detector.device_sample_rate = 16000
         mock_detector_class.return_value = mock_detector
         mock_beep.return_value = "/tmp/beep.mp3"
 
