@@ -263,6 +263,14 @@ plan/
 **Document**: [backlog/59-drop-zoneinfo-fallback.md](./backlog/59-drop-zoneinfo-fallback.md)
 **Description**: Remove the `try/except ImportError` guard around `from zoneinfo import ZoneInfo` in `plugins/weather/plugin.py` and `plugins/greeting/plugin.py`. Both target platforms (macOS M1, Raspberry Pi OS Bullseye+) ship Python 3.9+; the fallback is dead code that adds noise and a silent failure mode.
 
+### Priority 60: Lazy pygame Import
+**Document**: [backlog/60-lazy-pygame-import.md](./backlog/60-lazy-pygame-import.md)
+**Description**: Move `import pygame` and the SDL/ALSA device probe from module level into `Audio.initialize_audio()`. Eliminates import-time PyAudio enumeration and ALSA warnings by ensuring `_suppress_alsa_errors()` runs before any PyAudio or SDL initialization. Minimal-change alternative to Plan 61.
+
+### Priority 61: Replace pygame with miniaudio
+**Document**: [backlog/61-replace-pygame-with-miniaudio.md](./backlog/61-replace-pygame-with-miniaudio.md)
+**Description**: Replace `pygame.mixer` with the `miniaudio` library for TTS MP3 playback. Eliminates the SDL layer, env-var ordering constraints, ALSA suppression, and all import-time side effects in `common/audio.py`. Supersedes Plan 60 if implemented.
+
 ### Future Enhancements
 **Document**: [backlog/FUTURE.md](./backlog/FUTURE.md)
 **Description**: Long-term feature ideas: alternative providers (Anthropic, Ollama, Piper), local offline mode, conversation history truncation, user-triggered timers, conversation memory, export, plugin hot-reload, API cost tracking, music control, smart home, calendar, todo lists, multi-user support.
