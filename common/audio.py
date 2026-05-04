@@ -92,10 +92,13 @@ class Audio:
     def init_recording(self):
         from pynput import keyboard
         self._keyboard = keyboard
-        listener = keyboard.Listener(on_press=self.on_press)
-        listener.start()
-        self.start_recording()
-        self.convert_to_mp3()
+        self._listener = keyboard.Listener(on_press=self.on_press)
+        self._listener.start()
+        try:
+            self.start_recording()
+            self.convert_to_mp3()
+        finally:
+            self._listener.stop()
 
     def initialize_audio(self):
         _suppress_alsa_errors()
