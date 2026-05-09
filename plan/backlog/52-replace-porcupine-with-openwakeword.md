@@ -1,6 +1,6 @@
 # Replace Porcupine with openWakeWord
 
-**Status**: 🚧 In Progress
+**Status**: ✅ Completed (merged in PR #148)
 **Priority**: 52
 **Platforms**: macOS M1, Raspberry Pi 3B
 
