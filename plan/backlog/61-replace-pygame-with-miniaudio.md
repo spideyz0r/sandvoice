@@ -81,9 +81,11 @@ This replaces the `pygame.mixer.music.load / play / get_busy` loop in
   may be retained.
 - Replace `Audio.stop_playback()` and `Audio.is_playing()`: since
   `_play_mp3_blocking()` creates `device` as a local context-managed variable,
-  stop/is_playing cannot access it directly. Instead, store a shared
-  `threading.Event` (e.g. `self._stop_event`) that `_play_mp3_blocking()` polls
-  and that `stop_playback()` sets. Track playback state with a boolean flag (e.g.
+  stop/is_playing cannot access it directly. The shared stop mechanism is
+  `self._stop_event` (a `threading.Event`): `play_audio_file()` clears it and
+  passes it as the `stop_event` argument to `_play_mp3_blocking()`; `stop_playback()`
+  sets it. The `stop_event` parameter in the helper is thus always `self._stop_event`
+  — there is no second event. Track playback state with a boolean flag (e.g.
   `self._playing`) set/cleared around the `device.start()` call. `is_playing()`
   returns that flag.
 - Remove `Audio.log_mixer_state()` (pygame mixer debug helper; not applicable).
