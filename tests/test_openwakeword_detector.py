@@ -106,7 +106,7 @@ class TestOpenWakeWordDetectorInit(unittest.TestCase):
         self.assertTrue(np.all(warmup_arg == 0))
 
     @patch('openwakeword.model.Model')
-    def test_init_onnx_path_uses_wakeword_model_paths(self, mock_model_class):
+    def test_init_onnx_path_uses_wakeword_models(self, mock_model_class):
         mock_model = Mock()
         mock_model.predict.return_value = {"my_model": 0.0}
         mock_model_class.return_value = mock_model
@@ -115,7 +115,7 @@ class TestOpenWakeWordDetectorInit(unittest.TestCase):
         d = OpenWakeWordDetector(model_name="/path/to/my_model.onnx", threshold=0.5)
 
         mock_model_class.assert_called_once_with(
-            wakeword_model_paths=["/path/to/my_model.onnx"],
+            wakeword_models=["/path/to/my_model.onnx"],
             inference_framework="onnx",
         )
         self.assertEqual(d._prediction_key, "my_model")
