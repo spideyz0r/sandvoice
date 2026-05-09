@@ -88,10 +88,9 @@ it returns immediately without creating a PyAudio instance.
 - Remove module-level SDL probe block from `audio.py`.
 - Extract probe logic into `_detect_sdl_audio_device()` module-level function.
 - Call `_suppress_alsa_errors()`, then `_detect_sdl_audio_device()`, then
-  `import pygame` inside `Audio.initialize_audio()`.
-- All other `pygame.*` references inside `Audio` methods are already inside
-  method bodies — they will still work because `initialize_audio()` is always
-  called before any playback method.
+  `import pygame` inside `Audio.initialize_audio()`. Use `global pygame` so the
+  name is bound at module scope and accessible to all other `Audio` methods
+  without re-importing in each one.
 - Update tests that patch `pygame` at module level to patch at the correct
   location (`common.audio.pygame` will no longer exist; patch the import in
   `initialize_audio` instead, or call `initialize_audio()` with a mocked pygame
@@ -104,7 +103,6 @@ it returns immediately without creating a PyAudio instance.
 | File | Change |
 |------|--------|
 | `common/audio.py` | Lazy pygame import; extract `_detect_sdl_audio_device()`; call in correct order inside `initialize_audio()` |
-| `tests/test_audio_playback.py` | Update pygame patch locations |
 | `tests/test_audio_playback.py` | Update pygame patch locations; add test that calls `_detect_sdl_audio_device()` directly |
 
 ---
