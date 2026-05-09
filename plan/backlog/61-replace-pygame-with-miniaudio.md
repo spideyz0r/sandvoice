@@ -90,6 +90,10 @@ This replaces the `pygame.mixer.music.load / play / get_busy` loop in
 - Replace `play_audio_file()` internals with `_play_mp3_blocking()`.
 - `play_audio_queue()` and `play_audio_files()` remain structurally unchanged —
   they call `play_audio_file()` internally.
+- Remove the `try: import pygame` debug block inside `BargeIn._poll_op()`
+  (`common/barge_in.py`) — this import exists solely to check pygame mixer state
+  for debugging and must be removed (or replaced with a miniaudio equivalent) when
+  pygame is dropped.
 - Add `miniaudio` to `requirements.txt`.
 - Remove `pygame` from `requirements.txt`.
 
@@ -105,6 +109,7 @@ None. The playback API surface (`play_audio_file`, `play_audio_queue`,
 | File | Change |
 |------|--------|
 | `common/audio.py` | Replace pygame with miniaudio; remove SDL probe and ALSA suppression |
+| `common/barge_in.py` | Remove `try: import pygame` debug block in `_poll_op()` |
 | `requirements.txt` | Remove `pygame`; add `miniaudio` |
 | `tests/test_audio_playback.py` | Update mocks from `pygame.mixer` to `miniaudio` |
 
