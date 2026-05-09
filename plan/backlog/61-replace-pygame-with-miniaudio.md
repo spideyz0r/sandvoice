@@ -74,11 +74,12 @@ This replaces the `pygame.mixer.music.load / play / get_busy` loop in
 ### Changes required
 
 - Remove `import pygame` (module level and inside methods).
-- Remove SDL probe block (`_detect_sdl_audio_device`) and the SDL-specific
-  `_suppress_alsa_errors()` call — these are only needed to work around SDL/pygame
-  ALSA interactions. If PyAudio mic initialization still produces ALSA warnings on
-  Linux, a separate `_suppress_alsa_errors()` call scoped to the PyAudio context
-  may be retained.
+- Remove the SDL probe block (`_detect_sdl_audio_device` / module-level env-var
+  setup) — it exists solely to configure SDL/pygame output routing and is not
+  needed by miniaudio.
+- Retain `_suppress_alsa_errors()` in `initialize_audio()`: it suppresses
+  PortAudio/ALSA stderr noise that occurs when `pyaudio.PyAudio()` enumerates
+  devices for mic input, which is unrelated to pygame and still needed on Linux.
 - Replace `Audio.stop_playback()` and `Audio.is_playing()`: since
   `_play_mp3_blocking()` creates `device` as a local context-managed variable,
   stop/is_playing cannot access it directly. The shared stop mechanism is
@@ -130,7 +131,7 @@ None. The playback API surface (`play_audio_file`, `play_audio_queue`,
 
 | Risk | Mitigation |
 |------|------------|
-| miniaudio not packaged for Pi aarch64 | Test `pip install miniaudio` on Pi 3B before implementing; it ships a pure-C extension with no extra system deps beyond libasound |
+| miniaudio not packaged for Pi armv7l/arm64 | Test `pip install miniaudio` on Pi 3B before implementing; it ships a pure-C extension with no extra system deps beyond libasound. Pi 3B typically runs armv7l (32-bit Raspberry Pi OS). |
 | Latency difference | miniaudio decodes inline; profile against pygame on Pi if needed |
 | Stop-event latency | 10 ms poll loop vs pygame's 100 ms tick — equal or better |
 

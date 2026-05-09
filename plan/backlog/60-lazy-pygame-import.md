@@ -9,17 +9,14 @@
 ## Dependencies
 
 - None — this is a self-contained `audio.py` change.
-- Plan 54 (Linux audio output device auto-detection, still in backlog) will add a module-level SDL probe that amplifies the import-time side effects. Plan 60 should be implemented alongside or after Plan 54.
 
 ---
 
 ## Overview
 
-`common/audio.py` currently has `import pygame` at module level, causing
-import-time side effects today. Once Plan 54 is implemented it will also run a
-PyAudio device enumeration block at module import time to set `SDL_AUDIODRIVER`
-and `AUDIODEV` before pygame initialises, further amplifying the problem.
-This design causes three problems:
+`common/audio.py` currently has both `import pygame` and a module-level SDL
+output device probe (PyAudio enumeration that sets `SDL_AUDIODRIVER` and
+`AUDIODEV`) running at import time. This design causes three problems:
 
 1. **ALSA warnings on stderr** — `pyaudio.PyAudio()` is constructed before
    `_suppress_alsa_errors()` is ever called, so the noise-suppression hook is not
@@ -33,8 +30,8 @@ This design causes three problems:
    inside the SDL probe block without triggering a segfault on CI runners (hit in
    PR #148 Round 4), so the warnings cannot be suppressed in the current design.
 
-The root cause: `import pygame` is at module level, forcing the SDL env-var setup
-to also be at module level, which forces the PyAudio probe to be at module level.
+The root cause: `import pygame` and the SDL probe are both at module level,
+forcing the PyAudio enumeration to run before `_suppress_alsa_errors()` can be called.
 
 **This plan breaks that chain by making `import pygame` lazy.**
 
