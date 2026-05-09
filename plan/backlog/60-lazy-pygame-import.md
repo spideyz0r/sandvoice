@@ -105,7 +105,7 @@ it returns immediately without creating a PyAudio instance.
 |------|--------|
 | `common/audio.py` | Lazy pygame import; extract `_detect_sdl_audio_device()`; call in correct order inside `initialize_audio()` |
 | `tests/test_audio_playback.py` | Update pygame patch locations |
-| `tests/test_audio_device_detection.py` | Update probe-logic test to call helper directly |
+| `tests/test_audio_playback.py` | Update pygame patch locations; add test that calls `_detect_sdl_audio_device()` directly |
 
 ---
 
