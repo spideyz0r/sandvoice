@@ -53,6 +53,7 @@ the SDL probe block, ALSA suppression, and env-var ordering constraints entirely
 ### New playback helper
 
 ```python
+import time
 import miniaudio
 
 def _play_mp3_blocking(file_path, stop_event=None):
@@ -73,8 +74,11 @@ This replaces the `pygame.mixer.music.load / play / get_busy` loop in
 ### Changes required
 
 - Remove `import pygame` (module level and inside methods).
-- Remove SDL probe block (`_detect_sdl_audio_device` / `_suppress_alsa_errors`
-  for SDL purposes — ALSA suppression for PyAudio mic use can remain if needed).
+- Remove SDL probe block (`_detect_sdl_audio_device`) and the SDL-specific
+  `_suppress_alsa_errors()` call — these are only needed to work around SDL/pygame
+  ALSA interactions. If PyAudio mic initialization still produces ALSA warnings on
+  Linux, a separate `_suppress_alsa_errors()` call scoped to the PyAudio context
+  may be retained.
 - Remove `Audio.stop_playback()` pygame-specific logic; replace with miniaudio
   device stop.
 - Remove `Audio.is_playing()` pygame-specific logic; replace with
