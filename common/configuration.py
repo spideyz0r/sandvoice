@@ -512,6 +512,7 @@ class Config:
                 expanded = os.path.expandvars(os.path.expanduser(self.openwakeword_model))
                 if not os.path.isabs(expanded):
                     # Resolve relative paths: config dir first, then repo root (for bundled models/).
+                    # Never fall through to CWD — fail explicitly if neither candidate exists.
                     _config_dir = os.path.dirname(self.config_file)
                     _repo_root = os.path.normpath(self.sandvoice_path)
                     _config_dir_path = os.path.join(_config_dir, expanded)
@@ -520,9 +521,15 @@ class Config:
                         expanded = _config_dir_path
                     elif os.path.exists(_repo_path):
                         expanded = _repo_path
-                if not os.path.exists(expanded):
+                    else:
+                        errors.append(
+                            f"openwakeword_model path does not exist: {self.openwakeword_model} "
+                            f"(checked {_config_dir_path} and {_repo_path})"
+                        )
+                        expanded = None
+                if expanded is not None and not os.path.exists(expanded):
                     errors.append(f"openwakeword_model path does not exist: {self.openwakeword_model}")
-                else:
+                elif expanded is not None:
                     self.openwakeword_model = expanded
 
         # Validate VAD settings
