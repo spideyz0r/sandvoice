@@ -180,19 +180,19 @@ plan/
 **Description**: Fix cache warmup to skip live API/LLM calls when the SQLite-persisted entry is still fresh. Adds a fresh-entry early return in the `refresh_only=True` path for the weather and greeting plugins. Warmup is now instant when the cache is warm from a recent run. Pattern documented in `docs/PATTERNS.md`.
 
 ### Priority 52: Replace Porcupine with openWakeWord
-**Document**: [backlog/52-replace-porcupine-with-openwakeword.md](./backlog/52-replace-porcupine-with-openwakeword.md)
+**Document**: [completed/52-replace-porcupine-with-openwakeword.md](./completed/52-replace-porcupine-with-openwakeword.md)
 **Description**: Swap the Picovoice Porcupine engine for openWakeWord (MIT, no account required). New `common/openwakeword_detector.py` wraps openWakeWord behind Porcupine's interface. Pins `onnxruntime==1.20.0` for Pi 3B stability. Adds `openwakeword_model` config key.
 
 ### Priority 53: Linux ALSA Input Device Auto-Selection
-**Document**: [backlog/53-linux-alsa-input-device-auto-selection.md](./backlog/53-linux-alsa-input-device-auto-selection.md)
+**Document**: [completed/53-linux-alsa-input-device-auto-selection.md](./completed/53-linux-alsa-input-device-auto-selection.md)
 **Description**: On Linux, explicitly select the first `hw:N,M` PyAudio input device instead of the virtual ALSA `default` (which delivers silence on Pi). Affects wake word detection and barge-in detection. No change on macOS.
 
 ### Priority 54: Linux Audio Output Device Auto-Detection
-**Document**: [backlog/54-linux-audio-output-device-auto-detection.md](./backlog/54-linux-audio-output-device-auto-detection.md)
+**Document**: [completed/54-linux-audio-output-device-auto-detection.md](./completed/54-linux-audio-output-device-auto-detection.md)
 **Description**: On Linux, set `SDL_AUDIODRIVER=alsa` and auto-detect `AUDIODEV=plughw:N,M` before importing pygame, so TTS plays through the USB headset instead of the onboard bcm2835 device. Also moves `pynput` import inside `init_recording()` to prevent headless Linux crash.
 
 ### Priority 55: VAD Pre-Speech Grace Period
-**Document**: [backlog/55-vad-pre-speech-grace-period.md](./backlog/55-vad-pre-speech-grace-period.md)
+**Document**: [completed/55-vad-pre-speech-grace-period.md](./completed/55-vad-pre-speech-grace-period.md)
 **Description**: Only start the VAD silence countdown after at least one speech frame has been detected. Prevents the 1.5 s silence window from cutting off the recording before the user has had time to start speaking after the wake word beep.
 
 ---
