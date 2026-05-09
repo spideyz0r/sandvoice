@@ -511,12 +511,12 @@ class Config:
             if self.openwakeword_model.lower().endswith(".onnx"):
                 expanded = os.path.expandvars(os.path.expanduser(self.openwakeword_model))
                 if not os.path.isabs(expanded):
-                    # Resolve relative paths: config dir first, then repo root (for bundled models/).
+                    # Resolve relative paths: config dir first, then install root (for bundled models/).
                     # Never fall through to CWD — fail explicitly if neither candidate exists.
                     _config_dir = os.path.dirname(self.config_file)
-                    _repo_root = os.path.normpath(self.sandvoice_path)
-                    _config_dir_path = os.path.join(_config_dir, expanded)
-                    _repo_path = os.path.join(_repo_root, expanded)
+                    _repo_root = os.path.abspath(self.sandvoice_path)
+                    _config_dir_path = os.path.abspath(os.path.join(_config_dir, expanded))
+                    _repo_path = os.path.abspath(os.path.join(_repo_root, expanded))
                     if os.path.exists(_config_dir_path):
                         expanded = _config_dir_path
                     elif os.path.exists(_repo_path):

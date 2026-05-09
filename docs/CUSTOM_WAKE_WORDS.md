@@ -18,7 +18,7 @@ wake_phrase: "sand voice"
 wake_word_sensitivity: 0.25
 ```
 
-> **Path resolution for `.onnx` files:** Relative paths are resolved first against the config directory (`~/.sandvoice/`), then against the repo root. Absolute paths are used as-is. For custom models stored outside the repo, use an absolute path (e.g. `~/.sandvoice/wake-words/my_model.onnx`).
+> **Path resolution for `.onnx` files:** Relative paths are resolved first against the config directory (`~/.sandvoice/`), then against the SandVoice install directory (where `sandvoice.py` lives). Absolute paths are used as-is. For custom models, an absolute path or a path relative to `~/.sandvoice/` is recommended (e.g. `~/.sandvoice/wake-words/my_model.onnx`).
 
 ## Built-in Models (No File Required)
 
@@ -40,7 +40,7 @@ The easiest way to train a custom model is Google Colab — free GPU, no local s
 
 ### Steps
 
-1. Open Colab → **File → Open notebook → GitHub** → `spideyz0r/openWakeWord`, branch `fix/python312-compat`, file `notebooks/automatic_model_training.ipynb`
+1. Open Colab → **File → Open notebook → GitHub** → `spideyz0r/openWakeWord`, branch `fix/python312-compat` (check the repo for the latest branch if this one is gone), file `notebooks/automatic_model_training.ipynb`
 2. In the **Define training configuration** cell, set your phrase: `config["target_phrase"] = ["your phrase here"]`. Also set `model_name` and `output_dir`.
 3. Run the **Environment setup** cell
 4. Run the **Download data** cell (downloads AudioSet negatives — ~30 min)
