@@ -45,15 +45,15 @@ class OpenWakeWordDetector:
             self._resample_up = None
             self._resample_down = None
 
+        if os.path.isabs(model_name) or model_name.lower().endswith(".onnx"):
+            self._prediction_key = os.path.splitext(os.path.basename(model_name))[0]
+        else:
+            self._prediction_key = model_name
+
         with warnings.catch_warnings():
             warnings.simplefilter("ignore", DeprecationWarning)
             warnings.simplefilter("ignore", UserWarning)
-            if os.path.isabs(model_name) or model_name.lower().endswith(".onnx"):
-                self._model = Model(wakeword_models=[model_name], inference_framework="onnx")
-                self._prediction_key = os.path.splitext(os.path.basename(model_name))[0]
-            else:
-                self._model = Model(wakeword_models=[model_name], inference_framework="onnx")
-                self._prediction_key = model_name
+            self._model = Model(wakeword_models=[model_name], inference_framework="onnx")
 
         # Warm up the prediction buffer so keys are initialised before first use.
         self._model.predict(np.zeros(_FRAME_LENGTH, dtype=np.int16))
