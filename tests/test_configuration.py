@@ -523,6 +523,30 @@ class TestConfigurationValidation(unittest.TestCase):
         self.assertFalse(config.visual_state_indicator)
 
 
+    def test_openwakeword_model_relative_resolves_config_dir(self):
+        """Relative .onnx path is resolved against the config directory first"""
+        model_path = os.path.join(self.temp_dir, ".sandvoice", "my_model.onnx")
+        open(model_path, "wb").close()
+        self.write_config({"openwakeword_model": "my_model.onnx"})
+        config = Config()
+        self.assertEqual(config.openwakeword_model, os.path.abspath(model_path))
+
+    def test_openwakeword_model_relative_falls_back_to_install_root(self):
+        """Relative .onnx path falls back to install root when absent from config dir"""
+        config = Config()  # default models/sand_voice.onnx, not in temp config dir
+        self.assertTrue(os.path.isabs(config.openwakeword_model))
+        self.assertTrue(config.openwakeword_model.endswith(os.path.join("models", "sand_voice.onnx")))
+
+    def test_openwakeword_model_relative_not_found_reports_both_paths(self):
+        """Missing relative .onnx raises ValueError listing both checked paths"""
+        self.write_config({"openwakeword_model": "nonexistent.onnx"})
+        with self.assertRaises(ValueError) as context:
+            Config()
+        msg = str(context.exception)
+        self.assertIn("nonexistent.onnx", msg)
+        self.assertIn(".sandvoice", msg)  # config dir candidate mentioned
+
+
 class _TempHomeBase(unittest.TestCase):
     """Shared base: create a temporary HOME with a .sandvoice directory."""
 
