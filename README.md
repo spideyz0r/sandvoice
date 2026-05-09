@@ -53,7 +53,7 @@ stream_tts: enabled
 vad_enabled: enabled
 ```
 
-The wake phrase defaults to `hey jarvis`. Change it with `wake_phrase` and `openwakeword_model` in config. The model name must be a built-in openWakeWord model (e.g. `hey_jarvis`, `alexa`) or a path to a `.onnx` file.
+The default wake phrase is **"sand voice"**, using the model at `models/sand_voice.onnx` (included in the repo). You can use any built-in openWakeWord model (e.g. `hey_jarvis`, `alexa`) or train your own — see [docs/CUSTOM_WAKE_WORDS.md](docs/CUSTOM_WAKE_WORDS.md).
 
 **Raspberry Pi / Linux install note:** `tflite-runtime` (a transitive dependency of openWakeWord) has no compatible wheels for current Python versions on Linux. Install a no-op stub before running `pip install -r requirements.txt`:
 
@@ -136,9 +136,9 @@ rss_news_max_items: "5"
 
 # Wake word (--wake-word mode)
 wake_word_enabled: enabled   # global toggle; --wake-word flag is still required to start the mode
-wake_phrase: hey jarvis
-wake_word_sensitivity: 0.35  # 0.0-1.0; higher = stricter (fewer false positives), lower = more sensitive
-openwakeword_model: hey_jarvis  # built-in model name or path to a .onnx file
+wake_phrase: sand voice
+wake_word_sensitivity: 0.25  # 0.0-1.0; higher = stricter (fewer false positives), lower = more sensitive
+openwakeword_model: models/sand_voice.onnx  # path to .onnx model; or a built-in e.g. hey_jarvis (no file needed)
 
 # Voice activity detection (required in --wake-word mode)
 vad_enabled: enabled
