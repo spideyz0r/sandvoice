@@ -36,26 +36,35 @@ The easiest way to train a custom model is Google Colab — free GPU, no local s
 
 > **Note:** The upstream openWakeWord training notebooks don't work with current Google Colab (Python 3.12+). Use the fixed fork at [spideyz0r/openWakeWord](https://github.com/spideyz0r/openWakeWord), which patches Python 3.12 compatibility and torchaudio issues. The training notebooks are in the `notebooks/` directory.
 
-### Quick Steps
+### Steps
 
-1. Open the training notebook from [spideyz0r/openWakeWord](https://github.com/spideyz0r/openWakeWord) in Google Colab.
-2. In the **Target phrase** cell, enter your phrase (e.g. `sand voice`).
-3. Optionally record real samples of your own voice — this significantly improves accuracy over synthetic-only training.
-4. Run all cells. Training takes ~10–20 minutes on a free Colab GPU.
-4. Download the generated `.onnx` file from the Colab session.
-5. Copy it to your machine, e.g. `~/.sandvoice/wake-words/hey_sandvoice.onnx`.
-6. Point SandVoice at it:
+1. Open Colab → **File → Open notebook → GitHub** → `spideyz0r/openWakeWord`, branch `fix/python312-compat`, file `notebooks/automatic_model_training.ipynb`
+2. In the **Define training configuration** cell, set your phrase: `config["target_phrase"] = ["your phrase here"]`. Also set `model_name` and `output_dir`.
+3. Run the **Environment setup** cell
+4. Run the **Download data** cell (downloads AudioSet negatives — ~30 min)
+5. Run the **Generate synthetic clips** cell (generates TTS clips — ~40 min)
+6. *(Optional but recommended)* Upload your own voice recordings and oversample them:
+```bash
+cp /content/your_clips/*.wav /content/my_custom_model/<model_name>/positive_train/
+# oversample real clips 20x so the model learns your voice, not just synthetic TTS
+cd /content/my_custom_model/<model_name>/positive_train/
+for f in clip_*.wav; do for i in $(seq 1 19); do cp "$f" "real_${i}_${f}"; done; done
+```
+7. Run the **Augment clips** cell
+8. Run the **Train model** cell (~15 min)
+9. Download `/content/my_custom_model/<model_name>.onnx` from the Colab file browser
+10. Copy it to your machine and update your config:
 
 ```yaml
-openwakeword_model: "/home/user/.sandvoice/wake-words/hey_sandvoice.onnx"
-wake_phrase: "hey sandvoice"
-wake_word_sensitivity: 0.5
+openwakeword_model: "/home/user/.sandvoice/wake-words/my_model.onnx"
+wake_phrase: "my phrase"
+wake_word_sensitivity: 0.25
 ```
 
 **Notes:**
-- Use an absolute path for `openwakeword_model` when pointing to a custom `.onnx` file.
 - `wake_phrase` is for display/logging only; actual detection uses the model.
-- Train separate models per platform if needed — openWakeWord models are architecture-independent (ONNX), so the same file works on macOS M1 and Raspberry Pi.
+- The same `.onnx` file works on macOS M1 and Raspberry Pi — no per-platform retraining needed.
+- Adding real voice recordings (step 6) makes a significant difference in real-world accuracy.
 
 ## Configuration Reference
 
