@@ -32,11 +32,13 @@ Available built-in names: `hey_jarvis`, `alexa`, `hey_mycroft`.
 
 ## Training Your Own Wake Word
 
-The easiest way to train a custom model is the [openWakeWord Google Colab notebook](https://github.com/dscripka/openWakeWord#training-new-models) — free GPU, no local setup required. Training takes ~10–20 minutes.
+The easiest way to train a custom model is Google Colab — free GPU, no local setup required. Training takes ~10–20 minutes.
+
+> **Note:** The upstream openWakeWord training notebooks don't work with current Google Colab (Python 3.12+). Use the fixed fork at [spideyz0r/openWakeWord](https://github.com/spideyz0r/openWakeWord), which patches Python 3.12 compatibility and torchaudio issues. The training notebooks are in the `notebooks/` directory.
 
 ### Quick Steps
 
-1. Open the Colab notebook (link above).
+1. Open the training notebook from [spideyz0r/openWakeWord](https://github.com/spideyz0r/openWakeWord) in Google Colab.
 2. In the **Target phrase** cell, enter your phrase (e.g. `sand voice`).
 3. Optionally record real samples of your own voice — this significantly improves accuracy over synthetic-only training.
 4. Run all cells. Training takes ~10–20 minutes on a free Colab GPU.
