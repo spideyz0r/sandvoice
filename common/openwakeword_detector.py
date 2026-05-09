@@ -49,7 +49,7 @@ class OpenWakeWordDetector:
             warnings.simplefilter("ignore", DeprecationWarning)
             warnings.simplefilter("ignore", UserWarning)
             if os.path.isabs(model_name) or model_name.lower().endswith(".onnx"):
-                self._model = Model(wakeword_model_paths=[model_name], inference_framework="onnx")
+                self._model = Model(wakeword_models=[model_name], inference_framework="onnx")
                 self._prediction_key = os.path.splitext(os.path.basename(model_name))[0]
             else:
                 self._model = Model(wakeword_models=[model_name], inference_framework="onnx")
