@@ -79,10 +79,13 @@ This replaces the `pygame.mixer.music.load / play / get_busy` loop in
   ALSA interactions. If PyAudio mic initialization still produces ALSA warnings on
   Linux, a separate `_suppress_alsa_errors()` call scoped to the PyAudio context
   may be retained.
-- Remove `Audio.stop_playback()` pygame-specific logic; replace with miniaudio
-  device stop.
-- Remove `Audio.is_playing()` pygame-specific logic; replace with
-  `device.running`.
+- Replace `Audio.stop_playback()` and `Audio.is_playing()`: since
+  `_play_mp3_blocking()` creates `device` as a local context-managed variable,
+  stop/is_playing cannot access it directly. Instead, store a shared
+  `threading.Event` (e.g. `self._stop_event`) that `_play_mp3_blocking()` polls
+  and that `stop_playback()` sets. Track playback state with a boolean flag (e.g.
+  `self._playing`) set/cleared around the `device.start()` call. `is_playing()`
+  returns that flag.
 - Remove `Audio.log_mixer_state()` (pygame mixer debug helper; not applicable).
 - Replace `play_audio_file()` internals with `_play_mp3_blocking()`.
 - `play_audio_queue()` and `play_audio_files()` remain structurally unchanged —

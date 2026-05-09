@@ -50,7 +50,7 @@ that actually needs audio.
 
 ```python
 # Module level — runs at import time
-if platform.system() == "linux" ...:
+if platform.system() == "Linux" ...:
     _pa = pyaudio.PyAudio()          # ← ALSA warnings, no suppression yet
     ...set SDL_AUDIODRIVER / AUDIODEV...
     _pa.terminate()
