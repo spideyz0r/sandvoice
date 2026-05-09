@@ -395,8 +395,8 @@ class TestConfigurationValidation(unittest.TestCase):
         config = Config()
 
         self.assertTrue(config.wake_word_enabled)
-        self.assertEqual(config.wake_phrase, "hey jarvis")
-        self.assertEqual(config.wake_word_sensitivity, 0.35)
+        self.assertEqual(config.wake_phrase, "sand voice")
+        self.assertEqual(config.wake_word_sensitivity, 0.25)
         self.assertEqual(config.openwakeword_model, "hey_jarvis")
         self.assertTrue(config.vad_enabled)
         self.assertEqual(config.vad_aggressiveness, 3)
