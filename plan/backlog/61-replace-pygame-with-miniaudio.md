@@ -116,7 +116,7 @@ None. The playback API surface (`play_audio_file`, `play_audio_queue`,
 | File | Change |
 |------|--------|
 | `common/audio.py` | Replace pygame with miniaudio; remove SDL probe; retain `_suppress_alsa_errors()` for PyAudio mic |
-| `common/barge_in.py` | Remove `try: import pygame` debug block in `_poll_op()` |
+| `common/barge_in.py` | Remove `try: import pygame` debug block in `BargeInDetector.run_with_polling()` |
 | `requirements.txt` | Remove `pygame`; add `miniaudio` |
 | `tests/test_audio_playback.py` | Update mocks from `pygame.mixer` to `miniaudio` |
 
