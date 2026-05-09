@@ -9,15 +9,16 @@
 ## Dependencies
 
 - None — this is a self-contained `audio.py` change.
-- Plan 54 (Linux audio output device auto-detection, still in backlog) is the direct motivation: once Plan 54 is implemented, its module-level SDL probe will introduce the import-time side effects this plan resolves.
+- Plan 54 (Linux audio output device auto-detection, still in backlog) will add a module-level SDL probe that amplifies the import-time side effects. Plan 60 should be implemented alongside or after Plan 54.
 
 ---
 
 ## Overview
 
-`common/audio.py` currently has `import pygame` at module level. Once Plan 54
-is implemented it will also run a PyAudio device enumeration block at module
-import time to set `SDL_AUDIODRIVER` and `AUDIODEV` before pygame initialises.
+`common/audio.py` currently has `import pygame` at module level, causing
+import-time side effects today. Once Plan 54 is implemented it will also run a
+PyAudio device enumeration block at module import time to set `SDL_AUDIODRIVER`
+and `AUDIODEV` before pygame initialises, further amplifying the problem.
 This design causes three problems:
 
 1. **ALSA warnings on stderr** — `pyaudio.PyAudio()` is constructed before
