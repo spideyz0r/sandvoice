@@ -18,6 +18,8 @@ wake_phrase: "sand voice"
 wake_word_sensitivity: 0.25
 ```
 
+> **Path resolution for `.onnx` files:** Relative paths are resolved first against the config directory (`~/.sandvoice/`), then against the repo root. Absolute paths are used as-is. For custom models stored outside the repo, use an absolute path (e.g. `~/.sandvoice/wake-words/my_model.onnx`).
+
 ## Built-in Models (No File Required)
 
 If you prefer a built-in model that needs no `.onnx` file, set `openwakeword_model` to a model name string:
