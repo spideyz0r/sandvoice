@@ -2,7 +2,7 @@
 
 **Status**: 📋 Backlog
 **Priority**: 61
-**Platforms**: macOS M1 + Raspberry Pi 3B (Linux).
+**Platforms**: macOS M1, Raspberry Pi 3B (Linux).
 
 ---
 

@@ -39,10 +39,10 @@ forcing the PyAudio enumeration to run before `_suppress_alsa_errors()` can be c
 
 ## Proposed Solution
 
-Move `import pygame` from module level into `Audio.initialize_audio()`. The SDL
-probe and `_suppress_alsa_errors()` call move there too, running in the correct
-order — suppression first, then probe, then pygame import — all inside the method
-that actually needs audio.
+Move `import pygame` and the SDL probe from module level into
+`Audio.initialize_audio()`. `_suppress_alsa_errors()` is already called at the
+top of `initialize_audio()` today — the key fix is ensuring the SDL probe and
+`import pygame` run after it, inside the method that actually needs audio.
 
 ### Before (simplified)
 
