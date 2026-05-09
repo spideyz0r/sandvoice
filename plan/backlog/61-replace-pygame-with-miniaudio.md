@@ -75,9 +75,12 @@ This replaces the `pygame.mixer.music.load / play / get_busy` loop in
 ### Changes required
 
 - Remove `import pygame` (module level and inside methods).
-- Remove the SDL probe block (`_detect_sdl_audio_device` / module-level env-var
-  setup) — it exists solely to configure SDL/pygame output routing and is not
-  needed by miniaudio.
+- Remove the module-level SDL probe block in `common/audio.py` (the inline
+  `if platform.system().lower() == "linux"` block that constructs `pyaudio.PyAudio()`
+  and sets `SDL_AUDIODRIVER` / `AUDIODEV`) — it exists solely to configure SDL/pygame
+  output routing and is not needed by miniaudio. Note: if Plan 60 is implemented
+  first, this block will have been extracted into `_detect_sdl_audio_device()`;
+  in that case, remove that helper instead.
 - Retain `_suppress_alsa_errors()` in `initialize_audio()`: it suppresses
   PortAudio/ALSA stderr noise that occurs when `pyaudio.PyAudio()` enumerates
   devices for mic input, which is unrelated to pygame and still needed on Linux.
@@ -94,10 +97,10 @@ This replaces the `pygame.mixer.music.load / play / get_busy` loop in
 - Replace `play_audio_file()` internals with `_play_mp3_blocking()`.
 - `play_audio_queue()` and `play_audio_files()` remain structurally unchanged —
   they call `play_audio_file()` internally.
-- Remove the `try: import pygame` debug block inside `BargeIn._poll_op()`
-  (`common/barge_in.py`) — this import exists solely to check pygame mixer state
-  for debugging and must be removed (or replaced with a miniaudio equivalent) when
-  pygame is dropped.
+- Remove the `try: import pygame` debug block inside
+  `BargeInDetector.run_with_polling()` (`common/barge_in.py`, around the polling
+  loop) — this import exists solely to check pygame mixer state for debugging and
+  must be removed (or replaced with a miniaudio equivalent) when pygame is dropped.
 - Add `miniaudio` to `requirements.txt`.
 - Remove `pygame` from `requirements.txt`.
 
