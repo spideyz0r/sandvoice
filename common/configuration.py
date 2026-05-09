@@ -97,8 +97,8 @@ class Config:
             "stream_tts_first_chunk_target_s": 6,
             # Wake word mode settings (only active with --wake-word flag)
             "wake_word_enabled": "enabled",
-            "wake_phrase": "hey jarvis",
-            "wake_word_sensitivity": 0.35,
+            "wake_phrase": "sand voice",
+            "wake_word_sensitivity": 0.25,
             "openwakeword_model": "hey_jarvis",
             # Voice Activity Detection
             "vad_enabled": "enabled",

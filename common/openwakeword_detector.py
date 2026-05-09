@@ -23,8 +23,8 @@ class OpenWakeWordDetector:
         """Initialise the detector.
 
         Args:
-            model_name: Short built-in name (e.g. "hey_jarvis") or path
-                (absolute or relative) to a custom .onnx file.
+            model_name: Path (absolute or relative) to a custom .onnx file,
+                or a short built-in name (e.g. "hey_jarvis", "alexa").
             threshold: Detection score threshold (0.0–1.0).
             device_sample_rate: Sample rate of the audio device. When it
                 differs from 16000 Hz, each frame is resampled before

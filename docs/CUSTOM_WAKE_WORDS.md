@@ -1,38 +1,45 @@
 # Custom Wake Words Guide
 
-This guide shows you how to create and use custom wake words like "hey sandvoice" with openWakeWord.
+This guide covers wake word configuration for SandVoice.
 
 ## Overview
 
 SandVoice uses [openWakeWord](https://github.com/dscripka/openWakeWord) (MIT-licensed, no API key required).
-You can use any of the built-in models or train your own custom `.onnx` model.
+The default wake phrase is **"sand voice"**, using the model bundled at `models/sand_voice.onnx`.
+You can also use any built-in openWakeWord model or train your own.
 
-## Built-in Models
+## Default Model
 
-openWakeWord ships with a small set of pre-trained models. The default is `hey_jarvis`.
-Set `openwakeword_model` in `~/.sandvoice/config.yaml` to use one:
+Out of the box, SandVoice responds to **"sand voice"** using the included model:
 
 ```yaml
-openwakeword_model: hey_jarvis   # default
+openwakeword_model: models/sand_voice.onnx
+wake_phrase: "sand voice"
+wake_word_sensitivity: 0.25
+```
+
+## Built-in Models (No File Required)
+
+If you prefer a built-in model that needs no `.onnx` file, set `openwakeword_model` to a model name string:
+
+```yaml
+openwakeword_model: hey_jarvis
 wake_phrase: "hey jarvis"
 wake_word_sensitivity: 0.35
 ```
 
-Other available built-in names (pass exact string as `openwakeword_model`):
-- `hey_jarvis`
-- `alexa`
-- `hey_mycroft`
+Available built-in names: `hey_jarvis`, `alexa`, `hey_mycroft`.
 
-## Training a Custom Wake Word
+## Training Your Own Wake Word
 
-Custom models are `.onnx` files you train yourself. The easiest way is
-[openWakeWord's Colab notebook](https://github.com/dscripka/openWakeWord#training-new-models).
+The easiest way to train a custom model is the [openWakeWord Google Colab notebook](https://github.com/dscripka/openWakeWord#training-new-models) — free GPU, no local setup required. Training takes ~10–20 minutes.
 
 ### Quick Steps
 
-1. Open the openWakeWord training notebook in Google Colab (link in the repo above).
-2. In the **Target phrase** cell, enter your phrase (e.g. `hey sandvoice`).
-3. Run all cells. Training takes ~10–20 minutes on a free Colab GPU.
+1. Open the Colab notebook (link above).
+2. In the **Target phrase** cell, enter your phrase (e.g. `sand voice`).
+3. Optionally record real samples of your own voice — this significantly improves accuracy over synthetic-only training.
+4. Run all cells. Training takes ~10–20 minutes on a free Colab GPU.
 4. Download the generated `.onnx` file from the Colab session.
 5. Copy it to your machine, e.g. `~/.sandvoice/wake-words/hey_sandvoice.onnx`.
 6. Point SandVoice at it:
