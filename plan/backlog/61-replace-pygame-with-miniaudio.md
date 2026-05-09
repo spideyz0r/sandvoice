@@ -140,7 +140,7 @@ None. The playback API surface (`play_audio_file`, `play_audio_queue`,
 
 ## Acceptance Criteria
 
-- [ ] `import common.audio` has no import-time side effects on any platform
+- [ ] `import common.audio` does not construct `pyaudio.PyAudio()`, probe audio devices, or initialize any playback subsystem at import time on any platform
 - [ ] TTS MP3 playback works on macOS M1
 - [ ] TTS MP3 playback works on Raspberry Pi 3B (correct USB output device)
 - [ ] `stop_playback()` stops audio within ~50 ms
