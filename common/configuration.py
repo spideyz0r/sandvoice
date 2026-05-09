@@ -99,7 +99,7 @@ class Config:
             "wake_word_enabled": "enabled",
             "wake_phrase": "sand voice",
             "wake_word_sensitivity": 0.25,
-            "openwakeword_model": "hey_jarvis",
+            "openwakeword_model": "models/sand_voice.onnx",
             # Voice Activity Detection
             "vad_enabled": "enabled",
             "vad_aggressiveness": 3,
@@ -510,6 +510,10 @@ class Config:
             self.openwakeword_model = self.openwakeword_model.strip()
             if self.openwakeword_model.lower().endswith(".onnx"):
                 expanded = os.path.expandvars(os.path.expanduser(self.openwakeword_model))
+                if not os.path.isabs(expanded):
+                    # Resolve relative paths from the repo root (parent of common/)
+                    _repo_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+                    expanded = os.path.join(_repo_root, expanded)
                 if not os.path.exists(expanded):
                     errors.append(f"openwakeword_model path does not exist: {self.openwakeword_model}")
                 else:

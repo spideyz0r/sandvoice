@@ -32,7 +32,7 @@ Available built-in names: `hey_jarvis`, `alexa`, `hey_mycroft`.
 
 ## Training Your Own Wake Word
 
-The easiest way to train a custom model is Google Colab — free GPU, no local setup required. Training takes ~10–20 minutes.
+The easiest way to train a custom model is Google Colab — free GPU, no local setup required. The full pipeline takes ~85 minutes (data download ~30 min, synthetic clip generation ~40 min, model training ~15 min).
 
 > **Note:** The upstream openWakeWord training notebooks don't work with current Google Colab (Python 3.12+). Use the fixed fork at [spideyz0r/openWakeWord](https://github.com/spideyz0r/openWakeWord), which patches Python 3.12 compatibility and torchaudio issues. The training notebooks are in the `notebooks/` directory.
 
@@ -47,8 +47,12 @@ The easiest way to train a custom model is Google Colab — free GPU, no local s
 ```bash
 cp /content/your_clips/*.wav /content/my_custom_model/<model_name>/positive_train/
 # oversample real clips 20x so the model learns your voice, not just synthetic TTS
+# skip clip_* (synthetic) and real_* (already-oversampled) files
 cd /content/my_custom_model/<model_name>/positive_train/
-for f in clip_*.wav; do for i in $(seq 1 19); do cp "$f" "real_${i}_${f}"; done; done
+for f in *.wav; do
+  case "$f" in clip_*|real_*) continue;; esac
+  for i in $(seq 1 19); do cp "$f" "real_${i}_${f}"; done
+done
 ```
 7. Run the **Augment clips** cell
 8. Run the **Train model** cell (~15 min)
@@ -62,7 +66,7 @@ wake_word_sensitivity: 0.25
 ```
 
 **Notes:**
-- `wake_phrase` is for display/logging only; actual detection uses the model.
+- `wake_phrase` is for display/logging only; actual detection uses the model. When using a built-in model, keep `wake_phrase` consistent with that model's trigger phrase (e.g. `"hey jarvis"` for `hey_jarvis`) to avoid misleading terminal output.
 - The same `.onnx` file works on macOS M1 and Raspberry Pi — no per-platform retraining needed.
 - Adding real voice recordings (step 6) makes a significant difference in real-world accuracy.
 
@@ -112,7 +116,7 @@ pip install onnxruntime==1.20.0
 
 ## Troubleshooting
 
-1. Enable debug mode: `debug: enabled` in config.
+1. Enable debug mode: set `log_level: debug` in config.
 2. Check logs for `Wake word score:` lines to see raw scores for your phrase.
 3. If scores never reach threshold, lower `wake_word_sensitivity` or retrain.
 4. Report issues: https://github.com/spideyz0r/sandvoice/issues
