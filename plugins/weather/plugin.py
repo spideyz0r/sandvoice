@@ -5,10 +5,7 @@ import os
 
 import requests
 
-try:
-    from zoneinfo import ZoneInfo
-except ImportError:
-    ZoneInfo = None  # Python < 3.9 fallback
+from zoneinfo import ZoneInfo
 
 logger = logging.getLogger(__name__)
 
@@ -17,7 +14,7 @@ _TZ_CACHE = {}  # tz_name → ZoneInfo or None; avoids repeated resolution and d
 
 def _resolve_tz(tz_name):
     """Return a ZoneInfo for tz_name, or None if unavailable or invalid."""
-    if not isinstance(tz_name, str) or not tz_name.strip() or ZoneInfo is None:
+    if not isinstance(tz_name, str) or not tz_name.strip():
         return None
     tz_name = tz_name.strip()
     if tz_name in _TZ_CACHE:
