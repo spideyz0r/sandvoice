@@ -4,10 +4,7 @@ import threading
 from datetime import datetime, timedelta, timezone
 from typing import Any, Callable, Iterable, Optional
 
-try:
-    from zoneinfo import ZoneInfo
-except ImportError:
-    ZoneInfo = None  # Python < 3.9 fallback; times will print in UTC
+from zoneinfo import ZoneInfo
 
 from common.db import SchedulerDB, ScheduledTask
 
@@ -77,13 +74,6 @@ class TaskScheduler:
     def _resolve_tz(tz_name: Optional[str]):
         """Return a ZoneInfo object for tz_name, or None if unavailable/invalid."""
         if not tz_name:
-            return None
-        if ZoneInfo is None:
-            logger.warning(
-                "TaskScheduler: timezone %r requested but zoneinfo is unavailable "
-                "(Python < 3.9); timestamps will display in UTC.",
-                tz_name,
-            )
             return None
         try:
             return ZoneInfo(tz_name)
