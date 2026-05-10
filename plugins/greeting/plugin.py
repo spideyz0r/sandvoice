@@ -1,10 +1,7 @@
 import logging
 from datetime import datetime
 
-try:
-    from zoneinfo import ZoneInfo
-except ImportError:
-    ZoneInfo = None  # Python < 3.9 fallback; local time will be used
+from zoneinfo import ZoneInfo
 
 from common.plugin_loader import build_extra_routes_text
 
@@ -18,7 +15,7 @@ _TZ_CACHE = {}  # tz_name → ZoneInfo or None; avoids repeated resolution and d
 def _resolve_tz(config):
     """Return a ZoneInfo for config.timezone, or None to fall back to local time."""
     tz_name = getattr(config, 'timezone', None)
-    if not isinstance(tz_name, str) or not tz_name.strip() or ZoneInfo is None:
+    if not isinstance(tz_name, str) or not tz_name.strip():
         return None
     tz_name = tz_name.strip()
     if tz_name in _TZ_CACHE:
