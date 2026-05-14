@@ -31,17 +31,16 @@ sudo apt-get install -y \
 ## Installation
 
 ```bash
-git clone https://github.com/spideyz0r/sandvoice.git
-cd sandvoice
+git clone https://github.com/spideyz0r/sandvoice.git ~/sandvoice
+cd ~/sandvoice
 python3 -m venv env
 source env/bin/activate
 ```
 
-Install `openwakeword` first with `--no-deps` to skip `tflite-runtime` (no wheel available for Python 3.13 on aarch64), then install the rest:
+`tflite-runtime` (a transitive dependency of openWakeWord) has no compatible wheels for current Python versions on Linux. Install a no-op stub first, then the rest:
 
 ```bash
-pip install openwakeword>=0.6.0 --no-deps
-pip install scipy
+TD=$(mktemp -d) && echo "from setuptools import setup; setup(name='tflite-runtime', version='2.14.0', packages=[])" > $TD/setup.py && pip install $TD
 pip install -r requirements.txt
 ```
 
@@ -60,7 +59,7 @@ verbosity: brief
 
 openwakeword_model: ~/sandvoice/models/sand_voice.onnx
 wake_phrase: sand voice
-wake_word_sensitivity: 0.5
+wake_word_sensitivity: 0.25
 
 log_level: info
 
@@ -103,11 +102,11 @@ card 1: Device [USB PnP Sound Device], device 0: ...     ← USB mic
 
 ### Input (microphone)
 
-SandVoice automatically selects the first `hw:N,M` USB input device on Linux — no configuration needed. If you have multiple USB audio devices, the first one found is used.
+SandVoice automatically selects the first hardware `hw:N,M` input device on Linux — no configuration needed. If you have multiple hardware audio devices, the first one enumerated by PyAudio is used.
 
 ### Output (speaker)
 
-SandVoice automatically detects USB output devices and sets `AUDIODEV` accordingly. If you want to force a specific output device (e.g. 3.5mm jack instead of USB), set `AUDIODEV` in your shell before launching:
+On Linux, SandVoice scans ALSA hardware devices and sets `SDL_AUDIODRIVER=alsa` and `AUDIODEV` to the first `hw:N,M` output device found (preferring a combined in+out device). If `AUDIODEV` is already set in your environment, it is used as-is. To force a specific output device (e.g. 3.5mm jack), set `AUDIODEV` before launching:
 
 ```bash
 # Use 3.5mm jack (card 0)
