@@ -179,6 +179,10 @@ plan/
 **Document**: [completed/49-cache-warmup-skip-fresh-entries.md](./completed/49-cache-warmup-skip-fresh-entries.md)
 **Description**: Fix cache warmup to skip live API/LLM calls when the SQLite-persisted entry is still fresh. Adds a fresh-entry early return in the `refresh_only=True` path for the weather and greeting plugins. Warmup is now instant when the cache is warm from a recent run. Pattern documented in `docs/PATTERNS.md`.
 
+### Priority 5: Raspberry Pi Compatibility
+**Document**: [completed/05-raspberry-pi-compatibility.md](./completed/05-raspberry-pi-compatibility.md)
+**Description**: Setup guide for Raspberry Pi 3B deployment (headless, USB audio). Covers system deps, installation, audio configuration (USB mic, 3.5mm jack, USB headset), and wake word setup. All code changes covered by Plans 52–55.
+
 ### Priority 52: Replace Porcupine with openWakeWord
 **Document**: [completed/52-replace-porcupine-with-openwakeword.md](./completed/52-replace-porcupine-with-openwakeword.md)
 **Description**: Swap the Picovoice Porcupine engine for openWakeWord (MIT, no account required). New `common/openwakeword_detector.py` wraps openWakeWord behind Porcupine's interface. Pins `onnxruntime==1.20.0` for Pi 3B stability. Adds `openwakeword_model` config key.
@@ -217,10 +221,6 @@ plan/
 ---
 
 ## Backlog 📋
-
-### Priority 5: Raspberry Pi Compatibility
-**Document**: [backlog/05-raspberry-pi-compatibility.md](./backlog/05-raspberry-pi-compatibility.md)
-**Description**: Documentation and setup guide for Raspberry Pi 3B deployment (headless, USB audio). Depends on Plans 52–55 for all code changes; this plan covers only `docs/raspberry-pi-setup.md`.
 
 ### Priority 14: Energy-Based Speech Detection
 **Document**: [backlog/14-energy-based-speech-detection.md](./backlog/14-energy-based-speech-detection.md)
