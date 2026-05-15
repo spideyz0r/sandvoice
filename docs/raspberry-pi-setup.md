@@ -113,7 +113,7 @@ SandVoice automatically selects the first hardware `hw:N,M` input device on Linu
 
 ### Output (speaker)
 
-On Linux, when `SDL_AUDIODRIVER` is not set, SandVoice scans ALSA hardware devices, finds the first device whose name contains `hw:N,M`, and sets `SDL_AUDIODRIVER=alsa` and `AUDIODEV=plughw:N,M` (using ALSA's plug layer for format conversion). It prefers a combined in+out device over output-only. If `AUDIODEV` is already set, it is used as-is. If you override `SDL_AUDIODRIVER` manually, you should also set `AUDIODEV` explicitly — the auto-detection will be skipped. To force a specific output device (e.g. 3.5mm jack), set both before launching:
+On Linux, when `SDL_AUDIODRIVER` is not set, SandVoice uses PyAudio to enumerate devices and picks the first one whose name contains `hw:N,M`, preferring a combined input+output device (e.g. a USB headset) over output-only. It sets `SDL_AUDIODRIVER=alsa` and `AUDIODEV=plughw:N,M` (ALSA's plug layer for format conversion); falls back to `AUDIODEV=default` if no hardware device is found. If `AUDIODEV` is already set, it is used as-is. If you override `SDL_AUDIODRIVER` manually, you should also set `AUDIODEV` explicitly — the auto-detection will be skipped. To force a specific output device (e.g. 3.5mm jack), set both before launching:
 
 ```bash
 # Use 3.5mm jack (card 0)
