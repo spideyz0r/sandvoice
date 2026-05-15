@@ -2,7 +2,9 @@
 
 Talk to an LLM. Hear it talk back.
 
-SandVoice is a Python voice assistant that turns microphone input into an AI conversation — transcribing speech, routing requests to the right plugin, and playing the response through your speakers. It runs on macOS and Raspberry Pi.
+SandVoice is a Python voice assistant that turns microphone input into an AI conversation — transcribing speech, routing requests to the right plugin, and playing the response through your speakers.
+
+Run it on your laptop, or plug a Raspberry Pi into a USB mic and speaker and turn it into a private, always-on home assistant — your own voice-activated AI, without handing your home to a big tech device.
 
 ## Modes
 
@@ -54,6 +56,26 @@ vad_enabled: enabled
 ```
 
 The default wake phrase is **"sand voice"**, using the model at `models/sand_voice.onnx` (included in the repo). You can use any built-in openWakeWord model (e.g. `hey_jarvis`, `alexa`) or train your own — see [docs/CUSTOM_WAKE_WORDS.md](docs/CUSTOM_WAKE_WORDS.md).
+
+## Raspberry Pi — home voice assistant
+
+Wake word mode running on a Raspberry Pi 3B is SandVoice's most compelling use case:
+a standalone, always-on device you can place anywhere in the house. Say the wake
+phrase, ask anything, and hear the response — no screen, no keyboard, no subscription.
+
+Traditional smart speakers like Alexa and Google Home are built around fixed command
+sets and scripted answers. SandVoice is backed by a large language model — it can hold
+a real conversation, answer complex questions, explain things, help you think through a
+problem, and handle follow-up questions naturally. It also knows about the weather,
+latest news, and anything else a plugin can reach.
+
+Unlike those devices, SandVoice runs on hardware you own. Your voice is transcribed and
+answered via OpenAI, but the device, the config, and the wake word model are entirely
+yours. You can use the default "sand voice" phrase, swap in a built-in model like
+`hey_jarvis`, or train a custom wake word for any phrase you want.
+
+**What you need:** Raspberry Pi 3B (or newer), a USB microphone, and any speaker
+(3.5mm or USB). Full setup guide: [docs/raspberry-pi-setup.md](docs/raspberry-pi-setup.md)
 
 ## API keys
 
@@ -237,7 +259,6 @@ def process(user_input, route, s):
 | `realtime_websearch` | Live web search via Responses API | — |
 | `technical` | Technical/code questions | — |
 | `greeting` | Greetings and small talk | — |
-| `echo` | Echoes back what you said (example/test) | — |
 | `realtime` | Web search (scraping-based, **legacy**) | — |
 
 ### Adding a plugin
@@ -387,6 +408,3 @@ For the `news` plugin, `rss_url` overrides the `rss_news` config value and is us
 
 > **Note**: `cache_auto_refresh` requires `cache_enabled: enabled`. If the scheduler is disabled, the startup warmup still runs but no periodic tasks are registered.
 
-## Platform notes
-
-SandVoice targets macOS M1 and Raspberry Pi 3B. Audio settings are auto-detected where possible. If you run into microphone issues, try setting `channels: 1` in config.
