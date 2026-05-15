@@ -222,9 +222,9 @@ plan/
 
 ## Backlog 📋
 
-### Priority 14: Energy-Based Speech Detection
+### Priority 14: Adaptive Energy Pre-Filter for VAD
 **Document**: [backlog/14-energy-based-speech-detection.md](./backlog/14-energy-based-speech-detection.md)
-**Description**: Add ambient noise calibration and energy thresholding to reduce false positives from constant background audio.
+**Description**: Add adaptive noise-floor calibration and RMS energy pre-filtering inside `VadRecorder`. Frames below `noise_floor × multiplier` are forced to non-speech before WebRTC VAD runs. Fixes false positives from TV audio, fans, and distant speech. ~60 lines, no new dependencies, self-contained in `vad_recorder.py`.
 
 ### Priority 18: TTS Micro-Pauses and Pacing
 **Document**: [backlog/18-tts-micro-pauses-and-pacing.md](./backlog/18-tts-micro-pauses-and-pacing.md)
@@ -266,6 +266,10 @@ plan/
 ### Priority 60: Lazy pygame Import
 **Document**: [backlog/60-lazy-pygame-import.md](./backlog/60-lazy-pygame-import.md)
 **Description**: Move `import pygame` and the existing module-level SDL output device probe into `Audio.initialize_audio()`. Ensures `_suppress_alsa_errors()` runs before any PyAudio or SDL initialization, eliminating import-time side effects. Minimal-change alternative to Plan 61.
+
+### Priority 62: Silero VAD — Neural End-of-Speech Detection
+**Document**: [backlog/62-silero-vad-neural-endpoint-detection.md](./backlog/62-silero-vad-neural-endpoint-detection.md)
+**Description**: Replace WebRTC VAD with Silero VAD (neural LSTM, ~1.5 MB ONNX). Dramatically better accuracy for TV/music/background-speech scenarios. Uses `onnxruntime` (already installed). Energy pre-filter from Plan 14 stays as the cheap first-stage gate. Requires Pi 3B latency benchmark before committing. Supersedes dropped Plan 15.
 
 ### Priority 61: Replace pygame with miniaudio
 **Document**: [backlog/61-replace-pygame-with-miniaudio.md](./backlog/61-replace-pygame-with-miniaudio.md)
