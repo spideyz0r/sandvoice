@@ -604,21 +604,27 @@ class TestEnergyFilter(unittest.TestCase):
         return VadRecorder(self.mock_config, Mock(), None)
 
     @patch('common.vad_recorder.time.time')
+    @patch('common.vad_recorder.os.makedirs')
+    @patch('common.vad_recorder.wave.open')
     @patch('common.vad_recorder.webrtcvad.Vad')
     @patch('common.vad_recorder.pyaudio.PyAudio')
-    def test_energy_gate_suppresses_low_energy_speech_frames(
-            self, mock_pa_class, mock_vad_class, mock_time):
-        """Frames that WebRTC marks as speech but are below the energy gate → suppressed.
+    def test_energy_gate_enables_silence_detection_over_tv_noise(
+            self, mock_pa_class, mock_vad_class, mock_wave_open, mock_makedirs, mock_time):
+        """Gate allows silence detection to work even when TV audio makes WebRTC say True.
 
-        Calibration: 15 frames where WebRTC says False (noise) at RMS 100.
-        noise_floor = 100; gate threshold = 100 * 2.5 = 250.
-        Post-calibration: WebRTC says True but RMS = 150 (< 250) → energy gate forces False.
-        speech_detected never becomes True → returns None.
+        Without the gate: WebRTC returns True for every frame (TV + speech + post-speech TV),
+        silence_start never gets set, recording never ends until vad_timeout.
+        With the gate: post-speech TV frames are suppressed → silence counter ticks → recording
+        ends within vad_silence_duration.
+
+        Calibration runs unconditionally on frames 1-15 (TV level RMS 200),
+        so noise_floor is established even though WebRTC fires True throughout.
         """
-        noise_pcm = _make_pcm_with_rms(100)   # RMS 100, WebRTC → False
-        low_energy_pcm = _make_pcm_with_rms(150)  # RMS 150, WebRTC → True, gate → False
+        tv_pcm = _make_pcm_with_rms(200)      # TV noise, below gate (200 < 200*2.5=500)
+        speech_pcm = _make_pcm_with_rms(5000)  # User speech, above gate
 
-        frames_returned = [noise_pcm] * 15 + [low_energy_pcm] * 5
+        # 15 calibration (TV) + 3 speech + 3 TV noise after speech
+        frames_returned = [tv_pcm] * 15 + [speech_pcm] * 3 + [tv_pcm] * 3
 
         read_idx = [0]
         def mock_read(size, exception_on_overflow=False):
@@ -626,31 +632,32 @@ class TestEnergyFilter(unittest.TestCase):
                 f = frames_returned[read_idx[0]]
                 read_idx[0] += 1
                 return f
-            raise Exception("End of test frames")
+            raise Exception("End")
 
         mock_stream = Mock()
         mock_stream.read = mock_read
         mock_pa = Mock()
         mock_pa.open.return_value = mock_stream
+        mock_pa.get_sample_size.return_value = 2
         mock_pa_class.return_value = mock_pa
 
-        # Calibration frames: WebRTC says False. Post-calibration: WebRTC says True.
-        webrtc_responses = [False] * 15 + [True] * 5
+        # WebRTC says True for every frame — gate is the only thing that can detect silence
         mock_vad = Mock()
-        mock_vad.is_speech.side_effect = webrtc_responses
+        mock_vad.is_speech.return_value = True
         mock_vad_class.return_value = mock_vad
 
-        # Each loop iteration: 1 call for elapsed + 1 for pre-speech bail = 2 per frame.
-        # 20 frames × 2 = 40 calls + 1 for recording_start = 41 total.
-        # After the 20 frames we raise, so the bail fires on the 20th frame's 2nd call.
-        times = [0.0] + [t for i in range(20) for t in (i * 0.03, i * 0.03 + 0.01)] + [2.0]
+        mock_wf = Mock()
+        mock_wave_open.return_value.__enter__.return_value = mock_wf
+
+        # Each frame: 1 elapsed call; silence check adds 1 more after speech_detected=True
+        times = [0.0] + [i * 0.03 for i in range(25)] + [1.5, 2.0, 2.0, 2.0]
         mock_time.side_effect = times
 
         recorder = self._make_recorder()
         result = recorder.record()
 
-        # Energy gate suppressed all post-calibration speech → no speech_detected → None
-        self.assertIsNone(result)
+        # Gate suppressed post-speech TV frames → silence detected → WAV returned
+        self.assertIsNotNone(result)
 
     @patch('common.vad_recorder.time.time')
     @patch('common.vad_recorder.os.makedirs')
@@ -659,14 +666,17 @@ class TestEnergyFilter(unittest.TestCase):
     @patch('common.vad_recorder.pyaudio.PyAudio')
     def test_energy_gate_passes_high_energy_speech_frames(
             self, mock_pa_class, mock_vad_class, mock_wave_open, mock_makedirs, mock_time):
-        """Frames above the energy gate pass through normally."""
-        # Calibration: 15 frames at RMS 100 → threshold = 250
-        # Speech frames: RMS 3000 (>> 250) → pass through → speech_detected
+        """Frames above the energy gate pass through normally and are recorded.
+
+        Calibration (15 frames, WebRTC=False, RMS=100) → noise_floor=100, threshold=250.
+        Speech frames (RMS=3000, WebRTC=True) → 3000 > 250, passes gate → speech_detected.
+        Silence frames (RMS=50, WebRTC=False) → silence counter → recording ends.
+        """
         noise_pcm = _make_pcm_with_rms(100)
         speech_pcm = _make_pcm_with_rms(3000)
         silence_pcm = _make_pcm_with_rms(50)
 
-        # 15 calibration + 3 speech + 3 silence to trigger end
+        # 15 calibration + 3 speech + 3 silence
         frames_returned = [noise_pcm] * 15 + [speech_pcm] * 3 + [silence_pcm] * 3
 
         read_idx = [0]
@@ -684,16 +694,29 @@ class TestEnergyFilter(unittest.TestCase):
         mock_pa.get_sample_size.return_value = 2
         mock_pa_class.return_value = mock_pa
 
-        speech_flags = [True] * 3 + [False] * 3
+        # 15 False (calibration noise) + 3 True (speech) + 3 False (silence)
         mock_vad = Mock()
-        mock_vad.is_speech.side_effect = speech_flags * 10  # enough for the loop
+        mock_vad.is_speech.side_effect = [False] * 15 + [True] * 3 + [False] * 3
         mock_vad_class.return_value = mock_vad
-
-        times = [0.0] + [i * 0.03 for i in range(30)] + [1.5, 2.0, 2.0, 2.0]
-        mock_time.side_effect = times
 
         mock_wf = Mock()
         mock_wave_open.return_value.__enter__.return_value = mock_wf
+
+        # Time layout (time.time() is called multiple times per frame):
+        # recording_start=0.0
+        # 15 calibration frames (WebRTC=False): elapsed + pre-speech bail = 2 calls each
+        # 3 speech frames (WebRTC=True, is_speech=True): elapsed only = 1 call each
+        # Silence frame 1 (is_speech=False, silence_start=None): elapsed + silence_start = 2 calls
+        # Silence frame 2: elapsed + silence_duration check; need duration >= 1.5s
+        # Silence frame 3: same (in case frame 2 doesn't fire break)
+        # Buffer values for wav path (time.time() used in filename)
+        calibration_times = [t for i in range(15) for t in (i * 0.03, i * 0.03 + 0.005)]
+        speech_times = [0.45 + i * 0.03 for i in range(3)]
+        silence_times = [0.54, 0.54,   # frame 1: elapsed + silence_start=0.54
+                         0.57, 2.1,    # frame 2: elapsed + duration=2.1-0.54=1.56 ≥ 1.5 → break
+                         2.1, 2.1, 2.1]
+        times = [0.0] + calibration_times + speech_times + silence_times
+        mock_time.side_effect = times
 
         recorder = self._make_recorder()
         result = recorder.record()

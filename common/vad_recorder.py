@@ -130,8 +130,10 @@ class VadRecorder:
 
                 frames.append(pcm)
 
-                # Energy calibration: collect noise floor from pre-speech frames
-                if not speech_detected and len(_rms_samples) < _ENERGY_CALIBRATION_FRAMES:
+                # Energy calibration: always collect the first N frames regardless of
+                # WebRTC output so the noise floor is established even when early ambient
+                # frames are misclassified as speech.
+                if len(_rms_samples) < _ENERGY_CALIBRATION_FRAMES:
                     _rms_samples.append(_rms(pcm))
                     if len(_rms_samples) == _ENERGY_CALIBRATION_FRAMES:
                         _noise_floor = sum(_rms_samples) / len(_rms_samples)

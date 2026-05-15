@@ -489,6 +489,39 @@ class TestConfigurationValidation(unittest.TestCase):
 
         self.assertIn("vad_timeout must be a positive number", str(context.exception))
 
+    def test_invalid_vad_energy_threshold_multiplier_nan(self):
+        """vad_energy_threshold_multiplier: nan must be rejected."""
+        self.write_config({"vad_energy_threshold_multiplier": float('nan')})
+        with self.assertRaises(ValueError) as context:
+            Config()
+        self.assertIn("vad_energy_threshold_multiplier", str(context.exception))
+
+    def test_invalid_vad_energy_threshold_multiplier_inf(self):
+        """vad_energy_threshold_multiplier: inf must be rejected."""
+        self.write_config({"vad_energy_threshold_multiplier": float('inf')})
+        with self.assertRaises(ValueError) as context:
+            Config()
+        self.assertIn("vad_energy_threshold_multiplier", str(context.exception))
+
+    def test_invalid_vad_energy_threshold_multiplier_too_low(self):
+        """vad_energy_threshold_multiplier: value <= 1.0 must be rejected."""
+        self.write_config({"vad_energy_threshold_multiplier": 1.0})
+        with self.assertRaises(ValueError) as context:
+            Config()
+        self.assertIn("vad_energy_threshold_multiplier", str(context.exception))
+
+    def test_vad_energy_filter_accepts_yaml_bool(self):
+        """vad_energy_filter: YAML boolean false must not crash at startup."""
+        self.write_config({"vad_energy_filter": False})
+        config = Config()
+        self.assertFalse(config.vad_energy_filter)
+
+    def test_vad_energy_filter_accepts_yaml_bool_true(self):
+        """vad_energy_filter: YAML boolean true must be accepted."""
+        self.write_config({"vad_energy_filter": True})
+        config = Config()
+        self.assertTrue(config.vad_energy_filter)
+
     def test_valid_wake_word_configuration(self):
         """Test that valid custom wake word configuration is accepted"""
         self.write_config({

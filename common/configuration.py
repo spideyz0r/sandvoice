@@ -1,6 +1,7 @@
 import math, os, yaml, logging
 from common.platform_detection import log_platform_info
 from common.audio_device_detection import get_optimal_channels, log_device_info
+from common.utils import _is_enabled_flag
 
 logger = logging.getLogger(__name__)
 
@@ -256,7 +257,7 @@ class Config:
         self.vad_silence_duration = self.get("vad_silence_duration")
         self.vad_frame_duration = self.get("vad_frame_duration")
         self.vad_timeout = self.get("vad_timeout")
-        self.vad_energy_filter = self.get("vad_energy_filter").lower() == "enabled"
+        self.vad_energy_filter = _is_enabled_flag(self.get("vad_energy_filter"))
         self.vad_energy_threshold_multiplier = self.get("vad_energy_threshold_multiplier")
         # Audio feedback
         self.wake_confirmation_beep = self.get("wake_confirmation_beep").lower() == "enabled"
@@ -549,8 +550,11 @@ class Config:
         if not isinstance(self.vad_timeout, (int, float)) or self.vad_timeout <= 0:
             errors.append("vad_timeout must be a positive number")
 
-        if isinstance(self.vad_energy_threshold_multiplier, bool) or not isinstance(self.vad_energy_threshold_multiplier, (int, float)) or self.vad_energy_threshold_multiplier <= 1.0:
-            errors.append("vad_energy_threshold_multiplier must be a number greater than 1.0")
+        if (isinstance(self.vad_energy_threshold_multiplier, bool)
+                or not isinstance(self.vad_energy_threshold_multiplier, (int, float))
+                or not math.isfinite(self.vad_energy_threshold_multiplier)
+                or self.vad_energy_threshold_multiplier <= 1.0):
+            errors.append("vad_energy_threshold_multiplier must be a finite number greater than 1.0")
 
         # Validate audio feedback settings
         if isinstance(self.wake_confirmation_beep_freq, bool) or not isinstance(self.wake_confirmation_beep_freq, int) or self.wake_confirmation_beep_freq <= 0:
