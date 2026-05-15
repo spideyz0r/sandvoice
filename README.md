@@ -55,13 +55,6 @@ vad_enabled: enabled
 
 The default wake phrase is **"sand voice"**, using the model at `models/sand_voice.onnx` (included in the repo). You can use any built-in openWakeWord model (e.g. `hey_jarvis`, `alexa`) or train your own — see [docs/CUSTOM_WAKE_WORDS.md](docs/CUSTOM_WAKE_WORDS.md).
 
-**Raspberry Pi / Linux install note:** `tflite-runtime` (a transitive dependency of openWakeWord) has no compatible wheels for current Python versions on Linux. Install a no-op stub before running `pip install -r requirements.txt`:
-
-```bash
-TD=$(mktemp -d) && echo "from setuptools import setup; setup(name='tflite-runtime', version='2.14.0', packages=[])" > $TD/setup.py && pip install $TD
-pip install -r requirements.txt
-```
-
 ## API keys
 
 | Key | Required | Used by |
