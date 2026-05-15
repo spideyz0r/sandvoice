@@ -1,126 +1,135 @@
-# Plan 14: Energy-Based Speech Detection
+# Plan 14: Adaptive Energy Pre-Filter for VAD
+
+## Status: 📋 Backlog
 
 ## Problem Statement
-WebRTC VAD detects any sound as potential speech, including constant background noise like music or podcasts. We need to distinguish actual speech (variable energy, speech patterns) from ambient noise (relatively constant energy).
+
+WebRTC VAD at aggressiveness 3 still classifies low-level ambient noise (TV dialogue,
+fan hum, distant speech, mic self-noise) as speech. The `vad_silence_duration` counter
+never resets because the VAD never sees a silence frame, so SandVoice keeps recording
+until `vad_timeout` fires. This causes the system to record several extra seconds of
+silence/noise after the user finishes speaking, increasing latency and sometimes sending
+garbage audio to the STT API.
+
+Repro: TV on in the background, or a second person speaking more than ~2m from the mic.
+
+## Root Cause
+
+WebRTC VAD is a rule-based signal-processing model from ~2012. It works on spectral
+features and zero-crossing rate. At aggressiveness 3 it is strict about what counts
+as speech, but low-level broadband noise (TV, music, room tone) has enough energy in
+speech-frequency bands to pass. An energy gate eliminates these false positives before
+WebRTC ever runs.
 
 ## Goals
-1. Measure ambient noise baseline during IDLE state
-2. Only consider frames as speech if energy exceeds baseline + threshold
-3. Auto-calibrate on startup and periodically
-4. Reduce false positives from constant background audio
+
+1. Add an adaptive noise-floor calibration phase at the start of each recording
+2. Pre-filter frames whose RMS energy is below `noise_floor × multiplier` before
+   passing them to WebRTC VAD
+3. Keep all changes inside `common/vad_recorder.py` — no changes to wake_word.py or
+   any other module
+4. No new dependencies (struct math, no numpy)
+5. Config toggle + tunable multiplier
 
 ## Technical Approach
 
-### Energy Detection Concept
-- **Ambient noise** (music, HVAC, fans): Relatively constant energy level
-- **Human speech**: Variable energy with pauses, higher peaks above ambient
-- **Key insight**: Speech energy spikes above ambient; background is steady
+### Calibration phase (pre-speech)
 
-### Algorithm
-1. During IDLE, sample ambient noise level (RMS energy)
-2. Calculate baseline as rolling average of ambient samples
-3. During LISTENING, only count frame as "speech" if:
-   - Energy > baseline + threshold_db
-   - AND webrtcvad also says it's speech
-4. Periodically recalibrate baseline (every N seconds in IDLE)
+While `speech_detected` is False, collect the RMS of each frame. After
+`vad_energy_calibration_frames` frames (default 15 × 30ms = 450ms), compute
+`noise_floor = mean(rms_values)`.
 
-## Implementation
+Once calibrated, for every subsequent frame:
 
-### Phase 1: Energy Measurement Utility
-```python
-# In common/audio_utils.py (new file)
-import numpy as np
-
-def calculate_rms_energy(audio_frames: bytes, sample_width: int = 2) -> float:
-    """Calculate RMS energy of audio frames in dB."""
-    samples = np.frombuffer(audio_frames, dtype=np.int16)
-    rms = np.sqrt(np.mean(samples.astype(np.float32) ** 2))
-    if rms == 0:
-        return -96.0  # Floor
-    return 20 * np.log10(rms / 32768.0)
-
-def is_above_threshold(energy_db: float, baseline_db: float, threshold_db: float) -> bool:
-    """Check if energy exceeds baseline by threshold."""
-    return energy_db > (baseline_db + threshold_db)
+```
+rms = compute_rms(pcm)
+if calibrated and rms < noise_floor * multiplier:
+    is_speech = False   # override — below energy gate
+else:
+    is_speech = vad.is_speech(pcm, sample_rate)
 ```
 
-### Phase 2: Ambient Calibration in IDLE
-```python
-# In wake_word.py, during _state_idle()
-class WakeWordMode:
-    def __init__(self, ...):
-        self.ambient_baseline_db = -40.0  # Default
-        self.calibration_samples = []
+### RMS computation (no numpy)
 
-    def _calibrate_ambient(self, audio_frames):
-        """Update ambient baseline with new sample."""
-        energy = calculate_rms_energy(audio_frames)
-        self.calibration_samples.append(energy)
-        if len(self.calibration_samples) > 50:  # ~1.5 seconds
-            self.calibration_samples.pop(0)
-        self.ambient_baseline_db = np.mean(self.calibration_samples)
+```python
+import struct, math
+
+def _rms(pcm: bytes) -> float:
+    samples = struct.unpack_from(f"{len(pcm)//2}h", pcm)
+    if not samples:
+        return 0.0
+    return math.sqrt(sum(s * s for s in samples) / len(samples))
 ```
 
-### Phase 3: Enhanced VAD in LISTENING
-```python
-def _is_speech_frame(self, audio_frames) -> bool:
-    """Combined VAD + energy detection."""
-    # Standard VAD check
-    vad_says_speech = self.vad.is_speech(audio_frames, self.sample_rate)
+Typical noise floor on a USB mic in a quiet room: RMS 80–200.
+Typical noise floor with TV at background volume: RMS 300–600.
+Speech peaks: RMS 2000–8000.
+A multiplier of 2.5 gives comfortable headroom in both cases.
 
-    if not self.config.energy_detection_enabled:
-        return vad_says_speech
+### Configuration
 
-    # Energy check
-    energy = calculate_rms_energy(audio_frames)
-    above_ambient = is_above_threshold(
-        energy,
-        self.ambient_baseline_db,
-        self.config.energy_threshold_db
-    )
+Two new config keys (both optional, both have defaults):
 
-    # Both must agree
-    return vad_says_speech and above_ambient
-```
-
-### Phase 4: Configuration
 ```yaml
-# New config options
-energy_detection_enabled: true
-energy_threshold_db: 6.0        # dB above ambient to count as speech
-energy_calibration_seconds: 2.0  # How long to sample ambient on startup
-energy_recalibrate_interval: 30  # Recalibrate every N seconds in IDLE
+vad_energy_filter: enabled           # enabled | disabled (default: enabled)
+vad_energy_threshold_multiplier: 2.5 # float > 1.0 (default: 2.5)
 ```
 
-## Testing Strategy
+`vad_energy_calibration_frames` is intentionally not exposed — 15 frames (450ms) is
+the right calibration window for all real-world cases.
 
-### Unit Tests
-- Test RMS calculation with known signals
-- Test threshold comparison logic
-- Test calibration averaging
+## Implementation Plan
 
-### Integration Tests
-- Test with silence → should calibrate low
-- Test with music → should calibrate to music level
-- Test speech over music → should detect speech peaks
+### Step 1 — `common/configuration.py`
+- Add `vad_energy_filter` (default `"enabled"`) and
+  `vad_energy_threshold_multiplier` (default `2.5`) to `_DEFAULTS`
+- Load and validate in `Config._load_config()`:
+  - `vad_energy_filter`: must be `"enabled"` or `"disabled"`
+  - `vad_energy_threshold_multiplier`: must be a float > 1.0
 
-### Manual Testing
-- Play music, say wake word, speak → should stop correctly
-- Play podcast, speak over it → should detect your speech
-- Quiet room → should work as before
+### Step 2 — `common/vad_recorder.py`
+- Add module-level `_rms(pcm)` helper (struct-only, no numpy)
+- In `VadRecorder.record()`:
+  - Before the loop: initialise `_rms_samples = []`, `_noise_floor = None`,
+    `_CALIBRATION_FRAMES = 15`
+  - Read `energy_filter_enabled` and `multiplier` from `self._config`
+  - In the loop, before the WebRTC call:
+    - If `not speech_detected` and `len(_rms_samples) < _CALIBRATION_FRAMES`:
+      append `_rms(pcm)` to `_rms_samples`
+    - When `len(_rms_samples) == _CALIBRATION_FRAMES` and `_noise_floor is None`:
+      set `_noise_floor = mean(_rms_samples)`, log at DEBUG
+    - If `energy_filter_enabled` and `_noise_floor is not None`:
+      if `_rms(pcm) < _noise_floor * multiplier`: force `is_speech = False`
+
+### Step 3 — Tests (`tests/test_vad_recorder.py`)
+- Test `_rms()` with known PCM data
+- Test that a frame below the energy gate is forced to `is_speech = False`
+- Test that a frame above the gate passes through to the WebRTC mock
+- Test that calibration uses exactly `_CALIBRATION_FRAMES` frames
+- Test that the filter is skipped when `vad_energy_filter: disabled`
+- Test the `vad_energy_threshold_multiplier` validation path
+
+### Step 4 — Docs
+- Add `vad_energy_filter` and `vad_energy_threshold_multiplier` to README config table
+- Add a note to `docs/raspberry-pi-setup.md` in the audio section
 
 ## Success Criteria
-- [ ] Ambient baseline calibrated on startup
-- [ ] Speech detected only when energy > baseline + threshold
-- [ ] Works correctly with music playing
-- [ ] No regression in quiet environment performance
 
-## Effort: Medium
+- [ ] VAD stops within `vad_silence_duration` after user stops speaking even with
+      TV audio playing at normal background volume
+- [ ] No regression in quiet-room detection (speech still detected reliably)
+- [ ] `vad_energy_filter: disabled` restores previous behavior exactly
+- [ ] >80% test coverage on new/modified code in `vad_recorder.py`
+
+## Effort: Small (≈ 60 lines of code + tests)
 
 ## Dependencies
-- numpy (already likely installed)
-- Plan 13 (VAD robustness) recommended first
+
+- Plan 35 (VadRecorder extraction) — ✅ completed
 
 ## Relationship
-- Builds on: Plan 13 (VAD Robustness)
-- Enhanced by: Plan 15 (Speech Classification)
+
+- Supersedes original Plan 14 approach (IDLE-state calibration, numpy, WakeWordMode
+  changes) — new approach is simpler and self-contained within VadRecorder
+- Prerequisite for: Plan 62 (Silero VAD) — energy gate remains as a lightweight
+  first-stage filter even after Silero replaces WebRTC
