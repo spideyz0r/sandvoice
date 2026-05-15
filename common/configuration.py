@@ -556,6 +556,15 @@ class Config:
                 or self.vad_energy_threshold_multiplier <= 1.0):
             errors.append("vad_energy_threshold_multiplier must be a finite number greater than 1.0")
 
+        _recognized_flag_values = {
+            "enabled", "disabled", "true", "false", "yes", "no", "1", "0", "on", "off",
+        }
+        raw_vef = self.get("vad_energy_filter")
+        if isinstance(raw_vef, str) and raw_vef.lower() not in _recognized_flag_values:
+            errors.append(
+                f"vad_energy_filter has unrecognized value '{raw_vef}'; use 'enabled' or 'disabled'"
+            )
+
         # Validate audio feedback settings
         if isinstance(self.wake_confirmation_beep_freq, bool) or not isinstance(self.wake_confirmation_beep_freq, int) or self.wake_confirmation_beep_freq <= 0:
             errors.append("wake_confirmation_beep_freq must be a positive integer")

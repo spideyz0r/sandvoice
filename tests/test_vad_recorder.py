@@ -896,3 +896,65 @@ class TestEnergyFilter(unittest.TestCase):
 
         # All _ENERGY_CALIBRATION_FRAMES frames were read
         self.assertEqual(read_idx[0], _ENERGY_CALIBRATION_FRAMES)
+
+    @patch('common.vad_recorder.time.time')
+    @patch('common.vad_recorder.os.makedirs')
+    @patch('common.vad_recorder.wave.open')
+    @patch('common.vad_recorder.webrtcvad.Vad')
+    @patch('common.vad_recorder.pyaudio.PyAudio')
+    def test_noise_floor_uses_lower_half_to_resist_early_speech(
+            self, mock_pa_class, mock_vad_class, mock_wave_open, mock_makedirs, mock_time):
+        """Noise floor uses lower-half mean so early speech frames do not inflate it.
+
+        Scenario: user starts talking after frame 7 of calibration.
+        Frames 0-6: ambient RMS=100 (7 frames)
+        Frames 7-14: user speech RMS=2000 (8 frames)
+        Sorted lower half (first 7): all 100 → noise_floor=100, threshold=250.
+        Post-calibration speech at RMS=2000 must pass the gate (2000 > 250).
+        If mean were used instead: noise_floor=(7*100+8*2000)/15≈1107, threshold≈2767,
+        so post-calibration speech at 2000 would be suppressed.
+        """
+        from common.vad_recorder import _ENERGY_CALIBRATION_FRAMES
+        ambient_pcm = _make_pcm_with_rms(100)
+        speech_pcm = _make_pcm_with_rms(2000)
+
+        # 7 ambient + 8 speech during calibration, then 1 post-calibration speech frame
+        frames_returned = (
+            [ambient_pcm] * 7 + [speech_pcm] * 8   # calibration
+            + [speech_pcm]                           # post-calibration: must pass gate
+        )
+
+        read_idx = [0]
+        def mock_read(size, exception_on_overflow=False):
+            if read_idx[0] < len(frames_returned):
+                f = frames_returned[read_idx[0]]
+                read_idx[0] += 1
+                return f
+            raise Exception("End")
+
+        mock_stream = Mock()
+        mock_stream.read = mock_read
+        mock_pa = Mock()
+        mock_pa.open.return_value = mock_stream
+        mock_pa_class.return_value = mock_pa
+
+        # Post-calibration: WebRTC says True for the speech frame
+        mock_vad = Mock()
+        mock_vad.is_speech.return_value = True
+        mock_vad_class.return_value = mock_vad
+
+        mock_wf = Mock()
+        mock_wave_open.return_value.__enter__.return_value = mock_wf
+
+        # 1 (recording_start) + 2 per calibration frame + 1 (frame 16 elapsed)
+        # + 1 (frame 17 elapsed → timeout break) + 2 (post-loop: log elapsed + wav_path)
+        calib = [t for i in range(_ENERGY_CALIBRATION_FRAMES) for t in (i * 0.03, i * 0.03 + 0.005)]
+        times = [0.0] + calib + [0.45, 31.0, 31.0, 31.0]
+        mock_time.side_effect = times
+
+        recorder = self._make_recorder()
+        result = recorder.record()
+
+        # Noise floor based on lower-half (ambient frames only) → speech frame passes gate
+        # speech_detected=True → even though timeout fires, frames exist → WAV written
+        self.assertIsNotNone(result)

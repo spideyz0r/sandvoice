@@ -522,6 +522,13 @@ class TestConfigurationValidation(unittest.TestCase):
         config = Config()
         self.assertTrue(config.vad_energy_filter)
 
+    def test_vad_energy_filter_rejects_unrecognized_string(self):
+        """vad_energy_filter: typo like 'enabeld' must be rejected, not silently disabled."""
+        self.write_config({"vad_energy_filter": "enabeld"})
+        with self.assertRaises(Exception) as context:
+            Config()
+        self.assertIn("vad_energy_filter", str(context.exception))
+
     def test_valid_wake_word_configuration(self):
         """Test that valid custom wake word configuration is accepted"""
         self.write_config({
