@@ -38,7 +38,7 @@ python3 -m venv env
 source env/bin/activate
 ```
 
-`tflite-runtime` (a transitive dependency of openWakeWord) has no compatible wheels for Python 3.12+ on Linux/aarch64. Install a no-op stub first, then the rest:
+`tflite-runtime` (a transitive dependency of openWakeWord) has no compatible wheels for current Python versions on Linux. Install a no-op stub first, then the rest:
 
 ```bash
 TD=$(mktemp -d) && echo "from setuptools import setup; setup(name='tflite-runtime', version='2.14.0', packages=[])" > $TD/setup.py && pip install $TD
@@ -152,7 +152,9 @@ arecord -D hw:1,0 -f cd -d 3 /tmp/test.wav && aplay /tmp/test.wav
 
 ```bash
 cd ~/sandvoice
-OPENAI_API_KEY=your_key OPENWEATHERMAP_API_KEY=your_key env/bin/python3 sandvoice.py --wake-word
+export OPENAI_API_KEY=your_key
+export OPENWEATHERMAP_API_KEY=your_key
+env/bin/python3 sandvoice.py --wake-word
 ```
 
 Say the wake phrase (`sand voice` by default) to activate. SandVoice will beep, listen, transcribe, and respond via TTS.
