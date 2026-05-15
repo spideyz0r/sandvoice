@@ -525,7 +525,14 @@ class TestConfigurationValidation(unittest.TestCase):
     def test_vad_energy_filter_rejects_unrecognized_string(self):
         """vad_energy_filter: typo like 'enabeld' must be rejected, not silently disabled."""
         self.write_config({"vad_energy_filter": "enabeld"})
-        with self.assertRaises(Exception) as context:
+        with self.assertRaises(ValueError) as context:
+            Config()
+        self.assertIn("vad_energy_filter", str(context.exception))
+
+    def test_vad_energy_filter_rejects_float(self):
+        """vad_energy_filter: a float (e.g. 0.5) must be rejected, not silently disabled."""
+        self.write_config({"vad_energy_filter": 0.5})
+        with self.assertRaises(ValueError) as context:
             Config()
         self.assertIn("vad_energy_filter", str(context.exception))
 

@@ -556,13 +556,22 @@ class Config:
                 or self.vad_energy_threshold_multiplier <= 1.0):
             errors.append("vad_energy_threshold_multiplier must be a finite number greater than 1.0")
 
-        _recognized_flag_values = {
+        _recognized_flag_strings = {
             "enabled", "disabled", "true", "false", "yes", "no", "1", "0", "on", "off",
         }
         raw_vef = self.get("vad_energy_filter")
-        if isinstance(raw_vef, str) and raw_vef.lower() not in _recognized_flag_values:
+        if isinstance(raw_vef, bool):
+            pass  # bool is a subclass of int; accept True/False from YAML
+        elif isinstance(raw_vef, int):
+            pass  # 0 / 1 from YAML
+        elif isinstance(raw_vef, str):
+            if raw_vef.strip().lower() not in _recognized_flag_strings:
+                errors.append(
+                    f"vad_energy_filter has unrecognized value '{raw_vef}'; use 'enabled' or 'disabled'"
+                )
+        else:
             errors.append(
-                f"vad_energy_filter has unrecognized value '{raw_vef}'; use 'enabled' or 'disabled'"
+                f"vad_energy_filter must be a boolean or string ('enabled'/'disabled'), got {type(raw_vef).__name__}"
             )
 
         # Validate audio feedback settings
