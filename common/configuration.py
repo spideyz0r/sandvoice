@@ -106,6 +106,8 @@ class Config:
             "vad_silence_duration": 1.5,
             "vad_frame_duration": 30,
             "vad_timeout": 30,
+            "vad_energy_filter": "enabled",
+            "vad_energy_threshold_multiplier": 2.5,
             # Audio feedback
             "wake_confirmation_beep": "enabled",
             "wake_confirmation_beep_freq": 800,
@@ -254,6 +256,8 @@ class Config:
         self.vad_silence_duration = self.get("vad_silence_duration")
         self.vad_frame_duration = self.get("vad_frame_duration")
         self.vad_timeout = self.get("vad_timeout")
+        self.vad_energy_filter = self.get("vad_energy_filter").lower() == "enabled"
+        self.vad_energy_threshold_multiplier = self.get("vad_energy_threshold_multiplier")
         # Audio feedback
         self.wake_confirmation_beep = self.get("wake_confirmation_beep").lower() == "enabled"
         self.wake_confirmation_beep_freq = _parse_exact_int(self.get("wake_confirmation_beep_freq"))
@@ -544,6 +548,9 @@ class Config:
 
         if not isinstance(self.vad_timeout, (int, float)) or self.vad_timeout <= 0:
             errors.append("vad_timeout must be a positive number")
+
+        if isinstance(self.vad_energy_threshold_multiplier, bool) or not isinstance(self.vad_energy_threshold_multiplier, (int, float)) or self.vad_energy_threshold_multiplier <= 1.0:
+            errors.append("vad_energy_threshold_multiplier must be a number greater than 1.0")
 
         # Validate audio feedback settings
         if isinstance(self.wake_confirmation_beep_freq, bool) or not isinstance(self.wake_confirmation_beep_freq, int) or self.wake_confirmation_beep_freq <= 0:

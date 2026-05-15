@@ -1,6 +1,8 @@
 import contextlib
 import logging
+import math
 import os
+import struct
 import time
 import wave
 
@@ -12,6 +14,16 @@ from common.utils import _is_enabled_flag
 logger = logging.getLogger(__name__)
 
 _VAD_SAMPLE_RATES = [8000, 16000, 32000, 48000]
+_ENERGY_CALIBRATION_FRAMES = 15  # ~450ms at 30ms/frame
+
+
+def _rms(pcm: bytes) -> float:
+    """Return RMS amplitude of a 16-bit PCM frame. Returns 0.0 for empty input."""
+    n = len(pcm) // 2
+    if n == 0:
+        return 0.0
+    samples = struct.unpack_from(f"{n}h", pcm)
+    return math.sqrt(sum(s * s for s in samples) / n)
 
 
 def _negotiate_sample_rate(desired_rate):
@@ -76,6 +88,11 @@ class VadRecorder:
         frame_duration_ms = self._config.vad_frame_duration
         vad_frame_size = int(vad_sample_rate * frame_duration_ms / 1000)
 
+        energy_filter_enabled = getattr(self._config, 'vad_energy_filter', True)
+        energy_multiplier = getattr(self._config, 'vad_energy_threshold_multiplier', 2.5)
+        _rms_samples = []
+        _noise_floor = None
+
         pa = None
         audio_stream = None
         frames = []
@@ -113,11 +130,23 @@ class VadRecorder:
 
                 frames.append(pcm)
 
+                # Energy calibration: collect noise floor from pre-speech frames
+                if not speech_detected and len(_rms_samples) < _ENERGY_CALIBRATION_FRAMES:
+                    _rms_samples.append(_rms(pcm))
+                    if len(_rms_samples) == _ENERGY_CALIBRATION_FRAMES:
+                        _noise_floor = sum(_rms_samples) / len(_rms_samples)
+                        logger.debug("VAD energy calibration complete: noise_floor=%.1f", _noise_floor)
+
                 try:
                     is_speech = vad.is_speech(pcm, vad_sample_rate)
                 except Exception as e:
                     logger.warning("VAD processing error: %s", e)
                     is_speech = True  # Assume speech on error
+
+                # Energy gate: override WebRTC if frame is below the noise floor
+                if energy_filter_enabled and _noise_floor is not None and is_speech:
+                    if _rms(pcm) < _noise_floor * energy_multiplier:
+                        is_speech = False
 
                 if is_speech:
                     speech_detected = True
