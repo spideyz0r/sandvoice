@@ -38,7 +38,7 @@ python3 -m venv env
 source env/bin/activate
 ```
 
-`tflite-runtime` (a transitive dependency of openWakeWord) has no compatible wheels for current Python versions on Linux. Install a no-op stub first, then the rest:
+`tflite-runtime` (a transitive dependency of openWakeWord) has no compatible wheels for Python 3.12+ on Linux/aarch64. Install a no-op stub first, then the rest:
 
 ```bash
 TD=$(mktemp -d) && echo "from setuptools import setup; setup(name='tflite-runtime', version='2.14.0', packages=[])" > $TD/setup.py && pip install $TD
@@ -49,7 +49,13 @@ pip install -r requirements.txt
 
 ## Configuration
 
-Create `~/.sandvoice/config.yaml`. Minimum working config:
+Create the config directory and file:
+
+```bash
+mkdir -p ~/.sandvoice
+```
+
+Minimum working config (`~/.sandvoice/config.yaml`):
 
 ```yaml
 botname: Sandbot
@@ -123,7 +129,7 @@ echo 'export AUDIODEV=plughw:0,0' >> ~/.bashrc
 source ~/.bashrc
 ```
 
-To use a USB headset for both input and output, leave `AUDIODEV` unset — auto-detection will pick it up.
+To use a USB headset for both input and output, leave both `SDL_AUDIODRIVER` and `AUDIODEV` unset — auto-detection will pick it up.
 
 ### Test audio
 
