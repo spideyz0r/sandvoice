@@ -97,16 +97,13 @@ class TestVadRecorderRecord(unittest.TestCase):
     @patch('common.vad_recorder.pyaudio.PyAudio')
     def test_record_success_transitions_after_silence(
             self, mock_pa_class, mock_vad_class, mock_wave_open, mock_makedirs, mock_time):
-        # 15 calibration frames + 3 speech + 3 silence
-        all_frames = self._prepend_calibration([b'\x00' * 960] * 6)
-        # Post-calibration time layout:
-        # 3 speech frames (is_speech=True): 1 call each (elapsed only)
-        # Silence frame 1 (silence_start=None): elapsed + set silence_start = 2 calls
-        # Silence frame 2 (silence_start set): elapsed + duration check = 2 calls (2.1-0.54=1.56≥1.5 → break)
+        # filter=False: no calibration window; 3 speech + 3 silence frames only.
+        # Frame 1-3 (speech): elapsed only = 1 call each
+        # Frame 4 (silence, silence_start=None): elapsed + set silence_start = 2 calls
+        # Frame 5 (silence, duration≥1.5 → break): elapsed + duration check = 2 calls
         # Post-loop: elapsed + wav_path = 2 calls
-        mock_time.side_effect = self._calibration_times(
-            [0.45, 0.48, 0.51, 0.54, 0.54, 0.57, 2.1, 2.1, 2.1]
-        )
+        all_frames = [b'\x00' * 960] * 6
+        mock_time.side_effect = [0.0, 0.03, 0.06, 0.09, 0.12, 0.12, 0.15, 2.1, 2.1, 2.1]
 
         mock_vad = Mock()
         mock_vad.is_speech.side_effect = [True, True, True, False, False, False]
@@ -170,8 +167,9 @@ class TestVadRecorderRecord(unittest.TestCase):
     @patch('common.vad_recorder.pyaudio.PyAudio')
     def test_record_timeout_exits_loop(
             self, mock_pa_class, mock_vad_class, mock_wave_open, mock_makedirs, mock_time):
-        # 15 calibration frames, then timeout fires on the 16th frame check
-        mock_time.side_effect = self._calibration_times([0.0, 31.0, 31.0, 31.0])
+        # filter=False: no calibration window; WebRTC=True on frame 1 → speech_detected=True.
+        # Frame 2 elapsed check fires timeout → WAV written.
+        mock_time.side_effect = [0.0, 0.03, 31.0, 31.0, 31.0]
 
         mock_vad = Mock()
         mock_vad.is_speech.return_value = True
@@ -303,8 +301,8 @@ class TestVadRecorderRecord(unittest.TestCase):
     def test_record_wav_write_failure_raises_and_removes_file(
             self, mock_pa_class, mock_vad_class, mock_wave_open, mock_makedirs,
             mock_time, mock_exists, mock_remove):
-        # 15 calibration + 1 post-calibration speech frame, then timeout → wav write fails
-        mock_time.side_effect = self._calibration_times([0.0, 31.0, 31.0, 31.0])
+        # filter=False: frame 1 WebRTC=True → speech_detected=True; frame 2 timeout → wav write fails
+        mock_time.side_effect = [0.0, 0.03, 31.0, 31.0, 31.0]
         # Simulate partial file left on disk after wave.open failure
         mock_exists.return_value = True
 
@@ -682,18 +680,18 @@ class TestEnergyFilter(unittest.TestCase):
         mock_wave_open.return_value.__enter__.return_value = mock_wf
 
         # recording_start=0.0
-        # 15 calibration frames: is_speech forced False, speech_detected=False → 2 calls each
-        #   (elapsed + pre-speech bail). TV noise in upper half: 200 < 200*2.5=500 → no retroactive speech.
+        # 15 calibration frames: pre-speech bail skipped (calibrating=True) → 1 elapsed call each.
+        #   TV noise in upper half: 200 < 200*2.5=500 → no retroactive speech detected.
         # 3 speech frames (post-calibration, gate passes: 5000>500): 1 call each
-        # TV frame 1 (gate suppresses → is_speech=False, speech_detected was True → silence_start): 2 calls
+        # TV frame 1 (gate suppresses → is_speech=False, speech_detected True → silence_start): 2 calls
         # TV frame 2 (silence_duration=2.1-0.54=1.56≥1.5 → break): 2 calls
         # Post-loop: elapsed + wav_path = 2 calls
-        calib = [t for i in range(15) for t in (i * 0.03, i * 0.03 + 0.005)]
-        times = ([0.0] + calib
-                 + [0.45, 0.48, 0.51]   # 3 speech frames
-                 + [0.54, 0.54]          # TV frame 1: elapsed + silence_start
-                 + [0.57, 2.1]           # TV frame 2: elapsed + duration
-                 + [2.1, 2.1])           # post-loop
+        times = ([0.0]
+                 + [i * 0.03 for i in range(15)]  # 15 calibration frames: 1 call each
+                 + [0.45, 0.48, 0.51]               # 3 speech frames
+                 + [0.54, 0.54]                      # TV frame 1: elapsed + silence_start
+                 + [0.57, 2.1]                       # TV frame 2: elapsed + duration
+                 + [2.1, 2.1])                       # post-loop
         mock_time.side_effect = times
 
         recorder = self._make_recorder()
