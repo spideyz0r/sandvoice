@@ -574,7 +574,7 @@ class Config:
                 )
         else:
             errors.append(
-                f"vad_energy_filter must be a boolean or string ('enabled'/'disabled'), got {type(raw_vef).__name__}"
+                f"vad_energy_filter must be a boolean, integer (0 or 1), or string ('enabled'/'disabled'), got {type(raw_vef).__name__}"
             )
 
         # Validate audio feedback settings
