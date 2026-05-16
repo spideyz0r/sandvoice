@@ -131,28 +131,41 @@ class VadRecorder:
                 frames.append(pcm)
 
                 # Energy calibration: when the filter is enabled, collect the first N frames
-                # to establish the noise floor.  RMS samples are sorted and only the lower
-                # half is averaged so that high-energy frames (e.g. user speaking immediately
+                # to establish the noise floor.  During this window WebRTC is skipped and
+                # is_speech is forced to False so that ambient noise mis-classified by WebRTC
+                # cannot prematurely set speech_detected.  RMS samples are sorted and only the
+                # lower half is averaged so that high-energy frames (user speaking immediately
                 # after the wake beep) fall in the upper half and do not inflate the estimate.
-                # WebRTC runs normally during calibration so that early speech is still captured.
-                if energy_filter_enabled and len(_rms_samples) < _ENERGY_CALIBRATION_FRAMES:
+                # Once calibration completes, the upper-half RMS samples are compared against
+                # the freshly computed threshold: if any exceed it, early user speech was
+                # present and speech_detected is set retroactively so the recording is kept.
+                calibrating = energy_filter_enabled and len(_rms_samples) < _ENERGY_CALIBRATION_FRAMES
+                if calibrating:
                     _rms_samples.append(_rms(pcm))
                     if len(_rms_samples) == _ENERGY_CALIBRATION_FRAMES:
                         sorted_samples = sorted(_rms_samples)
                         half = max(1, len(sorted_samples) // 2)
                         _noise_floor = sum(sorted_samples[:half]) / half
                         logger.debug("VAD energy calibration complete: noise_floor=%.1f", _noise_floor)
+                        threshold = _noise_floor * energy_multiplier
+                        if any(s >= threshold for s in sorted_samples[half:]):
+                            speech_detected = True
+                            logger.debug("Early speech detected in calibration window")
+                    is_speech = False
+                else:
+                    vad_error = False
+                    try:
+                        is_speech = vad.is_speech(pcm, vad_sample_rate)
+                    except Exception as e:
+                        logger.warning("VAD processing error: %s", e)
+                        is_speech = True  # Assume speech on error
+                        vad_error = True
 
-                try:
-                    is_speech = vad.is_speech(pcm, vad_sample_rate)
-                except Exception as e:
-                    logger.warning("VAD processing error: %s", e)
-                    is_speech = True  # Assume speech on error
-
-                # Energy gate: only active once the noise floor is established (post-calibration)
-                if energy_filter_enabled and _noise_floor is not None and is_speech:
-                    if _rms(pcm) < _noise_floor * energy_multiplier:
-                        is_speech = False
+                    # Energy gate: only active post-calibration; skip when VAD errored so
+                    # the "assume speech on error" fallback is not overridden.
+                    if not vad_error and energy_filter_enabled and _noise_floor is not None and is_speech:
+                        if _rms(pcm) < _noise_floor * energy_multiplier:
+                            is_speech = False
 
                 if is_speech:
                     speech_detected = True
