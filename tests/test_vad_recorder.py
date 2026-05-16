@@ -674,8 +674,8 @@ class TestEnergyFilter(unittest.TestCase):
         # 15 calibration frames: pre-speech bail skipped (calibrating=True) → 1 elapsed call each.
         #   TV noise in upper half: 200 < 200*2.5=500 → no retroactive speech detected.
         # 3 speech frames (post-calibration, gate passes: 5000>500): 1 call each
-        # TV frame 1 (gate suppresses → is_speech=False, speech_detected True → silence_start): 2 calls
-        # TV frame 2 (silence_duration=2.1-0.54=1.56≥1.5 → break): 2 calls
+        # TV frame 1 (gate suppresses BEFORE WebRTC → is_speech=False, silence_start set): 2 calls
+        # TV frame 2 (gate suppresses → silence_duration=2.1-0.54=1.56≥1.5 → break): 2 calls
         # Post-loop: elapsed + wav_path = 2 calls
         times = ([0.0]
                  + [i * 0.03 for i in range(15)]  # 15 calibration frames: 1 call each
@@ -690,8 +690,10 @@ class TestEnergyFilter(unittest.TestCase):
 
         # Gate suppressed post-speech TV frames → silence detected → WAV returned
         self.assertIsNotNone(result)
-        # WebRTC only called for post-calibration frames: 3 speech + 2 TV (breaks on 2nd) = 5.
-        self.assertEqual(mock_vad.is_speech.call_count, 5)
+        # WebRTC only called for post-calibration frames that pass the energy gate.
+        # TV frames (RMS=200 < 500) are blocked by the gate before reaching WebRTC.
+        # Only the 3 speech frames (RMS=5000 > 500) call WebRTC.
+        self.assertEqual(mock_vad.is_speech.call_count, 3)
 
     @patch('common.vad_recorder.time.time')
     @patch('common.vad_recorder.os.makedirs')
@@ -728,10 +730,11 @@ class TestEnergyFilter(unittest.TestCase):
         mock_pa.get_sample_size.return_value = 2
         mock_pa_class.return_value = mock_pa
 
-        # WebRTC is not called during calibration — only 6 post-calibration calls:
-        # 3 True (speech) + 3 False (silence)
+        # WebRTC is not called during calibration or for low-energy (gate-blocked) frames.
+        # Silence frames (RMS=50 < 250) are blocked by the gate before reaching WebRTC.
+        # Only 3 speech frames (RMS=3000 > 250) call WebRTC.
         mock_vad = Mock()
-        mock_vad.is_speech.side_effect = [True] * 3 + [False] * 3
+        mock_vad.is_speech.side_effect = [True] * 3
         mock_vad_class.return_value = mock_vad
 
         mock_wf = Mock()
@@ -1014,14 +1017,16 @@ class TestEnergyFilter(unittest.TestCase):
     @patch('common.vad_recorder.wave.open')
     @patch('common.vad_recorder.webrtcvad.Vad')
     @patch('common.vad_recorder.pyaudio.PyAudio')
-    def test_uniform_speech_calibration_disables_gate(
+    def test_all_speech_calibration_sets_noise_floor_to_speech_level(
             self, mock_pa_class, mock_vad_class, mock_wave_open, mock_makedirs, mock_time):
-        """When all calibration frames are speech (uniform high energy), the gate is disabled.
+        """When all calibration frames are speech-level energy, the noise floor equals speech RMS.
 
         If the whole calibration window is speech (RMS=2000), lower-half mean=2000 and
-        threshold=5000. Upper-half frames (2000) are below the threshold, so the retroactive
-        check would not fire. The max/min ratio is 1.0 (< 2.0) → uniform → gate disabled.
-        Post-calibration: WebRTC=True → speech_detected=True → WAV written.
+        threshold=5000. Upper-half frames (2000) are below the 5000 threshold, so the
+        retroactive check does not fire and speech_detected stays False.
+        If no post-calibration frames are processed (timeout), record() returns None.
+        This is a known edge case: the gate may suppress the user's own continued speech
+        if they begin talking during the entire calibration window (before the ack beep).
         """
         from common.vad_recorder import _ENERGY_CALIBRATION_FRAMES
         speech_pcm = _make_pcm_with_rms(2000)
@@ -1057,8 +1062,7 @@ class TestEnergyFilter(unittest.TestCase):
         recorder = self._make_recorder()
         result = recorder.record()
 
-        # Gate disabled: uniform calibration → gate out of the way; timeout fired before
-        # any post-calibration frames → speech_detected=False → None (no post-calib speech).
-        # This confirms the gate was disabled (not that a WAV was written).
+        # Noise floor = speech level → threshold above speech RMS → no retroactive detection.
+        # Timeout fires before any post-calibration frame → speech_detected=False → None.
         self.assertIsNone(result)
         mock_vad.is_speech.assert_not_called()

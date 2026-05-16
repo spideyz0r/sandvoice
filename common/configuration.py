@@ -563,7 +563,10 @@ class Config:
         if isinstance(raw_vef, bool):
             pass  # bool is a subclass of int; accept True/False from YAML
         elif isinstance(raw_vef, int):
-            pass  # 0 / 1 from YAML
+            if raw_vef not in (0, 1):
+                errors.append(
+                    f"vad_energy_filter integer must be 0 or 1, got {raw_vef}"
+                )
         elif isinstance(raw_vef, str):
             if raw_vef.strip().lower() not in _recognized_flag_strings:
                 errors.append(

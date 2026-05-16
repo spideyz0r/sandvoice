@@ -536,6 +536,13 @@ class TestConfigurationValidation(unittest.TestCase):
             Config()
         self.assertIn("vad_energy_filter", str(context.exception))
 
+    def test_vad_energy_filter_rejects_out_of_range_integer(self):
+        """vad_energy_filter: integers other than 0 or 1 must be rejected."""
+        self.write_config({"vad_energy_filter": 2})
+        with self.assertRaises(ValueError) as context:
+            Config()
+        self.assertIn("vad_energy_filter", str(context.exception))
+
     def test_valid_wake_word_configuration(self):
         """Test that valid custom wake word configuration is accepted"""
         self.write_config({
