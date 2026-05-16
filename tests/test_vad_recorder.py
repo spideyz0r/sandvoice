@@ -1020,16 +1020,23 @@ class TestEnergyFilter(unittest.TestCase):
     @patch('common.vad_recorder.wave.open')
     @patch('common.vad_recorder.webrtcvad.Vad')
     @patch('common.vad_recorder.pyaudio.PyAudio')
-    def test_all_speech_calibration_sets_noise_floor_to_speech_level(
+    def test_known_limitation_all_speech_calibration_discards_utterance(
             self, mock_pa_class, mock_vad_class, mock_wave_open, mock_makedirs, mock_time):
-        """When all calibration frames are speech-level energy, the noise floor equals speech RMS.
+        """Regression test for known limitation: all-speech calibration poisons the noise floor.
+
+        TODO: This test documents a failure mode that should be fixed. When the user speaks
+        immediately after the wake word fires and their voice fills all calibration frames,
+        the lower-half mean equals speech RMS, threshold is set above continued speech, and
+        the recording is discarded (returns None) even though real speech occurred.
+
+        The current implementation cannot distinguish all-speech calibration from
+        all-ambient-at-the-same-level using RMS alone; the retroactive check only fires for
+        bimodal distributions. A future fix should ensure record() returns a WAV when all
+        calibration frames contain the user's voice.
 
         If the whole calibration window is speech (RMS=2000), lower-half mean=2000 and
-        threshold=5000. Upper-half frames (2000) are below the 5000 threshold, so the
-        retroactive check does not fire and speech_detected stays False.
-        If no post-calibration frames are processed (timeout), record() returns None.
-        This is a known edge case: the gate may suppress the user's own continued speech
-        if they begin talking during the entire calibration window (before the ack beep).
+        threshold=5000. Upper-half frames (2000) are below the 5000 threshold → no retroactive
+        detection → speech_detected=False → None (with no post-calibration frames).
         """
         from common.vad_recorder import _ENERGY_CALIBRATION_FRAMES
         speech_pcm = _make_pcm_with_rms(2000)
@@ -1065,7 +1072,8 @@ class TestEnergyFilter(unittest.TestCase):
         recorder = self._make_recorder()
         result = recorder.record()
 
-        # Noise floor = speech level → threshold above speech RMS → no retroactive detection.
-        # Timeout fires before any post-calibration frame → speech_detected=False → None.
+        # Known limitation: noise floor = speech level → threshold above speech RMS →
+        # no retroactive detection → speech_detected=False → None.
+        # TODO: this should return a WAV once the all-speech calibration case is handled.
         self.assertIsNone(result)
         mock_vad.is_speech.assert_not_called()

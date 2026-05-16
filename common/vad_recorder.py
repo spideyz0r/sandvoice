@@ -141,6 +141,13 @@ class VadRecorder:
                 # Once calibration completes, the upper-half RMS samples are compared against
                 # the freshly computed threshold: if any exceed it, early user speech was
                 # present and speech_detected is set retroactively so the recording is kept.
+                #
+                # Known limitation: if the user speaks through the entire calibration window
+                # (all N frames are speech), the lower-half mean equals speech RMS, the
+                # threshold is set above the user's own voice, and the recording is discarded.
+                # This cannot be distinguished from all-ambient-at-the-same-level using RMS
+                # alone.  The retroactive check only fires for bimodal distributions.
+                # TODO: improve the calibration design to handle the all-speech case.
                 calibrating = energy_filter_enabled and len(_rms_samples) < n_calibration_frames
                 if calibrating:
                     _rms_samples.append(_rms(pcm))
