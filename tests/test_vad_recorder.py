@@ -500,10 +500,10 @@ class TestVadRecorderRecordWithEarcon(unittest.TestCase):
             return path == "/tmp/ack.mp3"
         mock_exists.side_effect = exists_side_effect
 
-        calib = [t for i in range(15) for t in (i * 0.03, i * 0.03 + 0.005)]
-        # Frame 16: elapsed=0.45, vad=True → speech_detected=True
-        # Frame 17: elapsed=31.0 > 30 → timeout break
-        # Post-loop: elapsed=31.0, wav_path=31.0
+        # 1 elapsed call per calibration frame (pre-speech bail skipped while calibrating)
+        # Frame 16: elapsed=0.45, gate passes (all-zero → no noise_floor yet), vad=True → speech
+        # Frame 17: elapsed=31.0 > 30 → timeout break; post-loop: elapsed, wav_path
+        calib = [i * 0.03 for i in range(15)]
         mock_time.side_effect = [0.0] + calib + [0.45, 31.0, 31.0, 31.0]
 
         mock_vad = Mock()
@@ -542,7 +542,7 @@ class TestVadRecorderRecordWithEarcon(unittest.TestCase):
         mock_exists.return_value = True
         self.mock_audio.is_playing.return_value = True
 
-        calib = [t for i in range(15) for t in (i * 0.03, i * 0.03 + 0.005)]
+        calib = [i * 0.03 for i in range(15)]
         mock_time.side_effect = [0.0] + calib + [0.45, 31.0, 31.0, 31.0]
 
         mock_vad = Mock()
@@ -741,12 +741,12 @@ class TestEnergyFilter(unittest.TestCase):
         mock_wave_open.return_value.__enter__.return_value = mock_wf
 
         # recording_start=0.0
-        # 15 calibration frames (is_speech forced False): elapsed + pre-speech bail = 2 calls each
-        # 3 speech frames (WebRTC=True, gate passes: 3000>100*2.5=250): elapsed only = 1 call each
-        # Silence frame 1 (is_speech=False, silence_start=None): elapsed + set silence_start = 2 calls
-        # Silence frame 2: elapsed + duration=2.1-0.54=1.56≥1.5 → break = 2 calls
+        # 15 calibration frames: 1 elapsed call each (pre-speech bail skipped while calibrating)
+        # 3 speech frames (gate passes: 3000>100*2.5=250, WebRTC=True): 1 call each
+        # Silence frame 1 (gate blocks: 50<250, silence_start=None → set): elapsed + silence_start = 2 calls
+        # Silence frame 2 (gate blocks, duration=2.1-0.54=1.56≥1.5 → break): elapsed + duration = 2 calls
         # Post-loop: elapsed + wav_path = 2 calls
-        calibration_times = [t for i in range(15) for t in (i * 0.03, i * 0.03 + 0.005)]
+        calibration_times = [i * 0.03 for i in range(15)]
         speech_times = [0.45, 0.48, 0.51]
         silence_times = [0.54, 0.54, 0.57, 2.1, 2.1, 2.1]
         times = [0.0] + calibration_times + speech_times + silence_times
@@ -853,10 +853,11 @@ class TestEnergyFilter(unittest.TestCase):
         mock_wf = Mock()
         mock_wave_open.return_value.__enter__.return_value = mock_wf
 
-        # During calibration is_speech=False → 2 time calls/frame (elapsed + pre-speech bail)
-        # speech_detected set retroactively when frame 15 completes (no extra time calls).
-        # Frame 16: elapsed → stream raises → break; post-loop: elapsed + wav_path.
-        calib = [t for i in range(15) for t in (i * 0.03, i * 0.03 + 0.005)]
+        # Frames 0-13: 1 elapsed call each (pre-speech bail skipped while calibrating).
+        # Frame 14 (last calibration, retroactive fires → speech_detected=True, is_speech=False
+        #   → silence_start branch runs): elapsed + silence_start = 2 calls.
+        # Frame 15: elapsed → stream raises → break; post-loop: elapsed + wav_path.
+        calib = [i * 0.03 for i in range(14)] + [0.42, 0.42]
         times = [0.0] + calib + [0.45, 0.45, 0.45]
         mock_time.side_effect = times
 
@@ -899,10 +900,10 @@ class TestEnergyFilter(unittest.TestCase):
         mock_vad.is_speech.return_value = False
         mock_vad_class.return_value = mock_vad
 
-        # 2 time calls per frame: elapsed check + pre-speech bail.
+        # 1 elapsed call per calibration frame (pre-speech bail skipped while calibrating).
         # +1 extra at end: loop starts iteration N+1, calls time.time() for elapsed,
         # then stream.read() raises and breaks — so we need that one extra value.
-        times = [0.0] + [t for i in range(_ENERGY_CALIBRATION_FRAMES) for t in (i * 0.03, i * 0.03)] + [1.0]
+        times = [0.0] + [i * 0.03 for i in range(_ENERGY_CALIBRATION_FRAMES)] + [1.0]
         mock_time.side_effect = times
 
         recorder = self._make_recorder()
@@ -960,9 +961,9 @@ class TestEnergyFilter(unittest.TestCase):
         mock_wf = Mock()
         mock_wave_open.return_value.__enter__.return_value = mock_wf
 
-        # 1 (recording_start) + 2 per calibration frame + 1 (frame 16 elapsed)
-        # + 1 (frame 17 elapsed → timeout break) + 2 (post-loop: log elapsed + wav_path)
-        calib = [t for i in range(_ENERGY_CALIBRATION_FRAMES) for t in (i * 0.03, i * 0.03 + 0.005)]
+        # 1 (recording_start) + 1 per calibration frame (pre-speech bail skipped while calibrating)
+        # + 1 (frame 16 elapsed) + 1 (frame 17 elapsed → timeout break) + 2 (post-loop)
+        calib = [i * 0.03 for i in range(_ENERGY_CALIBRATION_FRAMES)]
         times = [0.0] + calib + [0.45, 31.0, 31.0, 31.0]
         mock_time.side_effect = times
 
