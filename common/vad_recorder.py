@@ -148,7 +148,12 @@ class VadRecorder:
                         _noise_floor = sum(sorted_samples[:half]) / half
                         logger.debug("VAD energy calibration complete: noise_floor=%.1f", _noise_floor)
                         threshold = _noise_floor * energy_multiplier
-                        if any(s >= threshold for s in sorted_samples[half:]):
+                        # Retroactive speech detection: guard threshold > 0 so that a
+                        # completely silent calibration (all RMS=0) does not falsely
+                        # trigger speech_detected via 0 >= 0.
+                        if threshold > 0 and any(s >= threshold for s in sorted_samples[half:]):
+                            # Clearly bimodal: upper-half frames exceed the gate threshold,
+                            # indicating early user speech during calibration.
                             speech_detected = True
                             logger.debug("Early speech detected in calibration window")
                     is_speech = False

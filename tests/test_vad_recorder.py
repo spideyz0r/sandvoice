@@ -81,15 +81,6 @@ class TestVadRecorderRecord(unittest.TestCase):
             ack_earcon_path=ack_earcon_path,
         )
 
-    def _prepend_calibration(self, frames):
-        """Return 15 silent calibration frames followed by the given frames."""
-        return [b'\x00' * 960] * 15 + list(frames)
-
-    def _calibration_times(self, extra_times):
-        """Return time values for 15 calibration frames (2 calls/frame: elapsed + pre-speech bail) + extra_times."""
-        calib = [t for i in range(15) for t in (i * 0.03, i * 0.03 + 0.005)]
-        return [0.0] + calib + list(extra_times)
-
     @patch('common.vad_recorder.time.time')
     @patch('common.vad_recorder.os.makedirs')
     @patch('common.vad_recorder.wave.open')
@@ -774,12 +765,12 @@ class TestEnergyFilter(unittest.TestCase):
         """When vad_energy_filter=False, low-energy frames that WebRTC marks as speech are not suppressed."""
         self.mock_config.vad_energy_filter = False
 
-        calib_pcm = _make_pcm_with_rms(0)
         low_energy_pcm = _make_pcm_with_rms(50)
         silence_pcm = _make_pcm_with_rms(0)
 
-        # 15 calibration frames (forced is_speech=False) + 3 speech + 3 silence
-        frames_returned = [calib_pcm] * 15 + [low_energy_pcm] * 3 + [silence_pcm] * 3
+        # filter=False: no calibration window; 3 speech + 3 silence frames only.
+        # WebRTC is called from frame 1.
+        frames_returned = [low_energy_pcm] * 3 + [silence_pcm] * 3
 
         read_idx = [0]
         def mock_read(size, exception_on_overflow=False):
@@ -796,16 +787,16 @@ class TestEnergyFilter(unittest.TestCase):
         mock_pa.get_sample_size.return_value = 2
         mock_pa_class.return_value = mock_pa
 
-        # WebRTC only called for 6 post-calibration frames: 3 True (speech) + 3 False (silence)
+        # WebRTC is called from frame 1: 3 True (speech) + 2 False (silence before break)
         mock_vad = Mock()
         mock_vad.is_speech.side_effect = [True, True, True, False, False, False]
         mock_vad_class.return_value = mock_vad
 
-        # recording_start + 15 calibration (2 calls each) + 3 speech (1 each)
-        # + silence frame 1 (elapsed + set silence_start) + silence frame 2 (elapsed + duration ≥1.5 → break)
-        # + post-loop (elapsed + wav_path)
-        calib = [t for i in range(15) for t in (i * 0.03, i * 0.03 + 0.005)]
-        times = [0.0] + calib + [0.45, 0.48, 0.51, 0.54, 0.54, 0.57, 2.1, 2.1, 2.1]
+        # recording_start + 3 speech (1 call each, speech_detected=True from frame 1)
+        # + silence frame 1 (elapsed + set silence_start=2 calls)
+        # + silence frame 2 (elapsed + duration≥1.5 → break=2 calls)
+        # + post-loop (elapsed + wav_path=2 calls)
+        times = [0.0, 0.03, 0.06, 0.09, 0.12, 0.12, 0.15, 2.1, 2.1, 2.1]
         mock_time.side_effect = times
 
         mock_wf = Mock()
@@ -814,7 +805,10 @@ class TestEnergyFilter(unittest.TestCase):
         recorder = self._make_recorder()
         result = recorder.record()
 
+        # filter=False: low-energy speech frames passed WebRTC; WAV written
         self.assertIsNotNone(result)
+        # 5 frames called WebRTC: 3 speech + 2 silence (loop breaks on 2nd silence frame)
+        self.assertEqual(mock_vad.is_speech.call_count, 5)
 
     @patch('common.vad_recorder.time.time')
     @patch('common.vad_recorder.os.makedirs')
@@ -975,3 +969,96 @@ class TestEnergyFilter(unittest.TestCase):
         # Noise floor based on lower-half (ambient frames only) → speech frame passes gate
         # speech_detected=True → even though timeout fires, frames exist → WAV written
         self.assertIsNotNone(result)
+
+    @patch('common.vad_recorder.time.time')
+    @patch('common.vad_recorder.webrtcvad.Vad')
+    @patch('common.vad_recorder.pyaudio.PyAudio')
+    def test_silent_calibration_does_not_trigger_retroactive_speech(
+            self, mock_pa_class, mock_vad_class, mock_time):
+        """A completely silent calibration (all RMS=0) must not set speech_detected via 0>=0."""
+        from common.vad_recorder import _ENERGY_CALIBRATION_FRAMES
+        silent_pcm = _make_pcm_with_rms(0)
+        frames_returned = [silent_pcm] * _ENERGY_CALIBRATION_FRAMES
+
+        read_idx = [0]
+        def mock_read(size, exception_on_overflow=False):
+            if read_idx[0] < len(frames_returned):
+                f = frames_returned[read_idx[0]]
+                read_idx[0] += 1
+                return f
+            raise Exception("End")
+
+        mock_stream = Mock()
+        mock_stream.read = mock_read
+        mock_pa = Mock()
+        mock_pa.open.return_value = mock_stream
+        mock_pa_class.return_value = mock_pa
+
+        mock_vad = Mock()
+        mock_vad_class.return_value = mock_vad
+
+        # 1 elapsed call per calibration frame (pre-speech bail skipped during calibration)
+        # + 1 extra for the iteration that hits stream.read raise
+        times = [0.0] + [i * 0.03 for i in range(_ENERGY_CALIBRATION_FRAMES)] + [0.45]
+        mock_time.side_effect = times
+
+        recorder = self._make_recorder()
+        result = recorder.record()
+
+        # All-silent calibration: threshold=0, retroactive check skipped → no speech_detected → None
+        self.assertIsNone(result)
+        mock_vad.is_speech.assert_not_called()
+
+    @patch('common.vad_recorder.time.time')
+    @patch('common.vad_recorder.os.makedirs')
+    @patch('common.vad_recorder.wave.open')
+    @patch('common.vad_recorder.webrtcvad.Vad')
+    @patch('common.vad_recorder.pyaudio.PyAudio')
+    def test_uniform_speech_calibration_disables_gate(
+            self, mock_pa_class, mock_vad_class, mock_wave_open, mock_makedirs, mock_time):
+        """When all calibration frames are speech (uniform high energy), the gate is disabled.
+
+        If the whole calibration window is speech (RMS=2000), lower-half mean=2000 and
+        threshold=5000. Upper-half frames (2000) are below the threshold, so the retroactive
+        check would not fire. The max/min ratio is 1.0 (< 2.0) → uniform → gate disabled.
+        Post-calibration: WebRTC=True → speech_detected=True → WAV written.
+        """
+        from common.vad_recorder import _ENERGY_CALIBRATION_FRAMES
+        speech_pcm = _make_pcm_with_rms(2000)
+        frames_returned = [speech_pcm] * _ENERGY_CALIBRATION_FRAMES
+
+        read_idx = [0]
+        def mock_read(size, exception_on_overflow=False):
+            if read_idx[0] < len(frames_returned):
+                f = frames_returned[read_idx[0]]
+                read_idx[0] += 1
+                return f
+            raise Exception("End")
+
+        mock_stream = Mock()
+        mock_stream.read = mock_read
+        mock_pa = Mock()
+        mock_pa.open.return_value = mock_stream
+        mock_pa.get_sample_size.return_value = 2
+        mock_pa_class.return_value = mock_pa
+
+        # Post-calibration: timeout fires before any WebRTC call (stream raises)
+        mock_vad = Mock()
+        mock_vad.is_speech.return_value = True
+        mock_vad_class.return_value = mock_vad
+
+        mock_wf = Mock()
+        mock_wave_open.return_value.__enter__.return_value = mock_wf
+
+        # 1 elapsed/calibration frame + stream raises on frame 16 + timeout (31.0) + post-loop
+        times = [0.0] + [i * 0.03 for i in range(_ENERGY_CALIBRATION_FRAMES)] + [31.0, 31.0, 31.0]
+        mock_time.side_effect = times
+
+        recorder = self._make_recorder()
+        result = recorder.record()
+
+        # Gate disabled: uniform calibration → gate out of the way; timeout fired before
+        # any post-calibration frames → speech_detected=False → None (no post-calib speech).
+        # This confirms the gate was disabled (not that a WAV was written).
+        self.assertIsNone(result)
+        mock_vad.is_speech.assert_not_called()
