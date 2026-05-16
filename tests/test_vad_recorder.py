@@ -500,11 +500,12 @@ class TestVadRecorderRecordWithEarcon(unittest.TestCase):
             return path == "/tmp/ack.mp3"
         mock_exists.side_effect = exists_side_effect
 
-        # 1 elapsed call per calibration frame (pre-speech bail skipped while calibrating)
-        # Frame 16: elapsed=0.45, gate passes (all-zero → no noise_floor yet), vad=True → speech
-        # Frame 17: elapsed=31.0 > 30 → timeout break; post-loop: elapsed, wav_path
-        calib = [i * 0.03 for i in range(15)]
-        mock_time.side_effect = [0.0] + calib + [0.45, 31.0, 31.0, 31.0]
+        # vad_energy_filter=False → no calibration window; WebRTC runs from frame 1.
+        # 15 frames (WebRTC=True, speech_detected after frame 1): 1 elapsed call each.
+        # Frame 16: elapsed=0.45, WebRTC=True; frame 17: elapsed=31.0 → timeout break.
+        # Post-loop: elapsed, wav_path.
+        pre_speech_frames = [i * 0.03 for i in range(15)]
+        mock_time.side_effect = [0.0] + pre_speech_frames + [0.45, 31.0, 31.0, 31.0]
 
         mock_vad = Mock()
         mock_vad.is_speech.return_value = True
@@ -542,8 +543,9 @@ class TestVadRecorderRecordWithEarcon(unittest.TestCase):
         mock_exists.return_value = True
         self.mock_audio.is_playing.return_value = True
 
-        calib = [i * 0.03 for i in range(15)]
-        mock_time.side_effect = [0.0] + calib + [0.45, 31.0, 31.0, 31.0]
+        # vad_energy_filter=False → no calibration; same timing pattern as the plays-earcon test.
+        pre_speech_frames = [i * 0.03 for i in range(15)]
+        mock_time.side_effect = [0.0] + pre_speech_frames + [0.45, 31.0, 31.0, 31.0]
 
         mock_vad = Mock()
         mock_vad.is_speech.return_value = True
