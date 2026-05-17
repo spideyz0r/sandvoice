@@ -963,8 +963,15 @@ class TestEnergyFilter(unittest.TestCase):
         mock_wf = Mock()
         mock_wave_open.return_value.__enter__.return_value = mock_wf
 
-        # 1 (recording_start) + 1 per calibration frame (pre-speech bail skipped while calibrating)
-        # + 1 (frame 16 elapsed) + 1 (frame 17 elapsed → timeout break) + 2 (post-loop)
+        # recording_start: 1 call.
+        # Frames 0-13: 1 elapsed call each (pre-speech bail skipped while calibrating).
+        # Frame 14 (last calibration): elapsed + silence_start = 2 calls.
+        #   Retroactive fires (upper-half RMS=2000 ≥ 100*2.5=250) → speech_detected=True,
+        #   is_speech=False → silence_start branch runs → silence_start = time.time().
+        # Frame 15 attempt: elapsed = 31.0 → timeout break before stream.read() is called.
+        #   The post-calibration speech frame is never consumed; speech_detected=True from
+        #   retroactive detection means WAV is still written.
+        # Post-loop: elapsed + wav_path = 2 calls. Total = 1+14+2+1+2 = 20.
         calib = [i * 0.03 for i in range(_ENERGY_CALIBRATION_FRAMES)]
         times = [0.0] + calib + [0.45, 31.0, 31.0, 31.0]
         mock_time.side_effect = times
@@ -972,8 +979,9 @@ class TestEnergyFilter(unittest.TestCase):
         recorder = self._make_recorder()
         result = recorder.record()
 
-        # Noise floor based on lower-half (ambient frames only) → speech frame passes gate
-        # speech_detected=True → even though timeout fires, frames exist → WAV written
+        # Lower-half noise floor (ambient only) triggered retroactive speech detection →
+        # speech_detected=True → WAV written even though timeout fires before post-calibration
+        # speech is processed. (Gate behaviour for post-calibration is covered by the TV-noise test.)
         self.assertIsNotNone(result)
 
     @patch('common.vad_recorder.time.time')
