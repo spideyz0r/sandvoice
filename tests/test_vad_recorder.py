@@ -965,24 +965,26 @@ class TestEnergyFilter(unittest.TestCase):
 
         # recording_start: 1 call.
         # Frames 0-13: 1 elapsed call each (pre-speech bail skipped while calibrating).
-        # Frame 14 (last calibration): elapsed + silence_start = 2 calls.
+        # Frame 14 (last calibration): elapsed=0.42 + silence_start=0.42 = 2 calls.
         #   Retroactive fires (upper-half RMS=2000 ≥ 100*2.5=250) → speech_detected=True,
-        #   is_speech=False → silence_start branch runs → silence_start = time.time().
-        # Frame 15 attempt: elapsed = 31.0 → timeout break before stream.read() is called.
-        #   The post-calibration speech frame is never consumed; speech_detected=True from
-        #   retroactive detection means WAV is still written.
-        # Post-loop: elapsed + wav_path = 2 calls. Total = 1+14+2+1+2 = 20.
-        calib = [i * 0.03 for i in range(_ENERGY_CALIBRATION_FRAMES)]
-        times = [0.0] + calib + [0.45, 31.0, 31.0, 31.0]
+        #   is_speech=False → silence_start = time.time().
+        # Frame 15 (post-calibration speech, RMS=2000 > 250 → passes gate → WebRTC called):
+        #   elapsed=0.45 → WebRTC returns True → speech_detected=True, silence_start reset.
+        # Frame 16: stream raises → break. Post-loop: elapsed + wav_path = 2 calls.
+        # Total: 1 + 14 + 2 + 1 + 1 + 2 = 21.
+        calib_times = [i * 0.03 for i in range(14)] + [0.42, 0.42]  # frame 14: elapsed + silence_start
+        times = [0.0] + calib_times + [0.45, 31.0, 31.0, 31.0]
         mock_time.side_effect = times
 
         recorder = self._make_recorder()
         result = recorder.record()
 
-        # Lower-half noise floor (ambient only) triggered retroactive speech detection →
-        # speech_detected=True → WAV written even though timeout fires before post-calibration
-        # speech is processed. (Gate behaviour for post-calibration is covered by the TV-noise test.)
+        # Lower-half noise floor=100 → threshold=250; post-calibration speech RMS=2000 passes gate →
+        # WebRTC confirms speech → WAV written. If mean were used instead, threshold≈2767 and
+        # RMS=2000 would be suppressed.
         self.assertIsNotNone(result)
+        # WebRTC called exactly once: calibration skips it; only the post-calibration frame reaches it.
+        self.assertEqual(mock_vad.is_speech.call_count, 1)
 
     @patch('common.vad_recorder.time.time')
     @patch('common.vad_recorder.webrtcvad.Vad')
