@@ -543,6 +543,30 @@ class TestConfigurationValidation(unittest.TestCase):
             Config()
         self.assertIn("vad_energy_filter", str(context.exception))
 
+    def test_vad_energy_filter_default_is_enabled(self):
+        """vad_energy_filter defaults to True (enabled) when absent from config."""
+        self.write_config({})
+        config = Config()
+        self.assertTrue(config.vad_energy_filter)
+
+    def test_vad_energy_filter_custom_disabled(self):
+        """vad_energy_filter: 'disabled' string turns the filter off."""
+        self.write_config({"vad_energy_filter": "disabled"})
+        config = Config()
+        self.assertFalse(config.vad_energy_filter)
+
+    def test_vad_energy_threshold_multiplier_default(self):
+        """vad_energy_threshold_multiplier defaults to 2.5 when absent from config."""
+        self.write_config({})
+        config = Config()
+        self.assertAlmostEqual(config.vad_energy_threshold_multiplier, 2.5)
+
+    def test_vad_energy_threshold_multiplier_custom(self):
+        """vad_energy_threshold_multiplier: custom valid value is accepted."""
+        self.write_config({"vad_energy_threshold_multiplier": 3.0})
+        config = Config()
+        self.assertAlmostEqual(config.vad_energy_threshold_multiplier, 3.0)
+
     def test_valid_wake_word_configuration(self):
         """Test that valid custom wake word configuration is accepted"""
         self.write_config({
