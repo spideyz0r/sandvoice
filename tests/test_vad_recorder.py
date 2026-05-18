@@ -921,13 +921,14 @@ class TestEnergyFilter(unittest.TestCase):
             self, mock_pa_class, mock_vad_class, mock_time):
         """Calibration window uses round(450ms / frame_duration_ms) frames, not a fixed 15.
 
-        With vad_frame_duration=20ms: round(450/20)=23 calibration frames.
+        With vad_frame_duration=20ms: round(450/20)=22 calibration frames (Python banker's
+        rounding: 22.5 rounds to 22).
         With vad_frame_duration=10ms: round(450/10)=45 calibration frames.
         This test exercises the 20ms case to verify n_calibration_frames is computed
         dynamically and not hardcoded to _ENERGY_CALIBRATION_FRAMES (which assumes 30ms).
         """
         self.mock_config.vad_frame_duration = 20
-        expected_calib_frames = round(450 / 20)  # 23
+        expected_calib_frames = round(450 / 20)  # 22 (banker's rounding: 22.5 → 22)
 
         noise_pcm = _make_pcm_with_rms(200)
         frames_returned = [noise_pcm] * expected_calib_frames
@@ -957,7 +958,7 @@ class TestEnergyFilter(unittest.TestCase):
         recorder = self._make_recorder()
         recorder.record()
 
-        # Exactly 23 frames consumed — confirms frame count scales with frame_duration_ms
+        # Exactly 22 frames consumed — confirms frame count scales with frame_duration_ms
         self.assertEqual(read_idx[0], expected_calib_frames)
         # WebRTC not called during calibration
         mock_vad.is_speech.assert_not_called()
