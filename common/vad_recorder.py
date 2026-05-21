@@ -1,3 +1,4 @@
+import concurrent.futures
 import contextlib
 import logging
 import math
@@ -97,6 +98,7 @@ class VadRecorder:
 
         pa = None
         audio_stream = None
+        _read_executor = None
         frames = []
         silence_start = None
         speech_detected = False
@@ -118,6 +120,12 @@ class VadRecorder:
                 frame_duration_ms,
             )
 
+            # Run each read in a thread so a hard per-read timeout can escape an
+            # ALSA PCM overrun recovery spin-loop, which never raises but never
+            # returns, making the Python-level vad_timeout check unreachable.
+            _read_executor = concurrent.futures.ThreadPoolExecutor(max_workers=1)
+            _read_timeout_s = frame_duration_ms / 1000 * 10  # 10× frame duration
+
             while True:
                 elapsed = time.time() - recording_start
                 if elapsed > self._config.vad_timeout:
@@ -125,7 +133,15 @@ class VadRecorder:
                     break
 
                 try:
-                    pcm = audio_stream.read(vad_frame_size, exception_on_overflow=False)
+                    future = _read_executor.submit(audio_stream.read, vad_frame_size, False)
+                    try:
+                        pcm = future.result(timeout=_read_timeout_s)
+                    except concurrent.futures.TimeoutError:
+                        logger.warning(
+                            "Audio read timed out after %.2fs (ALSA overrun recovery?), stopping",
+                            _read_timeout_s,
+                        )
+                        break
                 except Exception as e:
                     logger.error("Error reading audio frame: %s", e)
                     break
@@ -246,6 +262,8 @@ class VadRecorder:
             return wav_path
 
         finally:
+            if _read_executor is not None:
+                _read_executor.shutdown(wait=False)
             self._cleanup_stream(audio_stream, pa)
 
     def _cleanup_stream(self, audio_stream, pa):

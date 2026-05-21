@@ -207,6 +207,41 @@ class TestVadRecorderRecord(unittest.TestCase):
         self.assertIsNone(result)
         mock_stream.stop_stream.assert_called_once()
 
+    @patch('common.vad_recorder.webrtcvad.Vad')
+    @patch('common.vad_recorder.pyaudio.PyAudio')
+    def test_record_read_timeout_breaks_loop_and_returns_none(
+            self, mock_pa_class, mock_vad_class):
+        """audio_stream.read() that never returns (ALSA overrun spin-loop) is escaped
+        by the per-read timeout; record() returns None and cleanup is called."""
+        import threading
+
+        hang_event = threading.Event()
+
+        def hanging_read(size, exception_on_overflow=False):
+            hang_event.wait()
+            return b'\x00' * size
+
+        mock_stream = Mock()
+        mock_stream.read = hanging_read
+
+        mock_pa = Mock()
+        mock_pa.open.return_value = mock_stream
+        mock_pa_class.return_value = mock_pa
+
+        mock_vad = Mock()
+        mock_vad_class.return_value = mock_vad
+
+        recorder = self._make_recorder()
+        try:
+            result = recorder.record()
+        finally:
+            hang_event.set()  # unblock the stuck thread so it can exit cleanly
+
+        # Timeout fires before any frame is processed → no speech_detected → None
+        self.assertIsNone(result)
+        mock_stream.stop_stream.assert_called_once()
+        mock_stream.close.assert_called_once()
+
     @patch('common.vad_recorder.time.time')
     @patch('common.vad_recorder.os.makedirs')
     @patch('common.vad_recorder.wave.open')
