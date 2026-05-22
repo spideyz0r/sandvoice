@@ -1,3 +1,4 @@
+import concurrent.futures
 import contextlib
 import io
 import logging
@@ -278,21 +279,36 @@ class WakeWordMode:
                 input_device_index=input_device_index,
             )
 
-            while self.running and self.state == State.IDLE:
-                pcm = audio_stream.read(self.detector.frame_length, exception_on_overflow=False)
-                pcm = struct.unpack_from("h" * self.detector.frame_length, pcm)
+            read_timeout_s = self.detector.frame_length / self.detector.device_sample_rate * 10
+            _read_executor = concurrent.futures.ThreadPoolExecutor(max_workers=1)
+            try:
+                while self.running and self.state == State.IDLE:
+                    future = _read_executor.submit(
+                        audio_stream.read, self.detector.frame_length, False
+                    )
+                    try:
+                        pcm = future.result(timeout=read_timeout_s)
+                    except concurrent.futures.TimeoutError:
+                        logger.warning(
+                            "Wake word audio read timed out after %.2fs (ALSA overrun?), restarting",
+                            read_timeout_s,
+                        )
+                        break
+                    pcm = struct.unpack_from("h" * self.detector.frame_length, pcm)
 
-                keyword_index = self.detector.process(pcm)
+                    keyword_index = self.detector.process(pcm)
 
-                if keyword_index >= 0:
-                    logger.info("Wake word detected: '%s'", self.config.wake_phrase)
-                    with self._filler_lock:
-                        self._req_seq += 1
-                        self._req_filler_s = None
-                    self._req_t_start = time.monotonic()
+                    if keyword_index >= 0:
+                        logger.info("Wake word detected: '%s'", self.config.wake_phrase)
+                        with self._filler_lock:
+                            self._req_seq += 1
+                            self._req_filler_s = None
+                        self._req_t_start = time.monotonic()
 
-                    self.state = State.LISTENING
-                    break
+                        self.state = State.LISTENING
+                        break
+            finally:
+                _read_executor.shutdown(wait=False)
 
         except Exception as e:
             error_msg = f"Wake word detection error: {str(e)}"

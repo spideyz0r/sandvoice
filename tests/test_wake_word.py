@@ -1442,6 +1442,7 @@ class TestRequestTimingSummary(unittest.TestCase):
         mode.detector = Mock()
         mode.detector.sample_rate = 16000
         mode.detector.frame_length = 1280
+        mode.detector.device_sample_rate = 16000
         mode.running = True
         mode.state = State.IDLE
 
