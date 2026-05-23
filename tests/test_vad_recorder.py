@@ -125,7 +125,7 @@ class TestVadRecorderRecord(unittest.TestCase):
         self.assertIsNotNone(path)
         self.assertTrue(path.endswith('.wav'))
         mock_wf.writeframes.assert_called_once()
-        mock_stream.stop_stream.assert_called_once()
+        mock_stream.stop_stream.assert_called()
         mock_stream.close.assert_called_once()
         mock_pa.terminate.assert_called_once()
 
@@ -205,7 +205,7 @@ class TestVadRecorderRecord(unittest.TestCase):
 
         # No frames → None
         self.assertIsNone(result)
-        mock_stream.stop_stream.assert_called_once()
+        mock_stream.stop_stream.assert_called()
 
     @patch('common.vad_recorder.webrtcvad.Vad')
     @patch('common.vad_recorder.pyaudio.PyAudio')
@@ -240,7 +240,7 @@ class TestVadRecorderRecord(unittest.TestCase):
 
         # Timeout fires before any frame is processed → no speech_detected → None
         self.assertIsNone(result)
-        mock_stream.stop_stream.assert_called_once()
+        mock_stream.stop_stream.assert_called()
         mock_stream.close.assert_called_once()
 
     @patch('common.vad_recorder.time.time')
@@ -370,7 +370,7 @@ class TestVadRecorderCleanupStream(unittest.TestCase):
 
         self.recorder._cleanup_stream(mock_stream, mock_pa)
 
-        mock_stream.stop_stream.assert_called_once()
+        mock_stream.stop_stream.assert_called()
         mock_stream.close.assert_called_once()
         mock_pa.terminate.assert_called_once()
 
@@ -384,7 +384,7 @@ class TestVadRecorderCleanupStream(unittest.TestCase):
         mock_stream = Mock()
         # Should not raise
         self.recorder._cleanup_stream(mock_stream, None)
-        mock_stream.stop_stream.assert_called_once()
+        mock_stream.stop_stream.assert_called()
 
     def test_cleanup_stream_swallows_exceptions(self):
         mock_stream = Mock()

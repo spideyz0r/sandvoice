@@ -314,11 +314,17 @@ class WakeWordMode:
             print(f"Error: {error_msg}")
             self.running = False
         finally:
-            # Stop the stream first so stop_stream() unblocks any read() stuck
-            # in ALSA overrun recovery, then wait for the executor to exit cleanly.
-            self._cleanup_pyaudio(audio_stream, pa)
+            # Sequence matters: stop_stream() first (unblocks any read() stuck in
+            # ALSA overrun recovery), then join the executor so the worker exits
+            # before we close/terminate PyAudio.
+            if audio_stream is not None:
+                try:
+                    audio_stream.stop_stream()
+                except Exception as e:
+                    logger.debug("Failed to stop PyAudio stream: %s", e)
             if _read_executor is not None:
                 _read_executor.shutdown(wait=True)
+            self._cleanup_pyaudio(audio_stream, pa)
 
         # Play beep after PyAudio stream is closed so both don't compete for the device
         if self.state == State.LISTENING:

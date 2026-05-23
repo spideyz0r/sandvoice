@@ -266,13 +266,17 @@ class VadRecorder:
             return wav_path
 
         finally:
-            # Stop the stream first: stop_stream() sends SNDRV_PCM_IOCTL_DROP
-            # which unblocks any audio_stream.read() stuck in ALSA overrun
-            # recovery. Only then shut down the executor with wait=True so the
-            # worker thread exits cleanly before record() returns.
-            self._cleanup_stream(audio_stream, pa)
+            # Sequence matters: stop_stream() first (sends SNDRV_PCM_IOCTL_DROP
+            # to unblock any read() stuck in ALSA overrun recovery), then join
+            # the executor so the worker exits before we close/terminate PyAudio.
+            if audio_stream is not None:
+                try:
+                    audio_stream.stop_stream()
+                except Exception as e:
+                    logger.debug("Error stopping audio stream: %s", e)
             if _read_executor is not None:
                 _read_executor.shutdown(wait=True)
+            self._cleanup_stream(audio_stream, pa)
 
     def _cleanup_stream(self, audio_stream, pa):
         """Stop and close a PyAudio stream and terminate PyAudio."""
