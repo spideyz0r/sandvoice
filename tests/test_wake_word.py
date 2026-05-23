@@ -1559,6 +1559,7 @@ class TestTerminalUIIntegration(unittest.TestCase):
         mode.detector = Mock()
         mode.detector.frame_length = 1280
         mode.detector.sample_rate = 16000
+        mode.detector.device_sample_rate = 16000
         mode.detector.process.return_value = -1  # no keyword
         mode.running = True
         # Force state to leave IDLE after one iteration while returning "no keyword"

@@ -120,12 +120,13 @@ class VadRecorder:
                 frame_duration_ms,
             )
 
-            # Run each read in a daemon thread so a hard per-read timeout can
-            # escape an ALSA PCM overrun recovery spin-loop, which never raises
-            # but never returns, making the Python-level vad_timeout unreachable.
-            # Daemon threads do not block interpreter shutdown; the timed-out
-            # worker is also unblocked naturally when _cleanup_stream() calls
-            # stop_stream(), which sends SNDRV_PCM_IOCTL_DROP to ALSA.
+            # Run each read in a ThreadPoolExecutor so a hard per-read timeout
+            # can escape an ALSA PCM overrun recovery spin-loop, which never
+            # raises but never returns, making the Python-level vad_timeout
+            # unreachable.  On timeout the executor is shut down after
+            # _cleanup_stream() calls stop_stream(), which sends
+            # SNDRV_PCM_IOCTL_DROP to ALSA and unblocks the worker thread so
+            # shutdown(wait=True) completes promptly.
             _read_executor = concurrent.futures.ThreadPoolExecutor(max_workers=1)
             _read_timeout_s = frame_duration_ms / 1000 * 10  # 10× frame duration
 
