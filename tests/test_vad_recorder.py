@@ -224,6 +224,10 @@ class TestVadRecorderRecord(unittest.TestCase):
         mock_stream = Mock()
         mock_stream.read = hanging_read
 
+        # stop_stream() is what unblocks read() in real ALSA (SNDRV_PCM_IOCTL_DROP).
+        # Mirror that here so shutdown(wait=True) does not deadlock the test.
+        mock_stream.stop_stream.side_effect = hang_event.set
+
         mock_pa = Mock()
         mock_pa.open.return_value = mock_stream
         mock_pa_class.return_value = mock_pa
@@ -232,10 +236,7 @@ class TestVadRecorderRecord(unittest.TestCase):
         mock_vad_class.return_value = mock_vad
 
         recorder = self._make_recorder()
-        try:
-            result = recorder.record()
-        finally:
-            hang_event.set()  # unblock the stuck thread so it can exit cleanly
+        result = recorder.record()
 
         # Timeout fires before any frame is processed → no speech_detected → None
         self.assertIsNone(result)

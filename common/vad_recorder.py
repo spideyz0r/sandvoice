@@ -120,9 +120,12 @@ class VadRecorder:
                 frame_duration_ms,
             )
 
-            # Run each read in a thread so a hard per-read timeout can escape an
-            # ALSA PCM overrun recovery spin-loop, which never raises but never
-            # returns, making the Python-level vad_timeout check unreachable.
+            # Run each read in a daemon thread so a hard per-read timeout can
+            # escape an ALSA PCM overrun recovery spin-loop, which never raises
+            # but never returns, making the Python-level vad_timeout unreachable.
+            # Daemon threads do not block interpreter shutdown; the timed-out
+            # worker is also unblocked naturally when _cleanup_stream() calls
+            # stop_stream(), which sends SNDRV_PCM_IOCTL_DROP to ALSA.
             _read_executor = concurrent.futures.ThreadPoolExecutor(max_workers=1)
             _read_timeout_s = frame_duration_ms / 1000 * 10  # 10× frame duration
 
@@ -262,9 +265,13 @@ class VadRecorder:
             return wav_path
 
         finally:
-            if _read_executor is not None:
-                _read_executor.shutdown(wait=False)
+            # Stop the stream first: stop_stream() sends SNDRV_PCM_IOCTL_DROP
+            # which unblocks any audio_stream.read() stuck in ALSA overrun
+            # recovery. Only then shut down the executor with wait=True so the
+            # worker thread exits cleanly before record() returns.
             self._cleanup_stream(audio_stream, pa)
+            if _read_executor is not None:
+                _read_executor.shutdown(wait=True)
 
     def _cleanup_stream(self, audio_stream, pa):
         """Stop and close a PyAudio stream and terminate PyAudio."""

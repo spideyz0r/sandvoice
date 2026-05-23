@@ -266,6 +266,7 @@ class WakeWordMode:
         self.detector.reset()
         pa = None
         audio_stream = None
+        _read_executor = None
 
         try:
             pa = pyaudio.PyAudio()
@@ -281,34 +282,31 @@ class WakeWordMode:
 
             read_timeout_s = self.detector.frame_length / self.detector.device_sample_rate * 10
             _read_executor = concurrent.futures.ThreadPoolExecutor(max_workers=1)
-            try:
-                while self.running and self.state == State.IDLE:
-                    future = _read_executor.submit(
-                        audio_stream.read, self.detector.frame_length, False
+            while self.running and self.state == State.IDLE:
+                future = _read_executor.submit(
+                    audio_stream.read, self.detector.frame_length, False
+                )
+                try:
+                    pcm = future.result(timeout=read_timeout_s)
+                except concurrent.futures.TimeoutError:
+                    logger.warning(
+                        "Wake word audio read timed out after %.2fs (ALSA overrun?), restarting",
+                        read_timeout_s,
                     )
-                    try:
-                        pcm = future.result(timeout=read_timeout_s)
-                    except concurrent.futures.TimeoutError:
-                        logger.warning(
-                            "Wake word audio read timed out after %.2fs (ALSA overrun?), restarting",
-                            read_timeout_s,
-                        )
-                        break
-                    pcm = struct.unpack_from("h" * self.detector.frame_length, pcm)
+                    break
+                pcm = struct.unpack_from("h" * self.detector.frame_length, pcm)
 
-                    keyword_index = self.detector.process(pcm)
+                keyword_index = self.detector.process(pcm)
 
-                    if keyword_index >= 0:
-                        logger.info("Wake word detected: '%s'", self.config.wake_phrase)
-                        with self._filler_lock:
-                            self._req_seq += 1
-                            self._req_filler_s = None
-                        self._req_t_start = time.monotonic()
+                if keyword_index >= 0:
+                    logger.info("Wake word detected: '%s'", self.config.wake_phrase)
+                    with self._filler_lock:
+                        self._req_seq += 1
+                        self._req_filler_s = None
+                    self._req_t_start = time.monotonic()
 
-                        self.state = State.LISTENING
-                        break
-            finally:
-                _read_executor.shutdown(wait=False)
+                    self.state = State.LISTENING
+                    break
 
         except Exception as e:
             error_msg = f"Wake word detection error: {str(e)}"
@@ -316,7 +314,11 @@ class WakeWordMode:
             print(f"Error: {error_msg}")
             self.running = False
         finally:
+            # Stop the stream first so stop_stream() unblocks any read() stuck
+            # in ALSA overrun recovery, then wait for the executor to exit cleanly.
             self._cleanup_pyaudio(audio_stream, pa)
+            if _read_executor is not None:
+                _read_executor.shutdown(wait=True)
 
         # Play beep after PyAudio stream is closed so both don't compete for the device
         if self.state == State.LISTENING:
