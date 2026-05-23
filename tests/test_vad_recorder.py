@@ -1110,6 +1110,7 @@ class TestEnergyFilter(unittest.TestCase):
         self.assertIsNone(result)
         mock_vad.is_speech.assert_not_called()
 
+    @unittest.expectedFailure
     @patch('common.vad_recorder.time.time')
     @patch('common.vad_recorder.os.makedirs')
     @patch('common.vad_recorder.wave.open')
@@ -1117,21 +1118,14 @@ class TestEnergyFilter(unittest.TestCase):
     @patch('common.vad_recorder.pyaudio.PyAudio')
     def test_known_limitation_all_speech_calibration_discards_utterance(
             self, mock_pa_class, mock_vad_class, mock_wave_open, mock_makedirs, mock_time):
-        """Regression test for known limitation: all-speech calibration poisons the noise floor.
+        """Known limitation: all-speech calibration poisons the noise floor.
 
-        TODO: This test documents a failure mode that should be fixed. When the user speaks
-        immediately after the wake word fires and their voice fills all calibration frames,
-        the lower-half mean equals speech RMS, threshold is set above continued speech, and
-        the recording is discarded (returns None) even though real speech occurred.
+        Marked @expectedFailure: the correct behavior is to return a WAV, but the
+        current implementation discards the utterance. When the user speaks through
+        the entire calibration window, the lower-half mean equals speech RMS,
+        threshold is set above the user's own voice, and record() returns None.
 
-        The current implementation cannot distinguish all-speech calibration from
-        all-ambient-at-the-same-level using RMS alone; the retroactive check only fires for
-        bimodal distributions. A future fix should ensure record() returns a WAV when all
-        calibration frames contain the user's voice.
-
-        If the whole calibration window is speech (RMS=2000), lower-half mean=2000 and
-        threshold=5000. Upper-half frames (2000) are below the 5000 threshold → no retroactive
-        detection → speech_detected=False → None (with no post-calibration frames).
+        TODO: fix in vad_recorder.py so this test passes (remove @expectedFailure).
         """
         from common.vad_recorder import _ENERGY_CALIBRATION_FRAMES
         speech_pcm = _make_pcm_with_rms(2000)
@@ -1169,6 +1163,7 @@ class TestEnergyFilter(unittest.TestCase):
 
         # Known limitation: noise floor = speech level → threshold above speech RMS →
         # no retroactive detection → speech_detected=False → None.
-        # TODO: this should return a WAV once the all-speech calibration case is handled.
-        self.assertIsNone(result)
-        mock_vad.is_speech.assert_not_called()
+        # This assertion documents the desired correct behavior (return a WAV).
+        # It is currently expected to fail because the all-speech calibration case
+        # is not yet handled (see TODO in vad_recorder.py).
+        self.assertIsNotNone(result)

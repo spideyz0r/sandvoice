@@ -570,11 +570,13 @@ class Config:
         elif isinstance(raw_vef, str):
             if raw_vef.strip().lower() not in _recognized_flag_strings:
                 errors.append(
-                    f"vad_energy_filter has unrecognized value '{raw_vef}'; use 'enabled' or 'disabled'"
+                    f"vad_energy_filter has unrecognized value '{raw_vef}'; "
+                    f"accepted strings: {sorted(_recognized_flag_strings)}"
                 )
         else:
             errors.append(
-                f"vad_energy_filter must be a boolean, integer (0 or 1), or string ('enabled'/'disabled'), got {type(raw_vef).__name__}"
+                f"vad_energy_filter must be a boolean, integer (0 or 1), or string "
+                f"({sorted(_recognized_flag_strings)}), got {type(raw_vef).__name__}"
             )
 
         # Validate audio feedback settings
