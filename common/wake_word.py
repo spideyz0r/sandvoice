@@ -324,7 +324,7 @@ class WakeWordMode:
                     logger.debug("Failed to stop PyAudio stream: %s", e)
             if _read_executor is not None:
                 _read_executor.shutdown(wait=True)
-            self._cleanup_pyaudio(audio_stream, pa)
+            self._cleanup_pyaudio(audio_stream, pa, skip_stop=True)
 
         # Play beep after PyAudio stream is closed so both don't compete for the device
         if self.state == State.LISTENING:
@@ -391,13 +391,19 @@ class WakeWordMode:
         # Go directly to LISTENING
         self.state = State.LISTENING
 
-    def _cleanup_pyaudio(self, stream, pa):
-        """Stop and close a PyAudio stream, then terminate the PyAudio instance."""
+    def _cleanup_pyaudio(self, stream, pa, skip_stop=False):
+        """Stop and close a PyAudio stream, then terminate the PyAudio instance.
+
+        Args:
+            skip_stop: If True, skip stop_stream() (caller already called it
+                       to unblock a stuck read before joining the executor).
+        """
         if stream is not None:
-            try:
-                stream.stop_stream()
-            except Exception as e:
-                logger.debug("Failed to stop PyAudio stream: %s", e)
+            if not skip_stop:
+                try:
+                    stream.stop_stream()
+                except Exception as e:
+                    logger.debug("Failed to stop PyAudio stream: %s", e)
             try:
                 stream.close()
             except Exception as e:

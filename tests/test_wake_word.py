@@ -276,7 +276,7 @@ class TestWakeWordModeStateIdle(unittest.TestCase):
 
         self.assertEqual(mode.state, State.LISTENING)
         self.assertEqual(mock_detector.process.call_count, 3)
-        mock_stream.stop_stream.assert_called()
+        mock_stream.stop_stream.assert_called_once()
         mock_stream.close.assert_called_once()
         mock_pa.terminate.assert_called_once()
 
@@ -335,7 +335,7 @@ class TestWakeWordModeStateIdle(unittest.TestCase):
         mode._state_idle()
 
         self.assertFalse(mode.running)
-        mock_stream.stop_stream.assert_called()
+        mock_stream.stop_stream.assert_called_once()
         mock_stream.close.assert_called_once()
         mock_pa.terminate.assert_called_once()
 
@@ -1074,7 +1074,7 @@ class TestHelperMethods(unittest.TestCase):
         mock_pa = Mock()
         mode = self._make_mode()
         mode._cleanup_pyaudio(mock_stream, mock_pa)
-        mock_stream.stop_stream.assert_called()
+        mock_stream.stop_stream.assert_called_once()
         mock_stream.close.assert_called_once()
         mock_pa.terminate.assert_called_once()
 
@@ -1088,7 +1088,7 @@ class TestHelperMethods(unittest.TestCase):
         mock_stream = Mock()
         mode = self._make_mode()
         mode._cleanup_pyaudio(mock_stream, None)
-        mock_stream.stop_stream.assert_called()
+        mock_stream.stop_stream.assert_called_once()
         mock_stream.close.assert_called_once()
 
     def test_cleanup_pyaudio_handles_both_none(self):

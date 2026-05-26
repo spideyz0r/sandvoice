@@ -276,15 +276,21 @@ class VadRecorder:
                     logger.debug("Error stopping audio stream: %s", e)
             if _read_executor is not None:
                 _read_executor.shutdown(wait=True)
-            self._cleanup_stream(audio_stream, pa)
+            self._cleanup_stream(audio_stream, pa, skip_stop=True)
 
-    def _cleanup_stream(self, audio_stream, pa):
-        """Stop and close a PyAudio stream and terminate PyAudio."""
+    def _cleanup_stream(self, audio_stream, pa, skip_stop=False):
+        """Stop and close a PyAudio stream and terminate PyAudio.
+
+        Args:
+            skip_stop: If True, skip stop_stream() (caller already called it
+                       to unblock a stuck read before joining the executor).
+        """
         if audio_stream is not None:
-            try:
-                audio_stream.stop_stream()
-            except Exception as e:
-                logger.debug("Error stopping audio stream: %s", e)
+            if not skip_stop:
+                try:
+                    audio_stream.stop_stream()
+                except Exception as e:
+                    logger.debug("Error stopping audio stream: %s", e)
             try:
                 audio_stream.close()
             except Exception as e:
