@@ -1,12 +1,12 @@
 import concurrent.futures
 import contextlib
 import logging
-import math
 import os
 import struct
 import time
 import wave
 
+import numpy as np
 import pyaudio
 import webrtcvad
 
@@ -21,11 +21,10 @@ _ENERGY_CALIBRATION_FRAMES = 15  # == round(_ENERGY_CALIBRATION_MS / 30ms); kept
 
 def _rms(pcm: bytes) -> float:
     """Return RMS amplitude of a 16-bit PCM frame. Returns 0.0 for empty input."""
-    n = len(pcm) // 2
-    if n == 0:
+    if len(pcm) < 2:
         return 0.0
-    samples = struct.unpack_from(f"{n}h", pcm)
-    return math.sqrt(sum(s * s for s in samples) / n)
+    samples = np.frombuffer(pcm, dtype=np.int16)
+    return float(np.sqrt(np.mean(samples.astype(np.float32) ** 2)))
 
 
 def _negotiate_sample_rate(desired_rate):
