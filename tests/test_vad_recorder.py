@@ -641,6 +641,16 @@ class TestRms(unittest.TestCase):
         pcm = struct.pack("4h", 1000, -1000, 1000, -1000)
         self.assertAlmostEqual(_rms(pcm), 1000.0, places=1)
 
+    def test_odd_length_truncates_trailing_byte(self):
+        # 5 bytes = 2 complete int16 samples + 1 trailing byte; should not raise
+        pcm = struct.pack("2h", 1000, 1000) + b'\xff'
+        self.assertAlmostEqual(_rms(pcm), 1000.0, places=1)
+
+    def test_three_bytes_treated_as_single_sample(self):
+        # 3 bytes → truncate to 2 bytes (1 sample)
+        pcm = struct.pack("1h", 500) + b'\xff'
+        self.assertAlmostEqual(_rms(pcm), 500.0, places=1)
+
 
 def _make_pcm_with_rms(target_rms, n_samples=480):
     """Return PCM bytes where all samples equal target_rms (gives exact RMS)."""

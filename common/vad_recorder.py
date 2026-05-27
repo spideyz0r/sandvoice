@@ -19,9 +19,16 @@ _ENERGY_CALIBRATION_FRAMES = 15  # == round(_ENERGY_CALIBRATION_MS / 30ms); kept
 
 
 def _rms(pcm: bytes) -> float:
-    """Return RMS amplitude of a 16-bit PCM frame. Returns 0.0 for empty input."""
-    if len(pcm) < 2:
+    """Return RMS amplitude of a 16-bit PCM frame. Returns 0.0 for empty input.
+
+    Truncates a trailing odd byte so np.frombuffer (which requires even length
+    for int16) never raises ValueError on a malformed/truncated frame.
+    """
+    n = len(pcm)
+    if n < 2:
         return 0.0
+    if n % 2:
+        pcm = pcm[: n - 1]
     samples = np.frombuffer(pcm, dtype=np.int16)
     return float(np.sqrt(np.mean(samples.astype(np.float32) ** 2)))
 
