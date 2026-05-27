@@ -1,4 +1,6 @@
+import concurrent.futures
 import logging
+import threading
 import unittest
 from unittest.mock import Mock, patch
 
@@ -212,9 +214,13 @@ class TestVadRecorderRecord(unittest.TestCase):
     def test_record_read_timeout_breaks_loop_and_returns_none(
             self, mock_pa_class, mock_vad_class):
         """audio_stream.read() that never returns (ALSA overrun spin-loop) is escaped
-        by the per-read timeout; record() returns None and cleanup is called."""
-        import threading
+        by the per-read timeout; record() returns None and cleanup is called.
 
+        Future.result is patched to raise TimeoutError immediately so the test
+        does not wait for the real per-read timeout (~0.3 s at 30 ms frames).
+        stop_stream.side_effect sets hang_event to unblock the worker thread so
+        shutdown(wait=True) can join cleanly without deadlocking the test.
+        """
         hang_event = threading.Event()
 
         def hanging_read(size, exception_on_overflow=False):
@@ -236,7 +242,9 @@ class TestVadRecorderRecord(unittest.TestCase):
         mock_vad_class.return_value = mock_vad
 
         recorder = self._make_recorder()
-        result = recorder.record()
+        with patch('concurrent.futures.Future.result',
+                   side_effect=concurrent.futures.TimeoutError):
+            result = recorder.record()
 
         # Timeout fires before any frame is processed → no speech_detected → None
         self.assertIsNone(result)
