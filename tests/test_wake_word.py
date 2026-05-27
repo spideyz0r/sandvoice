@@ -339,6 +339,45 @@ class TestWakeWordModeStateIdle(unittest.TestCase):
         mock_stream.close.assert_called_once()
         mock_pa.terminate.assert_called_once()
 
+    @patch('common.wake_word.pyaudio.PyAudio')
+    @patch('common.wake_word.struct.unpack_from')
+    def test_state_idle_read_timeout_breaks_loop(self, mock_unpack, mock_pyaudio_class):
+        """A per-read TimeoutError (ALSA overrun) breaks the loop and cleans up correctly."""
+        import concurrent.futures
+        mock_detector = Mock()
+        mock_detector.sample_rate = 16000
+        mock_detector.frame_length = 1280
+        mock_detector.device_sample_rate = 16000
+
+        hang_event = threading.Event()
+
+        def hanging_read(*args, **kwargs):
+            hang_event.wait()
+
+        mock_stream = Mock()
+        mock_stream.read.side_effect = hanging_read
+        mock_stream.stop_stream.side_effect = hang_event.set  # mirrors real ALSA: DROP unblocks read
+
+        mock_pa = Mock()
+        mock_pa.get_device_count.return_value = 0
+        mock_pa.open.return_value = mock_stream
+        mock_pyaudio_class.return_value = mock_pa
+
+        mode = WakeWordMode(self.mock_config, self.mock_ai, self.mock_audio, route_message=self.mock_route_message)
+        mode.detector = mock_detector
+        mode.running = True
+        mode.state = State.IDLE
+
+        with patch('concurrent.futures.Future.result', side_effect=concurrent.futures.TimeoutError):
+            mode._state_idle()
+
+        # Loop broke; state is still IDLE (no wake word detected)
+        self.assertEqual(mode.state, State.IDLE)
+        # Cleanup called stop_stream() exactly once (inline in finally), then joined executor
+        mock_stream.stop_stream.assert_called_once()
+        mock_stream.close.assert_called_once()
+        mock_pa.terminate.assert_called_once()
+
 
 class TestWakeWordModeRun(unittest.TestCase):
     def setUp(self):
