@@ -1,3 +1,4 @@
+import concurrent.futures
 import logging
 import threading
 import time
@@ -489,6 +490,49 @@ class TestBargeInDetectorDetectionLoop(unittest.TestCase):
         d._thread.join(timeout=2.0)
 
         self.assertFalse(d.is_triggered)
+
+    @patch('common.barge_in.OpenWakeWordDetector')
+    @patch('common.barge_in.pyaudio.PyAudio')
+    def test_detection_loop_read_timeout_breaks_loop(self, mock_pyaudio_class, mock_detector_class):
+        """Per-read TimeoutError (ALSA overrun spin-loop) breaks the loop cleanly.
+
+        Future.result is patched to raise TimeoutError immediately so the test
+        does not wait for the real per-read timeout. stop_stream.side_effect sets
+        hang_event so shutdown(wait=True) can join the worker without deadlock.
+        """
+        mock_detector = Mock()
+        mock_detector.sample_rate = 16000
+        mock_detector.device_sample_rate = 16000
+        mock_detector.frame_length = 1280
+        mock_detector_class.return_value = mock_detector
+
+        hang_event = threading.Event()
+
+        def hanging_read(n, exception_on_overflow=False):
+            hang_event.wait()
+            return b'\x00' * (n * 2)
+
+        mock_stream = Mock()
+        mock_stream.read = hanging_read
+        mock_stream.stop_stream.side_effect = hang_event.set  # unblocks worker
+
+        mock_pa = Mock()
+        mock_pa.get_device_count.return_value = 0
+        mock_pa.open.return_value = mock_stream
+        mock_pyaudio_class.return_value = mock_pa
+
+        d = self._make_detector()
+        with patch('concurrent.futures.Future.result',
+                   side_effect=concurrent.futures.TimeoutError):
+            d._thread = threading.Thread(target=d._detection_loop, daemon=True)
+            d._thread.start()
+            d._thread.join(timeout=2.0)
+
+        self.assertFalse(d._thread.is_alive())
+        self.assertFalse(d.is_triggered)
+        mock_stream.stop_stream.assert_called_once()
+        mock_stream.close.assert_called_once()
+        mock_pa.terminate.assert_called_once()
 
 
 class TestBargeInCleanupPyAudio(unittest.TestCase):
