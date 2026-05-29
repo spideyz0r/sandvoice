@@ -1,9 +1,11 @@
+import concurrent.futures
 import contextlib
 import logging
 import os
 import time
 import wave
 
+import numpy as np
 import pyaudio
 import webrtcvad
 
@@ -12,6 +14,23 @@ from common.utils import _is_enabled_flag
 logger = logging.getLogger(__name__)
 
 _VAD_SAMPLE_RATES = [8000, 16000, 32000, 48000]
+_ENERGY_CALIBRATION_MS = 450  # target calibration window duration in ms
+_ENERGY_CALIBRATION_FRAMES = 15  # == round(_ENERGY_CALIBRATION_MS / 30ms); kept for tests
+
+
+def _rms(pcm: bytes) -> float:
+    """Return RMS amplitude of a 16-bit PCM frame. Returns 0.0 for empty input.
+
+    Truncates a trailing odd byte so np.frombuffer (which requires even length
+    for int16) never raises ValueError on a malformed/truncated frame.
+    """
+    n = len(pcm)
+    if n < 2:
+        return 0.0
+    if n % 2:
+        pcm = pcm[: n - 1]
+    samples = np.frombuffer(pcm, dtype=np.int16)
+    return float(np.sqrt(np.mean(samples.astype(np.float32) ** 2)))
 
 
 def _negotiate_sample_rate(desired_rate):
@@ -76,8 +95,15 @@ class VadRecorder:
         frame_duration_ms = self._config.vad_frame_duration
         vad_frame_size = int(vad_sample_rate * frame_duration_ms / 1000)
 
+        energy_filter_enabled = getattr(self._config, 'vad_energy_filter', True)
+        energy_multiplier = getattr(self._config, 'vad_energy_threshold_multiplier', 2.5)
+        n_calibration_frames = max(1, round(_ENERGY_CALIBRATION_MS / frame_duration_ms))
+        _rms_samples = []
+        _noise_floor = None
+
         pa = None
         audio_stream = None
+        _read_executor = None
         frames = []
         silence_start = None
         speech_detected = False
@@ -99,6 +125,16 @@ class VadRecorder:
                 frame_duration_ms,
             )
 
+            # Run each read in a ThreadPoolExecutor so a hard per-read timeout
+            # can escape an ALSA PCM overrun recovery spin-loop, which never
+            # raises but never returns, making the Python-level vad_timeout
+            # unreachable.  On timeout the executor is shut down after
+            # _cleanup_stream() calls stop_stream(), which sends
+            # SNDRV_PCM_IOCTL_DROP to ALSA and unblocks the worker thread so
+            # shutdown(wait=True) completes promptly.
+            _read_executor = concurrent.futures.ThreadPoolExecutor(max_workers=1)
+            _read_timeout_s = frame_duration_ms / 1000 * 10  # 10× frame duration
+
             while True:
                 elapsed = time.time() - recording_start
                 if elapsed > self._config.vad_timeout:
@@ -106,18 +142,68 @@ class VadRecorder:
                     break
 
                 try:
-                    pcm = audio_stream.read(vad_frame_size, exception_on_overflow=False)
+                    future = _read_executor.submit(audio_stream.read, vad_frame_size, False)
+                    try:
+                        pcm = future.result(timeout=_read_timeout_s)
+                    except concurrent.futures.TimeoutError:
+                        logger.warning(
+                            "Audio read timed out after %.2fs (ALSA overrun recovery?), stopping",
+                            _read_timeout_s,
+                        )
+                        break
                 except Exception as e:
                     logger.error("Error reading audio frame: %s", e)
                     break
 
                 frames.append(pcm)
 
-                try:
-                    is_speech = vad.is_speech(pcm, vad_sample_rate)
-                except Exception as e:
-                    logger.warning("VAD processing error: %s", e)
-                    is_speech = True  # Assume speech on error
+                # Energy calibration: when the filter is enabled, collect the first N frames
+                # to establish the noise floor.  During this window WebRTC is skipped and
+                # is_speech is forced to False so that ambient noise mis-classified by WebRTC
+                # cannot prematurely set speech_detected.  RMS samples are sorted and only the
+                # lower half is averaged so that high-energy frames (user speaking immediately
+                # after the wake beep) fall in the upper half and do not inflate the estimate.
+                # Once calibration completes, the upper-half RMS samples are compared against
+                # the freshly computed threshold: if any exceed it, early user speech was
+                # present and speech_detected is set retroactively so the recording is kept.
+                #
+                # Known limitation: if the user speaks through the entire calibration window
+                # (all N frames are speech), the lower-half mean equals speech RMS, the
+                # threshold is set above the user's own voice, and the recording is discarded.
+                # This cannot be distinguished from all-ambient-at-the-same-level using RMS
+                # alone.  The retroactive check only fires for bimodal distributions.
+                # TODO: improve the calibration design to handle the all-speech case.
+                calibrating = energy_filter_enabled and len(_rms_samples) < n_calibration_frames
+                if calibrating:
+                    _rms_samples.append(_rms(pcm))
+                    if len(_rms_samples) == n_calibration_frames:
+                        sorted_samples = sorted(_rms_samples)
+                        half = max(1, len(sorted_samples) // 2)
+                        _noise_floor = sum(sorted_samples[:half]) / half
+                        logger.debug("VAD energy calibration complete: noise_floor=%.1f", _noise_floor)
+                        threshold = _noise_floor * energy_multiplier
+                        # Retroactive speech detection: guard threshold > 0 so that a
+                        # completely silent calibration (all RMS=0) does not falsely
+                        # trigger speech_detected via 0 >= 0.
+                        if threshold > 0 and any(s >= threshold for s in sorted_samples[half:]):
+                            # Clearly bimodal: upper-half frames exceed the gate threshold,
+                            # indicating early user speech during calibration.
+                            speech_detected = True
+                            logger.debug("Early speech detected in calibration window")
+                    is_speech = False
+                else:
+                    # Energy gate runs before WebRTC so that low-energy frames never reach
+                    # the VAD (matches design intent: "WebRTC only sees frames above the gate").
+                    # High-energy frames (or filter disabled / not yet calibrated) go through
+                    # WebRTC; VAD errors on those frames assume speech to fail open.
+                    if energy_filter_enabled and _noise_floor is not None and _rms(pcm) < _noise_floor * energy_multiplier:
+                        is_speech = False
+                    else:
+                        try:
+                            is_speech = vad.is_speech(pcm, vad_sample_rate)
+                        except Exception as e:
+                            logger.warning("VAD processing error: %s", e)
+                            is_speech = True  # Assume speech on error
 
                 if is_speech:
                     speech_detected = True
@@ -134,8 +220,9 @@ class VadRecorder:
                     else:
                         # No speech yet: bail out after vad_silence_duration so we don't
                         # hold the mic for the full vad_timeout window waiting for speech
-                        # that never comes.
-                        if (time.time() - recording_start) >= self._config.vad_silence_duration:
+                        # that never comes.  Skip this check while calibrating so a short
+                        # vad_silence_duration cannot fire before the noise floor is set.
+                        if not calibrating and (time.time() - recording_start) >= self._config.vad_silence_duration:
                             logger.debug("No speech detected within %.2fs, discarding", self._config.vad_silence_duration)
                             break
 
@@ -184,15 +271,35 @@ class VadRecorder:
             return wav_path
 
         finally:
-            self._cleanup_stream(audio_stream, pa)
+            # Sequence matters: stop_stream() first (sends SNDRV_PCM_IOCTL_DROP
+            # to unblock any read() stuck in ALSA overrun recovery), then join
+            # the executor so the worker exits before we close/terminate PyAudio.
+            # If stop_stream() itself fails, fall back to close() which drops the
+            # underlying device handle and also unblocks any blocked C-layer read().
+            if audio_stream is not None:
+                try:
+                    audio_stream.stop_stream()
+                except Exception as e:
+                    logger.debug("Error stopping audio stream: %s", e)
+                    with contextlib.suppress(Exception):
+                        audio_stream.close()
+            if _read_executor is not None:
+                _read_executor.shutdown(wait=True)
+            self._cleanup_stream(audio_stream, pa, skip_stop=True)
 
-    def _cleanup_stream(self, audio_stream, pa):
-        """Stop and close a PyAudio stream and terminate PyAudio."""
+    def _cleanup_stream(self, audio_stream, pa, skip_stop=False):
+        """Stop and close a PyAudio stream and terminate PyAudio.
+
+        Args:
+            skip_stop: If True, skip stop_stream() (caller already called it
+                       to unblock a stuck read before joining the executor).
+        """
         if audio_stream is not None:
-            try:
-                audio_stream.stop_stream()
-            except Exception as e:
-                logger.debug("Error stopping audio stream: %s", e)
+            if not skip_stop:
+                try:
+                    audio_stream.stop_stream()
+                except Exception as e:
+                    logger.debug("Error stopping audio stream: %s", e)
             try:
                 audio_stream.close()
             except Exception as e:

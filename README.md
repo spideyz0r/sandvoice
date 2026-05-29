@@ -161,6 +161,8 @@ vad_aggressiveness: 3        # 0-3; 3 = most aggressive noise filtering
 vad_silence_duration: 1.5    # seconds of silence to end recording
 vad_frame_duration: 30       # 10, 20, or 30 ms
 vad_timeout: 30              # max seconds waiting for speech
+vad_energy_filter: enabled   # enabled = reject frames below noise_floor × multiplier
+vad_energy_threshold_multiplier: 2.5  # frame must be this many times louder than noise floor to count as speech
 
 # Wake UX
 wake_confirmation_beep: enabled

@@ -1,6 +1,7 @@
 import math, os, yaml, logging
 from common.platform_detection import log_platform_info
 from common.audio_device_detection import get_optimal_channels, log_device_info
+from common.utils import _is_enabled_flag
 
 logger = logging.getLogger(__name__)
 
@@ -106,6 +107,8 @@ class Config:
             "vad_silence_duration": 1.5,
             "vad_frame_duration": 30,
             "vad_timeout": 30,
+            "vad_energy_filter": "enabled",
+            "vad_energy_threshold_multiplier": 2.5,
             # Audio feedback
             "wake_confirmation_beep": "enabled",
             "wake_confirmation_beep_freq": 800,
@@ -254,6 +257,8 @@ class Config:
         self.vad_silence_duration = self.get("vad_silence_duration")
         self.vad_frame_duration = self.get("vad_frame_duration")
         self.vad_timeout = self.get("vad_timeout")
+        self.vad_energy_filter = _is_enabled_flag(self.get("vad_energy_filter"))
+        self.vad_energy_threshold_multiplier = self.get("vad_energy_threshold_multiplier")
         # Audio feedback
         self.wake_confirmation_beep = self.get("wake_confirmation_beep").lower() == "enabled"
         self.wake_confirmation_beep_freq = _parse_exact_int(self.get("wake_confirmation_beep_freq"))
@@ -544,6 +549,35 @@ class Config:
 
         if not isinstance(self.vad_timeout, (int, float)) or self.vad_timeout <= 0:
             errors.append("vad_timeout must be a positive number")
+
+        if (isinstance(self.vad_energy_threshold_multiplier, bool)
+                or not isinstance(self.vad_energy_threshold_multiplier, (int, float))
+                or not math.isfinite(self.vad_energy_threshold_multiplier)
+                or self.vad_energy_threshold_multiplier <= 1.0):
+            errors.append("vad_energy_threshold_multiplier must be a finite number greater than 1.0")
+
+        _recognized_flag_strings = {
+            "enabled", "disabled", "true", "false", "yes", "no", "1", "0", "on", "off",
+        }
+        raw_vef = self.get("vad_energy_filter")
+        if isinstance(raw_vef, bool):
+            pass  # bool is a subclass of int; accept True/False from YAML
+        elif isinstance(raw_vef, int):
+            if raw_vef not in (0, 1):
+                errors.append(
+                    f"vad_energy_filter integer must be 0 or 1, got {raw_vef}"
+                )
+        elif isinstance(raw_vef, str):
+            if raw_vef.strip().lower() not in _recognized_flag_strings:
+                errors.append(
+                    f"vad_energy_filter has unrecognized value '{raw_vef}'; "
+                    f"accepted strings: {sorted(_recognized_flag_strings)}"
+                )
+        else:
+            errors.append(
+                f"vad_energy_filter must be a boolean, integer (0 or 1), or string "
+                f"({sorted(_recognized_flag_strings)}), got {type(raw_vef).__name__}"
+            )
 
         # Validate audio feedback settings
         if isinstance(self.wake_confirmation_beep_freq, bool) or not isinstance(self.wake_confirmation_beep_freq, int) or self.wake_confirmation_beep_freq <= 0:

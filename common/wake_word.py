@@ -1,3 +1,4 @@
+import concurrent.futures
 import contextlib
 import io
 import logging
@@ -265,6 +266,7 @@ class WakeWordMode:
         self.detector.reset()
         pa = None
         audio_stream = None
+        _read_executor = None
 
         try:
             pa = pyaudio.PyAudio()
@@ -278,8 +280,20 @@ class WakeWordMode:
                 input_device_index=input_device_index,
             )
 
+            read_timeout_s = self.detector.frame_length / self.detector.device_sample_rate * 10
+            _read_executor = concurrent.futures.ThreadPoolExecutor(max_workers=1)
             while self.running and self.state == State.IDLE:
-                pcm = audio_stream.read(self.detector.frame_length, exception_on_overflow=False)
+                future = _read_executor.submit(
+                    audio_stream.read, self.detector.frame_length, False
+                )
+                try:
+                    pcm = future.result(timeout=read_timeout_s)
+                except concurrent.futures.TimeoutError:
+                    logger.warning(
+                        "Wake word audio read timed out after %.2fs (ALSA overrun?), restarting",
+                        read_timeout_s,
+                    )
+                    break
                 pcm = struct.unpack_from("h" * self.detector.frame_length, pcm)
 
                 keyword_index = self.detector.process(pcm)
@@ -300,7 +314,21 @@ class WakeWordMode:
             print(f"Error: {error_msg}")
             self.running = False
         finally:
-            self._cleanup_pyaudio(audio_stream, pa)
+            # Sequence matters: stop_stream() first (unblocks any read() stuck in
+            # ALSA overrun recovery), then join the executor so the worker exits
+            # before we close/terminate PyAudio.
+            # If stop_stream() itself fails, fall back to close() which drops the
+            # underlying device handle and also unblocks any blocked C-layer read().
+            if audio_stream is not None:
+                try:
+                    audio_stream.stop_stream()
+                except Exception as e:
+                    logger.debug("Failed to stop PyAudio stream: %s", e)
+                    with contextlib.suppress(Exception):
+                        audio_stream.close()
+            if _read_executor is not None:
+                _read_executor.shutdown(wait=True)
+            self._cleanup_pyaudio(audio_stream, pa, skip_stop=True)
 
         # Play beep after PyAudio stream is closed so both don't compete for the device
         if self.state == State.LISTENING:
@@ -367,13 +395,19 @@ class WakeWordMode:
         # Go directly to LISTENING
         self.state = State.LISTENING
 
-    def _cleanup_pyaudio(self, stream, pa):
-        """Stop and close a PyAudio stream, then terminate the PyAudio instance."""
+    def _cleanup_pyaudio(self, stream, pa, skip_stop=False):
+        """Stop and close a PyAudio stream, then terminate the PyAudio instance.
+
+        Args:
+            skip_stop: If True, skip stop_stream() (caller already called it
+                       to unblock a stuck read before joining the executor).
+        """
         if stream is not None:
-            try:
-                stream.stop_stream()
-            except Exception as e:
-                logger.debug("Failed to stop PyAudio stream: %s", e)
+            if not skip_stop:
+                try:
+                    stream.stop_stream()
+                except Exception as e:
+                    logger.debug("Failed to stop PyAudio stream: %s", e)
             try:
                 stream.close()
             except Exception as e:

@@ -1,3 +1,5 @@
+import concurrent.futures
+import contextlib
 import logging
 import struct
 import threading
@@ -214,13 +216,19 @@ class BargeInDetector:
             device_sample_rate=self._config.rate,
         )
 
-    def _cleanup_pyaudio(self, stream, pa):
-        """Stop and close a PyAudio stream, then terminate the PyAudio instance."""
+    def _cleanup_pyaudio(self, stream, pa, skip_stop=False):
+        """Stop and close a PyAudio stream, then terminate the PyAudio instance.
+
+        Args:
+            skip_stop: If True, skip stop_stream() (caller already called it
+                       to unblock a stuck read before joining the executor).
+        """
         if stream is not None:
-            try:
-                stream.stop_stream()
-            except Exception as e:
-                logger.debug("Failed to stop PyAudio stream: %s", e)
+            if not skip_stop:
+                try:
+                    stream.stop_stream()
+                except Exception as e:
+                    logger.debug("Failed to stop PyAudio stream: %s", e)
             try:
                 stream.close()
             except Exception as e:
@@ -240,6 +248,7 @@ class BargeInDetector:
         detector_instance = None
         pa = None
         audio_stream = None
+        _read_executor = None
 
         try:
             logger.debug("Barge-in thread: Creating OpenWakeWord detector instance...")
@@ -260,21 +269,21 @@ class BargeInDetector:
 
             logger.debug("Barge-in thread: Audio stream opened, listening for wake word...")
 
+            read_timeout_s = detector_instance.frame_length / detector_instance.device_sample_rate * 10
+            _read_executor = concurrent.futures.ThreadPoolExecutor(max_workers=1)
             while not self._event.is_set() and not self._stop_flag.is_set():
                 try:
-                    pcm = audio_stream.read(
-                        detector_instance.frame_length,
-                        exception_on_overflow=False,
+                    future = _read_executor.submit(
+                        audio_stream.read, detector_instance.frame_length, False
                     )
-                    pcm = struct.unpack_from("h" * detector_instance.frame_length, pcm)
-
-                    keyword_index = detector_instance.process(pcm)
-
-                    if keyword_index >= 0:
-                        logger.info("Barge-in: Wake word detected! Interrupting...")
-                        self._event.set()
+                    try:
+                        pcm = future.result(timeout=read_timeout_s)
+                    except concurrent.futures.TimeoutError:
+                        logger.warning(
+                            "Barge-in audio read timed out after %.2fs (ALSA overrun?), stopping",
+                            read_timeout_s,
+                        )
                         break
-
                 except Exception as e:
                     if self._stop_flag.is_set():
                         logger.debug(
@@ -284,10 +293,30 @@ class BargeInDetector:
                         logger.warning("Barge-in thread error reading audio: %s", e)
                     break
 
+                pcm = struct.unpack_from("h" * detector_instance.frame_length, pcm)
+
+                keyword_index = detector_instance.process(pcm)
+
+                if keyword_index >= 0:
+                    logger.info("Barge-in: Wake word detected! Interrupting...")
+                    self._event.set()
+                    break
+
         except Exception as e:
             logger.error("Barge-in detection thread error: %s", e)
         finally:
-            self._cleanup_pyaudio(audio_stream, pa)
+            # stop_stream() first (SNDRV_PCM_IOCTL_DROP unblocks any stuck read()),
+            # then join the executor, then close/terminate.
+            if audio_stream is not None:
+                try:
+                    audio_stream.stop_stream()
+                except Exception as e:
+                    logger.debug("Failed to stop PyAudio stream: %s", e)
+                    with contextlib.suppress(Exception):
+                        audio_stream.close()
+            if _read_executor is not None:
+                _read_executor.shutdown(wait=True)
+            self._cleanup_pyaudio(audio_stream, pa, skip_stop=True)
             if detector_instance is not None:
                 try:
                     detector_instance.delete()
